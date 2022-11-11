@@ -1,7 +1,7 @@
 # MDBook backend for Pants
 
 > **Warning**
-> :construction: Very WIP plugin :construction:
+> 🚧 Very WIP plugin 🚧
 
 This provides a tool for building mdbook targets with pants. There is currently a single very simple rule:
 
