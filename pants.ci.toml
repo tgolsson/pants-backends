@@ -1,0 +1,19 @@
+[GLOBAL]
+colors = true
+plugins = ["hdrhistogram"]
+
+print_stacktrace = true
+level = "debug"
+
+[stats]
+log = true
+
+[test]
+use_coverage = true
+
+[coverage-py]
+report = ["xml"]
+global_report = true
+
+[pytest]
+args = ["-vv", "--no-header"]

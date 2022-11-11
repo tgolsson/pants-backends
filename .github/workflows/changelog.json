@@ -1,0 +1,30 @@
+{
+	"categories": [
+		{
+			"title": "## 🚀 Features",
+			"labels": [
+				"t: feature"
+			]
+		},
+		{
+			"title": "## 🐛 Fixes",
+			"labels": [
+				"t: bug"
+			]
+		},
+		{
+			"title": "## :book: Documentation",
+			"labels": [
+				"t: documentation"
+			]
+		},
+	    {
+			"title": "## :gear: Development",
+			"labels": [
+				"t: tools", "t: ci"
+			]
+		}
+	],
+	"template": "# Changes since last full release\n\n${{CHANGELOG}}\n\n## Uncategorized\n\n${{UNCATEGORIZED}}\n",
+	"pr_template": "- ${{TITLE}} (#${{NUMBER}})"
+}

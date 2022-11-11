@@ -1,0 +1,35 @@
+[GLOBAL]
+pants_version = "2.14.0"
+
+pythonpath = ["%(buildroot)s/pants-plugins"]
+backend_packages = [
+  "pants.backend.python",
+  "pants.backend.python.lint.isort",
+  "pants.backend.python.lint.black",
+
+
+  "pants.backend.plugin_development",
+  "pants_backend_mdbook",
+]
+
+[source]
+root_patterns = [
+  '/',
+  '/pants-plugins',
+]
+
+[anonymous-telemetry]
+enabled = true
+repo_id = "e32e6905-7a7d-405f-82b1-86d2723b0c4d"
+
+[python]
+tailor_pex_binary_targets = true
+interpreter_constraints = [">=3.7"]
+enable_resolves = true
+default_resolve = "pants-plugins"
+
+[python.resolves]
+pants-plugins = "pants-plugins/lock.txt"
+
+[python.resolves_to_interpreter_constraints]
+pants-plugins = [">=3.7,<3.10"]

@@ -1,0 +1,13 @@
+"t: documentation":
+  - 'README.md'
+  - 'examples/*'
+  - 'examples/**/'
+
+"t: tools":
+  - '.flake8'
+  - 'pants.toml'
+
+"t: ci":
+  - '.github/*'
+  - '.github/**/*'
+  - 'pants.ci.toml'
