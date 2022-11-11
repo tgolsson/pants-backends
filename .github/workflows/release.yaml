@@ -58,8 +58,7 @@ jobs:
 
     - name: Publish Packages to PyPi
       env:
-        TWINE_PASSWORD: ${{ secrets.TEST_PYPI }}
-        TWINE_USERNAME: __token__
-        TWINE_REPOSITORY: testpypi
+        TWINE_PASSWORD_TESTPYPI: ${{ secrets.TEST_PYPI }}
+        TWINE_USERNAME_TESTPYPI: __token__
 
       run: ./pants publish //:package
