@@ -13,5 +13,4 @@ python_distribution(
     ),
     long_description_path="README.md",
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
-    generate_setup=True,
 )

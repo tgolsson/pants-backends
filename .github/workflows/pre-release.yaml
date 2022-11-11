@@ -70,7 +70,22 @@ jobs:
           pants-python-version: ${{ matrix.python_version }}          # cache0 makes it easy to bust the cache if needed
 
       - name: Build Packages
-        run: "./pants package ::"
+        run: "./pants package //:package"
+
+      - name: Delete old release assets
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ github.token }}
+          tag: latest
+
+          assets: 'pants*'
+
+      - name: Update tag
+        uses: richardsimko/update-tag@v1
+        with:
+          tag_name: latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Build Changelog"
         id: github_release
