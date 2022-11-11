@@ -42,6 +42,9 @@ jobs:
         toTag: ${{ github.ref }}
         configuration: .github/workflows/changelog.json
 
+    - name: Build Packages
+      run: "./pants package //:package"
+
     - name: Release to GitHub
       uses: mikepenz/action-gh-release@v0.2.0-a03
       with:
@@ -59,4 +62,4 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_REPOSITORY: testpypi
 
-      run: pants publish //:package
+      run: ./pants publish //:package
