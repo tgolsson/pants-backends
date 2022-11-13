@@ -39,7 +39,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        toTag: ${{ github.ref }}
+        toTag: ${{ github.ref_name }}
         configuration: .github/workflows/changelog.json
 
     - name: Build Packages
