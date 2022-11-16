@@ -1,4 +1,5 @@
 "t: documentation":
+  - '**/README.md'
   - 'README.md'
   - 'examples/*'
   - 'examples/**/'
@@ -11,3 +12,27 @@
   - '.github/*'
   - '.github/**/*'
   - 'pants.ci.toml'
+
+"a: k8s":
+  - 'examples/k8s/*'
+  - 'examples/k8s/**/*'
+  - 'pants-plugins/k8s/*'
+  - 'pants-plugins/k8s/**/*'
+
+"a: kustomize":
+  - 'examples/kustomize/*'
+  - 'examples/kustomize/**/*'
+  - 'pants-plugins/kustomize/*'
+  - 'pants-plugins/kustomize/**/*'
+
+"a: oci":
+  - 'examples/oci/*'
+  - 'examples/oci/**/*'
+  - 'pants-plugins/oci/*'
+  - 'pants-plugins/oci/**/*'
+
+"a: mdbook":
+  - 'examples/mdbook/*'
+  - 'examples/mdbook/**/*'
+  - 'pants-plugins/mdbook/*'
+  - 'pants-plugins/mdbook/**/*'
