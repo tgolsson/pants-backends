@@ -12,8 +12,8 @@ backend_packages = [
   "pants.backend.python",
   "pants.backend.experimental.python",
 
-  "pants.backend.python.lint.isort",
   "pants.backend.python.lint.black",
+  "pants.backend.python.lint.isort",
 
   "pants.backend.plugin_development",
   "pants_backend_mdbook",

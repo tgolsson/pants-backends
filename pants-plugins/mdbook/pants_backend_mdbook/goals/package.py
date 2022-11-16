@@ -9,7 +9,6 @@ from pants.core.goals.package import BuiltPackage, PackageFieldSet
 from pants.engine.internals.selectors import Get
 from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
-
 from pants_backend_mdbook.targets import MdBookSources
 from pants_backend_mdbook.util_rules.build import FallibleMdBookBuildOutput, MdbookBuildRequest
 

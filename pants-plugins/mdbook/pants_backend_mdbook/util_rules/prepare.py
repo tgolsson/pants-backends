@@ -8,7 +8,6 @@ from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import Targets, TransitiveTargets, TransitiveTargetsRequest
-
 from pants_backend_mdbook.subsystem import MdBookTool
 from pants_backend_mdbook.targets import MdBookSources
 
@@ -42,7 +41,11 @@ async def prepare_md_book_ctx(request: MdBookAnalysisRequest, mdbook: MdBookTool
                 + [t.get(MdBookSources) for t in transitive_targets.dependencies],
             ),
         ),
-        Get(DownloadedExternalTool, ExternalToolRequest, mdbook.get_request(Platform.current)),
+        Get(
+            DownloadedExternalTool,
+            ExternalToolRequest,
+            mdbook.get_request(Platform.current),
+        ),
     )
 
     build_root = None

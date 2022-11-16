@@ -1,5 +1,4 @@
 from pants.engine.rules import collect_rules
-
 from pants_backend_oci import goals, subsystem, targets, util_rules
 from pants_backend_oci.tools import process
 

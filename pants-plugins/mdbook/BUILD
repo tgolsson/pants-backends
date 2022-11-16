@@ -14,5 +14,4 @@ python_distribution(
     long_description_path="pants-plugins/mdbook/README.md",
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
     repositories=["@pypi"],
-
 )

@@ -3,10 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
-from pants.core.util_rules.external_tool import (
-    DownloadedExternalTool,
-    ExternalToolRequest,
-)
+from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.fs import EMPTY_DIGEST, Digest, MergeDigests
 from pants.engine.platform import Platform
@@ -21,7 +18,6 @@ from pants.engine.target import (
     WrappedTargetRequest,
 )
 from pants.engine.unions import UnionRule
-
 from pants_backend_k8s.subsystem import KubernetesTool
 from pants_backend_k8s.target_types import (
     KubernetesClusterField,

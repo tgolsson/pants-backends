@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.backend.shell.target_types import (
-    ShellCommandCommandField,
-    ShellCommandRunTarget,
-)
+from pants.backend.shell.target_types import ShellCommandCommandField, ShellCommandRunTarget
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
@@ -16,7 +13,6 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
-
 from pants_backend_k8s.target_types import (
     KubernetesClusterField,
     KubernetesCommandField,

@@ -11,7 +11,7 @@ python_distribution(
         version="0.1.0",
         long_description_content_type="markdown",
     ),
-#    long_description_path="./README.md",
+    long_description_path="pants-plugins/k8s/README.md",
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
     repositories=["@pypi"],
 )

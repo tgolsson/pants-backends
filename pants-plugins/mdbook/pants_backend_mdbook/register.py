@@ -8,4 +8,9 @@ def target_types():
 
 
 def rules():
-    return [*subsystem.rules(), *target_types_rules.rules(), *util_rules.rules(), *goals.rules()]
+    return [
+        *subsystem.rules(),
+        *target_types_rules.rules(),
+        *util_rules.rules(),
+        *goals.rules(),
+    ]

@@ -12,7 +12,6 @@ from pants.engine.target import (
     Target,
     Targets,
 )
-
 from pants_backend_kustomize.target_types import (
     KustomizeDependenciesField,
     KustomizeSourcesField,
@@ -31,7 +30,9 @@ class KustomizationContext:
 
 
 @rule
-async def prepare_build_context(request: KustomizationContextRequest) -> KustomizationContext:
+async def prepare_build_context(
+    request: KustomizationContextRequest,
+) -> KustomizationContext:
     root_get = Get(
         SourceFiles,
         SourceFilesRequest([request.target[KustomizeSourcesField]]),

@@ -24,7 +24,6 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
-
 from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import ImageBase
 from pants_backend_oci.tools.process import FusedProcess

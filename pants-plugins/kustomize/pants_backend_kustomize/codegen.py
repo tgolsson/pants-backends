@@ -32,7 +32,6 @@ from pants.engine.target import (
 from pants.engine.unions import UnionRule
 from pants.source.source_root import SourceRoot, SourceRootRequest
 from pants_backend_k8s.target_types import KubernetesSourceField
-
 from pants_backend_kustomize.subsystem import KustomizeTool
 from pants_backend_kustomize.target_types import KustomizeSourcesField
 from pants_backend_kustomize.util_rules.prepare_context import (

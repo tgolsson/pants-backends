@@ -5,7 +5,6 @@ from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import Get, collect_rules, rule
-
 from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 
