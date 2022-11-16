@@ -17,3 +17,19 @@
 - name: "t: feature"
   description: A new feature or functionality
   color: A5D99C
+
+- name: "a: k8s"
+  description: Affects `pants_backend_k8s`
+  color: 326ce5
+
+- name: "a: kustomize"
+  description: Affects `pants_backend_kustomize`
+  color: 5D8BEE
+
+- name: "a: mdbook"
+  description: Affects `pants_backend_mdbook`
+  color: CE412B
+
+- name: "a: oci"
+  description: Affects `pants_backend_oci`
+  color: 262262

@@ -1,17 +1,25 @@
 [GLOBAL]
 pants_version = "2.14.0"
 
-pythonpath = ["%(buildroot)s/pants-plugins"]
+pythonpath = [
+   "%(buildroot)s/pants-plugins/kustomize",
+   "%(buildroot)s/pants-plugins/oci",
+   "%(buildroot)s/pants-plugins/k8s",
+   "%(buildroot)s/pants-plugins/mdbook",
+]
+
 backend_packages = [
   "pants.backend.python",
   "pants.backend.experimental.python",
 
-  "pants.backend.python.lint.isort",
   "pants.backend.python.lint.black",
-
+  "pants.backend.python.lint.isort",
 
   "pants.backend.plugin_development",
   "pants_backend_mdbook",
+  "pants_backend_kustomize",
+  "pants_backend_k8s",
+  "pants_backend_oci",
 ]
 
 [source]
@@ -19,6 +27,7 @@ root_patterns = [
   '/',
   '/pants-plugins',
 ]
+marker_filenames = ["pyproject.toml"]
 
 [anonymous-telemetry]
 enabled = true

@@ -12,7 +12,6 @@ from pants.engine.addresses import Address, Addresses
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
-
 from pants_backend_mdbook.subsystem import MdBookTool
 from pants_backend_mdbook.util_rules.prepare import MdBookAnalysis, MdBookAnalysisRequest
 
