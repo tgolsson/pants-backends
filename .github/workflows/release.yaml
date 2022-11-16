@@ -6,6 +6,10 @@ on:
 
 jobs:
   create-release:
+    strategy:
+      matrix:
+        package: ["k8s", "kustomize", "mdbook", "oci"]
+
     name: release
     runs-on: ubuntu-latest
     steps:

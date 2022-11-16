@@ -1,3 +1,4 @@
 /.pids/
 /.pants.d/
 *.pyc
+/dist/

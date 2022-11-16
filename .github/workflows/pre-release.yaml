@@ -17,10 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Check latest commit is less than 24h old
 
-    strategy:
-      matrix:
-        python-version: ["3.8"]
-
     outputs:
       should_run: ${{ steps.should_run.outputs.should_run }}
 
@@ -31,18 +27,16 @@ jobs:
         continue-on-error: true
         name: check latest commit is less than a day
         if: ${{ github.event_name == 'schedule' }}
-        run: test -z $(git rev-list  --after="24 hours"  ${{ github.sha }}) && echo "::set-output name=should_run::false"
+        run: |
+          if test -z $(git rev-list  --after="24 hours" ${{ github.sha }}); then
+              "should_run=true" >> $GITHUB_OUTPUT
+          fi
 
   pre_release:
     name: "Pre Release"
-
     runs-on: "ubuntu-latest"
-
-    strategy:
-      matrix:
-        python-version: ["3.8"]
-
     needs: check_date
+
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
 
     steps:
@@ -52,25 +46,24 @@ jobs:
       - name: Fetch tags
         run: git fetch --prune --unshallow --tags
 
-      - name: Set up Python ${{ matrix.python_version }}
+      - name: Set up Python 3.8
         uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python_version }}
-      - name: Tell Pants to use Python ${{ matrix.python-version }}
-        run: 'echo "PY=python${{ matrix.python-version }}" >> $GITHUB_ENV
-          echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=[''==${{ matrix.python-version
-          }}.*'']" >> $GITHUB_ENV
+          python-version: 3.8
+      - name: Tell Pants to use Python 3.8
+        run: 'echo "PY=python3.8" >> $GITHUB_ENV
+          echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=[''==3.8.*'']" >> $GITHUB_ENV
           '
       - name: Initialize Pants
         uses: pantsbuild/actions/init-pants@main
         with:
           # cache0 makes it easy to bust the cache if needed
-          gha-cache-key: cache0-py${{ matrix.python_version }}
+          gha-cache-key: cache0-py3.8
           named-caches-hash: ${{ hashFiles('pants-plugins/lock.txt') }}
-          pants-python-version: ${{ matrix.python_version }}          # cache0 makes it easy to bust the cache if needed
+          pants-python-version: 3.8
 
       - name: Build Packages
-        run: "./pants package //:package"
+        run: "./pants package //pants-plugins::"
 
       - name: Delete old release assets
         uses: mknejp/delete-release-assets@v1
@@ -95,7 +88,6 @@ jobs:
         with:
           toTag: ${{ github.ref }}
           configuration: .github/workflows/changelog.json
-
 
       - name: Create Release
         uses: mikepenz/action-gh-release@v0.2.0-a03

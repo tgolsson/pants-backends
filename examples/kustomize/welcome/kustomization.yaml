@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: welcome
+
+commonLabels:
+  app: welcome
+
+bases:
+- base
+
+resources:
+- namespace.yaml
+
+configMapGenerator:
+- name: scripts
+  files:
+    - server.py
