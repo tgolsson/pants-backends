@@ -21,8 +21,9 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/tgolsson/pants-backend-kustomize"
-Changelog = "https://github.com/tgolsson/pants-backend-kustomize/tree/main/CHANGELOG.md"
+Repository = "https://github.com/tgolsson/pants-backends"
+Code = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/kustomize"
+Changelog = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/kustomize/CHANGELOG.md"
 
 [tool.pdm.build]
 includes = [

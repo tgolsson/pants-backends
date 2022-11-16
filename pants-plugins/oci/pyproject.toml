@@ -17,9 +17,11 @@ classifiers = [
   "Topic :: Software Development :: Build Tools",
 ]
 
+
 [project.urls]
-Repository = "https://github.com/tgolsson/pants-backend-oci"
-Changelog = "https://github.com/tgolsson/pants-backend-oci/tree/main/CHANGELOG.md"
+Repository = "https://github.com/tgolsson/pants-backends"
+Code = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/oci"
+Changelog = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/oci/CHANGELOG.md"
 
 [tool.pdm.build]
 includes = [

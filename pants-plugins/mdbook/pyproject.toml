@@ -18,8 +18,9 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/tgolsson/pants-backend-mdbook"
-Changelog = "https://github.com/tgolsson/pants-backend-mdbook/tree/main/CHANGELOG.md"
+Repository = "https://github.com/tgolsson/pants-backends"
+Code = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/mdbook"
+Changelog = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/mdbook/CHANGELOG.md"
 
 [tool.pdm.build]
 includes = [
