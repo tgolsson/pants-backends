@@ -26,6 +26,10 @@ fi
 #  locate the main branch SHA, set PANTS_SHA=<SHA> in the environment, and run this script as usual.
 #
 # E.g., PANTS_SHA=725fdaf504237190f6787dda3d72c39010a4c574 ./pants --version
+#
+# You can also use PANTS_VERSION=<VERSION> to override the config version that is in the pants.toml file.
+#
+# E.g., PANTS_VERSION=2.13.0 ./pants --version
 
 PYTHON_BIN_NAME="${PYTHON:-unspecified}"
 
@@ -139,6 +143,11 @@ function determine_pants_version {
   if [ -n "${PANTS_SHA:-}" ]; then
     # get_version_for_sha will echo the version, thus "returning" it from this function.
     get_version_for_sha "$PANTS_SHA"
+    return
+  fi
+
+  if [ -n "${PANTS_VERSION:-}" ]; then
+	echo "${PANTS_VERSION}"
     return
   fi
 
@@ -265,14 +274,13 @@ function bootstrap_pex {
       mkdir -p "${PANTS_BOOTSTRAP}"
       local staging_dir
       staging_dir=$(tempdir "${PANTS_BOOTSTRAP}")
-      cd "${staging_dir}"
       curl --proto "=https" \
            --tlsv1.2 \
            --silent \
            --location \
-           --remote-name \
+           -o "${staging_dir}/pex" \
            "${_PEX_URL}"
-      fingerprint="$(compute_sha256 "${python}" "pex")"
+      fingerprint="$(compute_sha256 "${python}" "${staging_dir}/pex")"
       if [[ "${_PEX_EXPECTED_SHA256}" != "${fingerprint}" ]]; then
         die "SHA256 of ${_PEX_URL} is not as expected. Aborting."
       fi
@@ -314,11 +322,10 @@ function bootstrap_virtualenv {
       mkdir -p "${PANTS_BOOTSTRAP}"
       local staging_dir
       staging_dir=$(tempdir "${PANTS_BOOTSTRAP}")
-      cd "${staging_dir}"
-      echo "${VIRTUALENV_REQUIREMENTS}" > requirements.txt
+      echo "${VIRTUALENV_REQUIREMENTS}" > "${staging_dir}/requirements.txt"
       (
         scrub_env_vars
-        "${python}" "${pex_path}" -r requirements.txt -c virtualenv -o virtualenv.pex
+        "${python}" "${pex_path}" -r "${staging_dir}/requirements.txt" -c virtualenv -o "${staging_dir}/virtualenv.pex"
       )
       mkdir -p "$(dirname "${bootstrapped}")"
       mv -f "${staging_dir}/virtualenv.pex" "${bootstrapped}"
