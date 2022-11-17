@@ -8,7 +8,7 @@ python_distribution(
     ],
     provides=python_artifact(
         name="pants_backend_kustomize",
-        version="0.1.0",
+        version="0.1.1",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/kustomize/README.md",
