@@ -8,7 +8,6 @@ from pants.util.strutil import softwrap
 
 class MdBookDependencies(Dependencies):
     alias = "dependencies"
-    default = ("book.toml", "src/*", "src/**/*")
 
     help = softwrap("""Dependencies to include in the build.""")
 
