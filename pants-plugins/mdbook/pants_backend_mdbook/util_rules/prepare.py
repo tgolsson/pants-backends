@@ -9,6 +9,7 @@ from pants.engine.platform import Platform
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
     InvalidTargetException,
+    SourcesField,
     Targets,
     TransitiveTargets,
     TransitiveTargetsRequest,
@@ -43,7 +44,7 @@ async def prepare_md_book_ctx(request: MdBookAnalysisRequest, mdbook: MdBookTool
             SourceFiles,
             SourceFilesRequest(
                 [target.get(MdBookSources)]
-                + [t.get(MdBookSources) for t in transitive_targets.dependencies],
+                + [t.get(SourcesField) for t in transitive_targets.dependencies],
             ),
         ),
         Get(

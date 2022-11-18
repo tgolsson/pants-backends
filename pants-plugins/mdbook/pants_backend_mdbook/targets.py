@@ -2,13 +2,18 @@
 
 """
 
-from pants.engine.target import COMMON_TARGET_FIELDS, MultipleSourcesField, Target
+from pants.engine.target import COMMON_TARGET_FIELDS, Dependencies, MultipleSourcesField, Target
 from pants.util.strutil import softwrap
+
+
+class MdBookDependencies(Dependencies):
+    alias = "dependencies"
+
+    help = softwrap("""Dependencies to include in the build.""")
 
 
 class MdBookSources(MultipleSourcesField):
     alias = "sources"
-    expected_file_extensions = (".toml", ".md", ".png", ".jpg", ".jpeg")
     default = ("book.toml", "src/*", "src/**/*")
 
     help = softwrap("""The sources to use for a MdBook book, including the book.toml.""")
@@ -16,7 +21,7 @@ class MdBookSources(MultipleSourcesField):
 
 class MdBook(Target):
     alias = "md_book"
-    core_fields = (*COMMON_TARGET_FIELDS, MdBookSources)
+    core_fields = (*COMMON_TARGET_FIELDS, MdBookSources, MdBookDependencies)
 
     help = softwrap("""A build target for a MdBook book. """)
 

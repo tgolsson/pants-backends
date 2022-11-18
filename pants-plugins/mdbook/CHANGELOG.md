@@ -7,6 +7,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 ## [Unreleased]
 
 * Raise error if `book.toml` is not found
+* Handle all sources in dependencies
 
 ## [0.1.2] - 2022-11-17
 
