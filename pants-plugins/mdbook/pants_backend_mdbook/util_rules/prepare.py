@@ -7,7 +7,13 @@ from pants.engine.addresses import Address, Addresses
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import Targets, TransitiveTargets, TransitiveTargetsRequest
+from pants.engine.target import (
+    InvalidTargetException,
+    Targets,
+    TransitiveTargets,
+    TransitiveTargetsRequest,
+)
+
 from pants_backend_mdbook.subsystem import MdBookTool
 from pants_backend_mdbook.targets import MdBookSources
 
@@ -52,6 +58,9 @@ async def prepare_md_book_ctx(request: MdBookAnalysisRequest, mdbook: MdBookTool
     for s in sources.files:
         if s.endswith("book.toml"):
             build_root = os.path.dirname(s)
+
+    if build_root is None:
+        raise InvalidTargetException("Must include a `book.toml` in the `md_book` sources.")
 
     sandbox_input = await Get(Digest, MergeDigests([tool.digest, sources.snapshot.digest]))
     return MdBookAnalysis(sandbox_input, build_root, tool.exe)
