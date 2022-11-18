@@ -8,7 +8,7 @@ python_distribution(
     ],
     provides=python_artifact(
         name="pants_backend_mdbook",
-        version="0.1.2",
+        version="0.1.3",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/mdbook/README.md",
