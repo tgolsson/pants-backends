@@ -1,5 +1,8 @@
 # OCI backend for Pants
 
+> **Warning**
+> This plugin is in development. No stability is guaranteed! Contributions welcome.
+
 This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. To do this, this plugin uses three different tools:
 
 * [umoci](https://github.com/opencontainers/umoci) for manipulating OCI images
@@ -36,13 +39,13 @@ oci_pull_image(
 )
 ```
 
-| Argument | Meaning | Default value |
-| --- | --- | --- |
-| name | The target name | Same as any other target, which is the directory name |
-| repository | Fully qualified repository name | Required |
-| sha | The digest of the image, minus the @sha: prefix. | Required |
-| decsription | A description of the target | "" |
-| tags | List of tags | [] |
+| Argument      | Meaning                                          | Default value                                         |
+|---------------|--------------------------------------------------|-------------------------------------------------------|
+| `name`        | The target name                                  | Same as any other target, which is the directory name |
+| `repository`  | Fully qualified repository name                  | **Required**                                          |
+| `sha`         | The digest of the image, minus the @sha: prefix. | **Required**                                          |
+| `decsription` | A description of the target                      |                                                       |
+| `tags`        | List of tags                                     | `[]`                                                  |
 
 ### `oci_pull_images`
 
@@ -59,13 +62,13 @@ oci_pull_image(
 )
 ```
 
-| Argument | Meaning | Default value |
-| --- | --- | --- |
-| name | The target name | Same as any other target, which is the directory name |
-| repository | Fully qualified repository name | Required |
-| variants | Dictionary with local tags to the remote sha | Required |
-| decsription | A description of the target | "" |
-| tags | List of tags | [] |
+| Argument      | Meaning                                      | Default value                                         |
+|---------------|----------------------------------------------|-------------------------------------------------------|
+| `name`        | The target name                              | Same as any other target, which is the directory name |
+| `repository`  | Fully qualified repository name              | **Required**                                          |
+| `variants`    | Dictionary with local tags to the remote sha | **Required**                                          |
+| `decsription` | A description of the target                  |                                                       |
+| `tags`        | List of tags                                 | `[]`                                                  |
 
 ### `oci_build_image`
 
@@ -81,12 +84,12 @@ oci_build_image(
 )
 ```
 
-| Argument | Meaning | Default value |
-| --- | --- | --- |
-| name | The target name | Same as any other target, which is the directory name |
-| base | The base image to use. Matches the `FROM` directive in a Dockerfile | Required |
-| packages | Packaged targets to include. The first element will be used as the entrypoint. | [] |
-| repository | Fully qualified repository name | Required when publishing |
-| tag | Remote tag to use | Required when publishing |
-| decsription | A description of the target | "" |
-| tags | List of tags | [] |
+| Argument      | Meaning                                                                        | Default value                                         |
+|---------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
+| `name`        | The target name                                                                | Same as any other target, which is the directory name |
+| `base`        | The base image to use. Matches the `FROM` directive in a Dockerfile            | **Required**                                          |
+| `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                  |
+| `repository`  | Fully qualified repository name                                                | Required when publishing                              |
+| `tag`         | Remote tag to use                                                              | Required when publishing                              |
+| `decsription` | A description of the target                                                    |                                                       |
+| `tags`        | List of tags                                                                   | `[]`                                                  |

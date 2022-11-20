@@ -3,6 +3,8 @@
   - 'README.md'
   - 'examples/*'
   - 'examples/**/'
+  - 'docs/*'
+  - 'docs/**/*'
 
 "t: tools":
   - '.flake8'
