@@ -2,3 +2,4 @@
 /.pants.d/
 *.pyc
 /dist/
+/docs/book/

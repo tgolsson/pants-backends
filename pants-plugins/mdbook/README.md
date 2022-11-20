@@ -1,7 +1,7 @@
 # MDBook backend for Pants
 
 > **Warning**
-> 🚧 Very WIP plugin 🚧
+> This plugin is in development. No stability is guaranteed! Contributions welcome.
 
 This provides a tool for building mdbook targets with pants. There is currently a single very simple rule:
 

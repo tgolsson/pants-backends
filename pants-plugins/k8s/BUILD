@@ -1,4 +1,4 @@
-resources(name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt"])
+resources(name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"])
 
 python_distribution(
     name="package",
