@@ -1,5 +1,7 @@
 # MDBook backend for Pants
 
+![PyPI](https://img.shields.io/pypi/v/pants-backend-mdbook?label=Latest%20release)
+
 > **Warning**
 > This plugin is in development. No stability is guaranteed! Contributions welcome.
 
