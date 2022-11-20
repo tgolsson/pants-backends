@@ -15,7 +15,7 @@ spec:
         app: welcome
     spec:
       containers:
-      - image: docker.io/pause
+      - image: pause
         name: welcome
         volumeMounts:
         - name: config

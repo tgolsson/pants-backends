@@ -91,6 +91,11 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
 
     request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
     image = await Get(FallibleImageBundle, FallibleImageBundleRequest, request.request)
+    if image.exit_code != 0 or image.dependency_failed:
+        raise Exception(
+            f"Failed packaging image:\n{image.stderr}",
+        )
+
     image_digest = image.output.digest
 
     name = (

@@ -25,4 +25,6 @@ oci_image_build(
     packages=[
         ":example2",
     ],
+    repository="harbor.sbg.dev/test/pants-plugin-oci-example-2",
+    tag="latest",
 )

@@ -51,6 +51,8 @@ class ImageBundle:
     """A built OCI image layer."""
 
     digest: Digest
+    image_sha: str
+    is_local: bool
 
 
 @dataclass(frozen=True)

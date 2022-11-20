@@ -34,6 +34,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     ImageBundle,
     ImageBundleRequest,
 )
+from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 
 
 @dataclass(frozen=True)
@@ -115,11 +116,17 @@ async def build_oci_bundle_package(
             MergeDigests([raw_layer_digest, umoci.digest, base_digest]),
         )
 
+        import datetime
+
+        timestamp = datetime.datetime.utcnow().isoformat() + "Z"
         config = [
             "--config.env",
             "BUILT_BY=pants.oci",
             "--config.entrypoint",
             f"/{embedded_pkgs[0].artifacts[0].relpath}",
+            "--author=pants_backend_oci",
+            f"--created={timestamp}",
+            "--no-history",
         ]
 
         compile_result = await Get(
@@ -131,6 +138,10 @@ async def build_oci_bundle_package(
                             umoci.exe,
                             "raw",
                             "add-layer",
+                            "--history.author=pants_backend_oci",
+                            f"--history.created_by='Layer target: {request.target.address}'",
+                            f"--history.comment='Layer target: {request.target.address}'",
+                            f"--history.created={timestamp}",
                             "--image",
                             "build:build",
                             "layers/image_bundle.tar",
@@ -163,15 +174,14 @@ async def build_oci_bundle_package(
             )
 
         compilation_digest = compile_result.output_digest
-
         output_digest = compilation_digest
 
     else:
         output_digest = base_digest
 
-    output = ImageBundle(
-        digest=output_digest,
-    )
+    image_digest = await Get(OciSha, OciShaRequest(output_digest))
+
+    output = ImageBundle(digest=output_digest, image_sha=image_digest.image_digest, is_local=True)
 
     return FallibleImageBundle(output)
 
