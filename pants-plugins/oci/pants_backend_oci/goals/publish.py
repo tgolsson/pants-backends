@@ -81,11 +81,11 @@ async def publish_oci_process(
             f"docker://{request.repository}:{request.tag}",
         ),
         description=f"Publishing OCI Archive: {request.repository}:{request.tag}",
-        output_files=(),
+        output_files=tuple(),
     )
 
 
-@rule(desc="Publish OCI Image", level=LogLevel.DEBUG)
+@rule(desc="Publish OCI Image")
 async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
     wrapped_target = await Get(
         WrappedTarget,

@@ -7,3 +7,8 @@ commonLabels:
 resources:
 - deployment.yaml
 - service.yaml
+
+images:
+  - name: pause
+    newName: harbor.sbg.dev/test/pants-plugin-oci-example
+    digest: //examples/oci:oci

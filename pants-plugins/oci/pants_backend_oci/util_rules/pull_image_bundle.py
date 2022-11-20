@@ -18,6 +18,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     ImageBundle,
 )
+from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,9 @@ async def pull_oci_image(
         ),
     )
 
-    return FallibleImageBundle(ImageBundle(result.output_digest))
+    return FallibleImageBundle(
+        ImageBundle(result.output_digest, f"sha256:{request.target.digest.value}", is_local=False)
+    )
 
 
 def rules():

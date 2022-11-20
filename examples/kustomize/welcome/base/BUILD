@@ -5,4 +5,5 @@ kustomize(
         "service.yaml",
         "kustomization.yaml",
     ],
+    dependencies=["//examples/oci:oci"],
 )
