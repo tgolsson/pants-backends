@@ -1,4 +1,4 @@
-[![Docs](https://github.com/tgolsson/pants-backends/actions/workflows/docs.yaml/badge.svg?branch=main)](https://github.com/tgolsson/pants-backends/actions/workflows/docs.yaml)
+[![Publish Documentation](https://github.com/tgolsson/pants-backends/actions/workflows/docs.yml/badge.svg)](https://github.com/tgolsson/pants-backends/actions/workflows/docs.yml)
 
 # Tom's Pants backends
 
