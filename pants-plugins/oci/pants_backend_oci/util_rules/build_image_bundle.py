@@ -118,7 +118,7 @@ async def build_oci_bundle_package(
 
         import datetime
 
-        timestamp = datetime.datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
         config = [
             "--config.env",
             "BUILT_BY=pants.oci",
