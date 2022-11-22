@@ -4,7 +4,6 @@ import dataclasses
 from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, PackageFieldSet
-from pants.core.util_rules.archive import CreateArchive
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import Digest, MergeDigests, Snapshot
@@ -27,6 +26,7 @@ from pants.util.logging import LogLevel
 from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import ImageBase
 from pants_backend_oci.tools.process import FusedProcess
+from pants_backend_oci.util_rules.archive import CreateDeterministicTar
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -108,7 +108,7 @@ async def build_oci_bundle_package(
         snapshot = await Get(Snapshot, Digest, layer_digest)
 
         raw_layer_digest = await Get(
-            Digest, CreateArchive(snapshot, "layers/image_bundle.tar", "tar")
+            Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
         )
 
         command_digest = await Get(
