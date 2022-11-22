@@ -2,7 +2,7 @@ resources(
     name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"]
 )
 
-python_distribution(
+python_distribution_with_secret(
     name="package",
     dependencies=[
         ":package_data",
@@ -17,4 +17,7 @@ python_distribution(
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
     generate_setup=True,
     repositories=["@pypi"],
+    repo_secrets={
+        "@pypi": "//examples/bitwarden:pypi_token"
+    }
 )
