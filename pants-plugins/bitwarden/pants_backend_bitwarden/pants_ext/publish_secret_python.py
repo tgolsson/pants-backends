@@ -132,7 +132,6 @@ async def twine_upload_with_secret(
         if artifact.relpath
     )
 
-    print("xx")
     if twine_subsystem.skip or not dists:
         return PublishProcesses()
 
@@ -173,8 +172,6 @@ async def twine_upload_with_secret(
 
     for repo in request.field_set.repositories.value:
         secret = request.field_set.secrets.value[repo]
-
-        print(secret)
         secret_address = await Get(
             Addresses,
             UnparsedAddressInputs(
@@ -183,7 +180,6 @@ async def twine_upload_with_secret(
                 description_of_origin=f"the `{secret}` from the target {request.field_set.secrets}",
             ),
         )
-
         wrapped_target = await Get(
             WrappedTarget,
             WrappedTargetRequest(
@@ -192,13 +188,12 @@ async def twine_upload_with_secret(
         )
 
         secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
-        print(secret_request)
         secret_requests.append(
             Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
         )
 
     secrets = await MultiGet(*secret_requests)
-    print(secrets)
+
     for repo, fallible in zip(request.field_set.repositories.value, secrets):
         pex_proc_requests.append(
             VenvPexProcess(
@@ -217,7 +212,6 @@ async def twine_upload_with_secret(
         Get(Process, VenvPexProcess, request) for request in pex_proc_requests
     )
 
-    print("xx")
     raise Exception("foobar")
     return PublishProcesses(
         PublishPackages(
