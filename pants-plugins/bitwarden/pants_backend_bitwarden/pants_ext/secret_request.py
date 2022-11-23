@@ -42,7 +42,7 @@ class SecretValue:
 class FallibleSecretsRequest:
     target: Target
 
-    field_set: ClassVar[FieldSet]
+    field_set_type: ClassVar[FieldSet]
 
 
 @dataclass(frozen=True)
@@ -60,7 +60,9 @@ class SecretsResponse:
     value: SecretValue
 
     def __post_init__(self):
-        assert isinstance(self.value, SecretValue)
+        assert isinstance(
+            self.value, SecretValue
+        ), f"value must be SecretValue but was {type(self.value)}"
 
     def cacheable(self) -> bool:
         return False
@@ -83,11 +85,13 @@ def secrets_request_request(
     request: SecretsRequestRequest, union_membership: UnionMembership
 ) -> SecretsRequestWrap:
     tgt = request.target
+
     concrete_requests = [
         request_type(request_type.field_set_type.create(tgt))
         for request_type in union_membership[FallibleSecretsRequest]
         if request_type.field_set_type.is_applicable(tgt)
     ]
+    print(concrete_requests, union_membership[FallibleSecretsRequest])
     if len(concrete_requests) > 1:
         raise ValueError(
             f"Multiple registered builders from {SecretsRequestRequest.__name__} can build target "

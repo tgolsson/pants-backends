@@ -3,6 +3,7 @@
 """
 
 import os
+from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
@@ -27,19 +28,24 @@ from pants_backend_bitwarden.targets import (
 )
 
 
+@dataclass(frozen=True)
 class BitWardenSecretResponse(SecretsResponse):
     def cacheable(self) -> bool:
         return "CI" not in os.environ
 
 
-class FallibleBitWardenSecretsRequest(SecretsResponse):
+@dataclass(frozen=True)
+class BitWardenFieldSet(FieldSet):
+    required_fields = (BitWardenItemField,)
+    item: BitWardenItemField
+
+
+@dataclass(frozen=True)
+class FallibleBitWardenSecretsRequest(FallibleSecretsRequest):
+    field_set_type = BitWardenFieldSet
+
     def cacheable(self) -> bool:
         return "CI" not in os.environ
-
-
-class BitWardenFieldSet(FieldSet):
-    required_types = (BitWardenItem,)
-    key: BitWardenItem
 
 
 @rule
@@ -51,7 +57,7 @@ async def get_bitwarden_key(
     item = await Get(
         Addresses,
         UnparsedAddressInputs,
-        request.field_set.item.to_unparsed_address_inputs(),
+        request.target.item.to_unparsed_address_inputs(),
     )
 
     wrapped_target = await Get(
@@ -64,6 +70,7 @@ async def get_bitwarden_key(
 
     command = (
         f"{bw_tool.exe}",
+        "--nointeraction",
         "get",
         "password",
         f"{wrapped_target.target[BitWardenId].value}",
@@ -74,16 +81,17 @@ async def get_bitwarden_key(
         ProcessResult,
         Process(
             command,
-            description=f"Decrypting {request.field_set.item}",
+            description=f"Decrypting {request.target.item}",
             input_digest=bw_tool.digest,
             env=relevant_env,
         ),
     )
 
+    print(result.stdout, result.stderr)
     return FallibleSecretsResponse(
         exit_code=0,
         response=SecretsResponse(
-            SecretValue(result.stdout.decode("utf-8"), request.field_set.address, "BitWarden"),
+            SecretValue(result.stdout.decode("utf-8"), request.target.address, "BitWarden"),
         ),
     )
 

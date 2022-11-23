@@ -174,34 +174,41 @@ async def twine_upload_with_secret(
     for repo in request.field_set.repositories.value:
         secret = request.field_set.secrets.value[repo]
 
+        print(secret)
         secret_address = await Get(
             Addresses,
             UnparsedAddressInputs(
                 [secret],
-                owning_address=request.field_set.secrets,
-                description_of_origin=f"the `{secret.alias}` from the target {request.field_set.secrets}",
+                owning_address=request.field_set.address,
+                description_of_origin=f"the `{secret}` from the target {request.field_set.secrets}",
             ),
         )
 
         wrapped_target = await Get(
             WrappedTarget,
-            WrappedTargetRequest(secret_address[0], description_of_origin="package_oci_image"),
+            WrappedTargetRequest(
+                secret_address[0], description_of_origin="twine_upload_with_secret"
+            ),
         )
 
-        secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target[0]))
+        secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
+        print(secret_request)
         secret_requests.append(
             Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
         )
 
     secrets = await MultiGet(*secret_requests)
     print(secrets)
-    for repo, env in zip(request.field_set.repositories.value, secrets):
+    for repo, fallible in zip(request.field_set.repositories.value, secrets):
         pex_proc_requests.append(
             VenvPexProcess(
                 twine_pex,
                 argv=twine_upload_args(twine_subsystem, config_files, repo, dists, ca_cert),
                 input_digest=input_digest,
-                extra_env={"TWINE_USERNAME": "__token__", "TWINE_PASSWORD": env.secret.value},
+                extra_env={
+                    "TWINE_USERNAME": "__token__",
+                    "TWINE_PASSWORD": fallible.response.value.value,
+                },
                 description=repo,
             )
         )
