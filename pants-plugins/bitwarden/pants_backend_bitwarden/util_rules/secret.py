@@ -9,7 +9,7 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
+from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
@@ -77,8 +77,8 @@ async def get_bitwarden_key(
     )
 
     relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "BW_SESSION"]))
-    result = await Get(
-        ProcessResult,
+    result: FallibleProcessResult = await Get(
+        FallibleProcessResult,
         Process(
             command,
             description=f"Decrypting {request.target.item}",
@@ -87,7 +87,15 @@ async def get_bitwarden_key(
         ),
     )
 
-    print(result.stdout, result.stderr)
+    if result.exit_code != 0:
+        return FallibleSecretsResponse(
+            exit_code=result.exit_code,
+            stdout=result.stdout.decode("utf-8"),
+            stderr=result.stderr.decode("utf-8"),
+            response=None,
+        )
+
+    # no stdout or stderr on exit 0, to avoid leaks
     return FallibleSecretsResponse(
         exit_code=0,
         response=SecretsResponse(

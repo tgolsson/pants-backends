@@ -71,6 +71,8 @@ class SecretsResponse:
 @dataclass(frozen=True)
 class FallibleSecretsResponse(EngineAwareReturnType):
     exit_code: int
+    stdout: str | None = None
+    stderr: str | None = None
     response: SecretsResponse | None = None
 
     def cacheable(self) -> bool:
@@ -91,10 +93,10 @@ def secrets_request_request(
         for request_type in union_membership[FallibleSecretsRequest]
         if request_type.field_set_type.is_applicable(tgt)
     ]
-    print(concrete_requests, union_membership[FallibleSecretsRequest])
-    if len(concrete_requests) > 1:
+
+    if len(concrete_requests) != 1:
         raise ValueError(
-            f"Multiple registered builders from {SecretsRequestRequest.__name__} can build target "
+            f"Multiple or zero registered decrypters from {SecretsRequestRequest.__name__} can build target "
             f"{tgt.name}. It is ambiguous which implementation to use.\n\n"
             "Possible implementations:\n\n"
             f"{bullet_list(sorted(generator.__name__ for generator in concrete_requests))}"
