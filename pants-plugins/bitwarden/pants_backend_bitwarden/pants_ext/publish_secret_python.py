@@ -56,6 +56,7 @@ from pants.engine.target import (
 from pants.option.global_options import GlobalOptions
 from pants.util.docutil import doc_url
 from pants.util.strutil import softwrap
+from pants_backend_bitwarden.pants_ext.exception import FailedDecryptException, NoDecrypterException
 from pants_backend_bitwarden.pants_ext.secret import SecretsField
 from pants_backend_bitwarden.pants_ext.secret_request import (
     FallibleSecretsRequest,
@@ -188,13 +189,28 @@ async def twine_upload_with_secret(
         )
 
         secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
+        if secret_request.request is None:
+            raise NoDecrypterException(
+                f"No valid decrypter found for secret: `{secret_address[0]}` of type `{wrapped_target.target.alias}`"
+            )
+
         secret_requests.append(
             Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
         )
 
-    secrets = await MultiGet(*secret_requests)
+    fallible_secrets = await MultiGet(*secret_requests)
+    secrets = []
+    for (repo, maybe_secret) in zip(request.field_set.repositories.value, fallible_secrets):
+        if maybe_secret.exit_code != 0:
+            raise FailedDecryptException(
+                f"Failed decrypting secret for repo: {repo}",
+                maybe_secret.stdout,
+                maybe_secret.stderr,
+            )
 
-    for repo, fallible in zip(request.field_set.repositories.value, secrets):
+        secrets.append(maybe_secret.response.value)
+
+    for repo, secret in zip(request.field_set.repositories.value, secrets):
         pex_proc_requests.append(
             VenvPexProcess(
                 twine_pex,
@@ -202,7 +218,7 @@ async def twine_upload_with_secret(
                 input_digest=input_digest,
                 extra_env={
                     "TWINE_USERNAME": "__token__",
-                    "TWINE_PASSWORD": fallible.response.value.value,
+                    "TWINE_PASSWORD": secret.value,
                 },
                 description=repo,
             )
