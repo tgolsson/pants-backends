@@ -10,6 +10,11 @@ class BitWardenId(StringField):
     help = "A BitWarden ID"
 
 
+class BitWardenSessionSecret(StringField):
+    alias = "session_secret"
+    help = "The secret to use for the secret"
+
+
 class BitWardenItemName(StringField):
     alias = "item_name"
 
@@ -34,6 +39,7 @@ class BitWardenItem(Target):
         *COMMON_TARGET_FIELDS,
         BitWardenId,
         BitWardenItemName,
+        BitWardenSessionSecret,
     )
 
     help = "A BitWarden item in the vault."
