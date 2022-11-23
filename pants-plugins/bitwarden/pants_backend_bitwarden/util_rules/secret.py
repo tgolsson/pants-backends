@@ -146,7 +146,7 @@ async def get_bitwarden_key(
             response=None,
         )
 
-    # NB: no stdout or stderr on exit 0, to avoid leaks
+    # NB[TSolberg]: no stdout or stderr on exit 0, to avoid leaks
     return FallibleSecretsResponse(
         exit_code=0,
         response=SecretsResponse(

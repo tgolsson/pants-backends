@@ -7,7 +7,7 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
+from pants.engine.process import Process, ProcessCacheScope, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import WrappedTarget, WrappedTargetRequest
 from pants_backend_bitwarden.pants_ext.goals.decrypt import (
@@ -68,6 +68,7 @@ async def decrypt_bitwarden(
             description=f"Decrypting {request.field_set.item}",
             input_digest=bw_tool.digest,
             env=relevant_env,
+            cache_scope=ProcessCacheScope.PER_SESSION,
         ),
     )
     return DecryptResponse(
