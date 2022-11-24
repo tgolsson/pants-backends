@@ -8,6 +8,7 @@ from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
+from pants.version import PANTS_SEMVER, Version
 
 
 @dataclass(frozen=True)
@@ -37,12 +38,24 @@ class SecretValue:
         return f"<{msg}>"
 
 
-@union
-@dataclass(frozen=True)
-class FallibleSecretsRequest:
-    target: Target
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+    from pants.engine.environment import EnvironmentName
 
-    field_set_type: ClassVar[FieldSet]
+    @union(in_scope_types=[EnvironmentName])
+    @dataclass(frozen=True)
+    class FallibleSecretsRequest:
+        target: Target
+
+        field_set_type: ClassVar[FieldSet]
+
+else:
+
+    @union
+    @dataclass(frozen=True)
+    class FallibleSecretsRequest:
+        target: Target
+
+        field_set_type: ClassVar[FieldSet]
 
 
 @dataclass(frozen=True)
