@@ -24,7 +24,6 @@ from pants_backend_bitwarden.pants_ext.secret_request import (
 )
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import (
-    BitWardenFieldField,
     BitWardenId,
     BitWardenItem,
     BitWardenItemField,

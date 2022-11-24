@@ -2,7 +2,7 @@
 
 """
 
-import logging
+
 from dataclasses import dataclass
 
 from pants.backend.python.goals.publish import (
@@ -17,7 +17,6 @@ from pants.backend.python.target_types import (
     GenerateSetupField,
     InterpreterConstraintsField,
     LongDescriptionPathField,
-    PythonDistribution,
     PythonDistributionDependenciesField,
     PythonDistributionEntryPointsField,
     PythonProvidesField,
@@ -27,32 +26,13 @@ from pants.backend.python.target_types import (
     WheelField,
 )
 from pants.backend.python.util_rules.pex import PexRequest, VenvPex, VenvPexProcess
-from pants.core.goals.publish import (
-    PublishFieldSet,
-    PublishOutputData,
-    PublishPackages,
-    PublishProcesses,
-    PublishRequest,
-)
+from pants.core.goals.publish import PublishOutputData, PublishPackages, PublishProcesses
 from pants.core.util_rules.config_files import ConfigFiles, ConfigFilesRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import CreateDigest, Digest, MergeDigests, Snapshot
 from pants.engine.process import InteractiveProcess, Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    COMMON_TARGET_FIELDS,
-    BoolField,
-    Dependencies,
-    DependenciesRequest,
-    FieldSet,
-    FieldSetsPerTarget,
-    FieldSetsPerTargetRequest,
-    StringSequenceField,
-    Target,
-    Targets,
-    WrappedTarget,
-    WrappedTargetRequest,
-)
+from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTarget, WrappedTargetRequest
 from pants.option.global_options import GlobalOptions
 from pants.util.docutil import doc_url
 from pants.util.strutil import softwrap
