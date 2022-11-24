@@ -17,7 +17,5 @@ python_distribution_with_secret(
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
     generate_setup=True,
     repositories=["@pypi"],
-    repo_secrets={
-        "@pypi": "//examples/bitwarden:pypi_token"
-    }
+    repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )
