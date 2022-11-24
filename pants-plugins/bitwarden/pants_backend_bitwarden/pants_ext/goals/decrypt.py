@@ -22,6 +22,7 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionMembership, UnionRule, union
 from pants.util.frozendict import FrozenDict
+from pants.version import PANTS_SEMVER, Version
 from pants_backend_bitwarden.pants_ext.secret_request import (
     FallibleSecretsRequest,
     FallibleSecretsResponse,
@@ -42,10 +43,20 @@ class Decrypt(Goal):
 _F = TypeVar("_F", bound=FieldSet)
 
 
-@union
-@dataclass(frozen=True)
-class DecryptRequest(Generic[_F]):
-    field_set: _F
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+    from pants.engine.environment import EnvironmentName
+
+    @union(in_scope_types=[EnvironmentName])
+    @dataclass(frozen=True)
+    class DecryptRequest(Generic[_F]):
+        field_set: _F
+
+else:
+
+    @union
+    @dataclass(frozen=True)
+    class DecryptRequest(Generic[_F]):
+        field_set: _F
 
 
 @dataclass(frozen=True)
@@ -60,7 +71,6 @@ class DecryptOutputData(FrozenDict[str, ImmutableValue]):
     pass
 
 
-@union
 @dataclass(frozen=True)
 class DecryptFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
     """FieldSet for DecryptRequest.
