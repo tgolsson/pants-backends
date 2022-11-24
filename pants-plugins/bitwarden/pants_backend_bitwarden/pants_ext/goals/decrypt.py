@@ -2,6 +2,8 @@
 
 """
 
+from __future__ import annotations
+
 from abc import ABCMeta
 from dataclasses import dataclass
 from typing import ClassVar, Generic, Type, TypeVar
