@@ -71,32 +71,66 @@ class DecryptOutputData(FrozenDict[str, ImmutableValue]):
     pass
 
 
-@dataclass(frozen=True)
-class DecryptFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
-    """FieldSet for DecryptRequest.
-    Union members may list any fields required to fulfill the instantiation of the
-    `DecryptProcesses` result of the decrypt rule.
-    """
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+    from pants.engine.environment import EnvironmentName
 
-    # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
-    decrypt_request_type: ClassVar[Type[_T]]  # type: ignore[misc]
+    @union(in_scope_types=[EnvironmentName])
+    @dataclass(frozen=True)
+    class DecryptFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
+        """FieldSet for DecryptRequest.
+        Union members may list any fields required to fulfill the instantiation of the
+        `DecryptProcesses` result of the decrypt rule.
+        """
 
-    @final
-    def _request(self) -> _T:
-        """Internal helper for the core decrypt goal."""
-        return self.decrypt_request_type(field_set=self)
+        # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
+        decrypt_request_type: ClassVar[Type[_T]]  # type: ignore[misc]
 
-    @final
-    @classmethod
-    def rules(cls) -> tuple[UnionRule, ...]:
-        """Helper method for registering the union members."""
-        return (
-            UnionRule(DecryptFieldSet, cls),
-            UnionRule(DecryptRequest, cls.decrypt_request_type),
-        )
+        @final
+        def _request(self) -> _T:
+            """Internal helper for the core decrypt goal."""
+            return self.decrypt_request_type(field_set=self)
 
-    def get_output_data(self) -> DecryptOutputData:
-        return DecryptOutputData({"target": self.address})
+        @final
+        @classmethod
+        def rules(cls) -> tuple[UnionRule, ...]:
+            """Helper method for registering the union members."""
+            return (
+                UnionRule(DecryptFieldSet, cls),
+                UnionRule(DecryptRequest, cls.decrypt_request_type),
+            )
+
+        def get_output_data(self) -> DecryptOutputData:
+            return DecryptOutputData({"target": self.address})
+
+else:
+
+    @union
+    @dataclass(frozen=True)
+    class DecryptFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
+        """FieldSet for DecryptRequest.
+        Union members may list any fields required to fulfill the instantiation of the
+        `DecryptProcesses` result of the decrypt rule.
+        """
+
+        # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
+        decrypt_request_type: ClassVar[Type[_T]]  # type: ignore[misc]
+
+        @final
+        def _request(self) -> _T:
+            """Internal helper for the core decrypt goal."""
+            return self.decrypt_request_type(field_set=self)
+
+        @final
+        @classmethod
+        def rules(cls) -> tuple[UnionRule, ...]:
+            """Helper method for registering the union members."""
+            return (
+                UnionRule(DecryptFieldSet, cls),
+                UnionRule(DecryptRequest, cls.decrypt_request_type),
+            )
+
+        def get_output_data(self) -> DecryptOutputData:
+            return DecryptOutputData({"target": self.address})
 
 
 class DecryptProcess(Process):
