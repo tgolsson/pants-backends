@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pants.engine.target import Dependencies, SpecialCasedDependencies, StringField
+from pants.engine.target import BoolField, Dependencies, SpecialCasedDependencies, StringField
 from pants.util.strutil import softwrap
 
 
@@ -9,6 +9,16 @@ class ImageBundle(StringField):
     help = softwrap(
         """
         The tag to use.
+        """
+    )
+
+
+class ImageRepositoryAnonymous(BoolField):
+    alias = "anonymous"
+    default = False
+    help = softwrap(
+        """
+        Whether the repository access should be anonymous.
         """
     )
 

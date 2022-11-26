@@ -1,4 +1,4 @@
-[GLOBAL]
+o[GLOBAL]
 pants_version = "2.14.0"
 
 pythonpath = [

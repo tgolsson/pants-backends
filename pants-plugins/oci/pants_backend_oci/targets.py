@@ -1,8 +1,3 @@
-"""
-
-"""
-
-
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
@@ -14,11 +9,13 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
+
 from pants_backend_oci.target_types import (
     ImageBase,
     ImageDependencies,
     ImageDigest,
     ImageRepository,
+    ImageRepositoryAnonymous,
     ImageTag,
 )
 
@@ -38,6 +35,7 @@ class PullImage(Target):
     core_fields = (
         *COMMON_TARGET_FIELDS,
         ImageRepository,
+        ImageRepositoryAnonymous,
         ImageDigest,
     )
     help = "An imported OCI image."
@@ -54,6 +52,7 @@ class PullImagesGenerator(TargetGenerator):
     core_fields = (
         *COMMON_TARGET_FIELDS,
         ImageRepository,
+        ImageRepositoryAnonymous,
         _ImageVariants,
     )
     copied_fields = (*COMMON_TARGET_FIELDS,)
@@ -78,6 +77,7 @@ async def generate_from_oci_base_images(
                 **request.template,
                 ImageDigest.alias: digest,
                 ImageRepository.alias: generator[ImageRepository].value,
+                ImageRepositoryAnonymous.alias: generator[ImageRepositoryAnonymous].value,
             },
             request.template_address.create_generated(name),
             union_membership,

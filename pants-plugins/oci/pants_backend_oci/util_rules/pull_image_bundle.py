@@ -11,8 +11,9 @@ from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
+
 from pants_backend_oci.subsystem import SkopeoTool
-from pants_backend_oci.target_types import ImageDigest, ImageRepository
+from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageRepositoryAnonymous
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -27,6 +28,7 @@ class ImageBundlePullFieldSet(FieldSet):
 
     repository: ImageRepository
     digest: ImageDigest
+    anonymous: ImageRepositoryAnonymous
 
 
 class ImageBundlePullRequest(FallibleImageBundleRequest):
@@ -53,16 +55,27 @@ async def pull_oci_image(
         skopeo_tool.get_request(platform),
     )
 
+    args = [
+        skopeo.exe,
+        "--insecure-policy",  # TODO[TSOL]: Should likely provide a way to inject a policy into this... Maybe dependency injector?
+        "copy",
+    ]
+
+    if request.target.anonymous:
+        args.append("--src-no-creds")
+
+    args.extend(
+        [
+            f"docker://{request.target.repository.value}@sha256:{request.target.digest.value}",
+            "oci:build:build",
+        ]
+    )
+
+    print(args)
     result = await Get(
         ProcessResult,
         Process(
-            argv=(
-                skopeo.exe,
-                "--insecure-policy",  # TODO[TSOL]: Should likely provide a way to inject a policy into this... Maybe dependency injector?
-                "copy",
-                f"docker://{request.target.repository.value}@sha256:{request.target.digest.value}",
-                "oci:build:build",
-            ),
+            argv=tuple(args),
             input_digest=skopeo.digest,
             description=f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}",
             output_directories=("build",),
