@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
+from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest, RunSubsystem
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import MkdirBinary
 from pants.engine.platform import Platform
@@ -14,6 +14,7 @@ from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
+
 from pants_backend_oci.subsystem import RuncTool
 from pants_backend_oci.targets import ImageRepository
 from pants_backend_oci.tools.process import FusedProcess
@@ -36,6 +37,8 @@ class RunImageBundleCommand(RunFieldSet):
 @dataclass(frozen=True)
 class RunImageBundleProcessRequest:
     target: Target
+
+    args: tuple[str]
 
 
 @rule
@@ -87,12 +90,14 @@ async def prepare_run_image_bundle(
 
 
 @rule
-async def run_oci_command_target(request: RunImageBundleCommand) -> RunRequest:
+async def run_oci_command_target(request: RunImageBundleCommand, rs: RunSubsystem) -> RunRequest:
+    args, rs.args = rs.args, tuple()
+
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(request.address, description_of_origin="package_oci_image"),
     )
-    process = await Get(Process, RunImageBundleProcessRequest(wrapped_target.target))
+    process = await Get(Process, RunImageBundleProcessRequest(wrapped_target.target, args))
 
     return RunRequest(
         digest=process.input_digest,
