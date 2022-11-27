@@ -3,7 +3,7 @@ Pants backend for bitwarden.
 """
 
 from pants_backend_bitwarden import targets
-from pants_backend_bitwarden.goals import decrypt, run
+from pants_backend_bitwarden.goals import decrypt
 from pants_backend_bitwarden.pants_ext import (
     env_secret_provider,
     publish_secret_python,
@@ -16,7 +16,6 @@ from pants_backend_bitwarden.util_rules import secret
 
 def rules():
     return [
-        *run.rules(),
         *secret.rules(),
         *decrypt.rules(),
         *decrypt_goal.rules(),
