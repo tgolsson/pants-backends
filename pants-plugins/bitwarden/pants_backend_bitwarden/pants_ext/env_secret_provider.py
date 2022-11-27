@@ -39,9 +39,6 @@ class EnvironmentSecretFieldSet(FieldSet):
 class FallibleEnvironmentSecretsRequest(FallibleSecretsRequest):
     field_set_type = EnvironmentSecretFieldSet
 
-    def cacheable(self) -> bool:
-        return "CI" not in os.environ
-
 
 @rule
 async def get_environment_key(
