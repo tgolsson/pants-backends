@@ -9,6 +9,11 @@ from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
+from pants_backend_bitwarden.pants_ext.goals.decrypt import (
+    DecryptFieldSet,
+    DecryptRequest,
+    DecryptResponse,
+)
 from pants_backend_bitwarden.pants_ext.secret_request import (
     FallibleSecretsRequest,
     FallibleSecretsResponse,
@@ -61,6 +66,30 @@ async def get_environment_key(
     )
 
 
+class DecryptEnvironmentRequest(DecryptRequest):
+    pass
+
+
+@dataclass(frozen=True)
+class DecryptEnvironmentFieldSet(DecryptFieldSet):
+    decrypt_request_type = DecryptEnvironmentRequest
+    required_fields = (EnvironmentSecretKey,)
+
+    key: EnvironmentSecretKey
+
+
+@rule
+async def decrypt_environment(request: DecryptEnvironmentRequest) -> DecryptResponse:
+    response = await Get(
+        FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set)
+    )
+
+    if response.exit_code != 0:
+        raise Exception(f"failed retreiving environment: {response.stdout}")
+
+    return DecryptResponse(response.response.value)
+
+
 def rules():
     return [
         *collect_rules(),
@@ -68,4 +97,5 @@ def rules():
             FallibleSecretsRequest,
             FallibleEnvironmentSecretsRequest,
         ),
+        *DecryptEnvironmentFieldSet.rules(),
     ]

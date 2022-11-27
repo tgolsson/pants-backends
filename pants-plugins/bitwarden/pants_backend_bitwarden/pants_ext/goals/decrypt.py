@@ -23,11 +23,7 @@ from pants.engine.target import (
 from pants.engine.unions import UnionMembership, UnionRule, union
 from pants.util.frozendict import FrozenDict
 from pants.version import PANTS_SEMVER, Version
-from pants_backend_bitwarden.pants_ext.secret_request import (
-    FallibleSecretsRequest,
-    FallibleSecretsResponse,
-    SecretValue,
-)
+from pants_backend_bitwarden.pants_ext.secret_request import SecretValue
 from typing_extensions import final
 
 
@@ -140,7 +136,7 @@ class DecryptProcess(Process):
 @goal_rule
 async def decrypt(
     console: Console,
-    hello_world_subsystem: DecryptSubsystem,
+    decrypt_subsystem: DecryptSubsystem,
     targets: Targets,
     unions: UnionMembership,
 ) -> Decrypt:
@@ -169,10 +165,10 @@ async def decrypt(
         gets.append(get)
 
     responses = await MultiGet(*gets)
-    with hello_world_subsystem.output(console) as write_stdout:
+    with decrypt_subsystem.output(console) as write_stdout:
         for response in responses:
             secret = response.secret
-            write_stdout(f"Secret {secret.name} from {secret.source}: {secret.value}")
+            write_stdout(f"Secret {secret.name} from {secret.source}: {secret.value}\n")
 
     return Decrypt(exit_code=0)
 

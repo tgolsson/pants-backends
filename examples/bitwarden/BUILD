@@ -9,4 +9,13 @@ bw_item(
     session_secret=":bw_session_key",
 )
 
-bw_item_field(name="pypi_token", item=[":PyPi"], field_name="API_TOKEN")
+bw_password(
+    name="pypi_password",
+    item=[":PyPi"],
+)
+
+bw_item_field(
+    name="pypi_token",
+    item=[":PyPi"],
+    field_name="API_TOKEN",
+)

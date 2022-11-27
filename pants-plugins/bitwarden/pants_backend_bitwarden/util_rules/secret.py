@@ -1,7 +1,7 @@
 """
 
 """
-
+import json
 import os
 from dataclasses import dataclass
 
@@ -24,6 +24,7 @@ from pants_backend_bitwarden.pants_ext.secret_request import (
 )
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import (
+    BitWardenFieldField,
     BitWardenId,
     BitWardenItem,
     BitWardenItemField,
@@ -41,6 +42,7 @@ class BitWardenSecretResponse(SecretsResponse):
 class BitWardenFieldSet(FieldSet):
     required_fields = (BitWardenItemField,)
     item: BitWardenItemField
+    field: BitWardenFieldField
 
 
 @dataclass(frozen=True)
@@ -106,14 +108,6 @@ async def get_bitwarden_key(
         ),
     )
 
-    command = (
-        f"{bw_tool.exe}",
-        "--nointeraction",
-        "get",
-        "password",
-        f"{wrapped_target.target[BitWardenId].value}",
-    )
-
     env_request = ["HOME"]
     extra_env = Environment()
     if wrapped_target.target[BitWardenSessionSecret].value is not None:
@@ -125,6 +119,61 @@ async def get_bitwarden_key(
         env_request.append("BW_SESSION")
 
     relevant_env = await Get(Environment, EnvironmentRequest(env_request))
+    command_env = Environment(**relevant_env, **extra_env)
+
+    if request.target.field.value:
+        command = [
+            f"{bw_tool.exe}",
+            "--nointeraction",
+            "get",
+            "item",
+            f"{wrapped_target.target[BitWardenId].value}",
+        ]
+
+        result: FallibleProcessResult = await Get(
+            FallibleProcessResult,
+            Process(
+                command,
+                description=f"Decrypting {request.target.item}",
+                input_digest=bw_tool.digest,
+                env=command_env,
+                cache_scope=ProcessCacheScope.PER_SESSION,
+            ),
+        )
+
+        if result.exit_code != 0:
+            return FallibleSecretsResponse(
+                exit_code=result.exit_code,
+                stdout=result.stdout.decode("utf-8"),
+                stderr=result.stderr.decode("utf-8"),
+                response=None,
+            )
+
+        fields = json.loads(result.stdout.decode("utf-8"))["fields"]
+        for field in fields:
+            if field["name"] == request.target.field.value:
+                return FallibleSecretsResponse(
+                    exit_code=0,
+                    response=SecretsResponse(
+                        SecretValue(field["value"], request.target.address, "BitWarden"),
+                    ),
+                )
+                break
+
+        return FallibleSecretsResponse(
+            exit_code=1,
+            stdout="",
+            stderr=f"no field `{request.target.field.field_name}` for id `{wrapped_target.target[BitWardenId].value}`",
+            response=None,
+        )
+
+    command = [
+        f"{bw_tool.exe}",
+        "--nointeraction",
+        "get",
+        "password",
+        f"{wrapped_target.target[BitWardenId].value}",
+    ]
 
     result: FallibleProcessResult = await Get(
         FallibleProcessResult,
@@ -132,7 +181,7 @@ async def get_bitwarden_key(
             command,
             description=f"Decrypting {request.target.item}",
             input_digest=bw_tool.digest,
-            env=Environment(**relevant_env, **extra_env),
+            env=command_env,
             cache_scope=ProcessCacheScope.PER_SESSION,
         ),
     )

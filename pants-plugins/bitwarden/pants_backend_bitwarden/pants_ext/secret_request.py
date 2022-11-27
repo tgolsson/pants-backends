@@ -9,6 +9,7 @@ from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
 from pants.version import PANTS_SEMVER, Version
+from pants_backend_bitwarden.pants_ext.exception import FailedDecryptException
 
 
 @dataclass(frozen=True)
@@ -120,6 +121,18 @@ def secrets_request_request(
 
     first_concrete = concrete_requests[0]
     return SecretsRequestWrap(first_concrete)
+
+
+@rule
+def unwrap_fallible_secret(fallible: FallibleSecretsResponse) -> SecretsResponse:
+    if fallible.exit_code != 0:
+        raise FailedDecryptException(
+            "Failed decrypting secret",
+            fallible.stdout,
+            fallible.stderr,
+        )
+
+    return fallible.response
 
 
 def rules():

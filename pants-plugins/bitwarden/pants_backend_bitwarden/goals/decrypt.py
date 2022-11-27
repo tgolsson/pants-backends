@@ -18,9 +18,10 @@ from pants_backend_bitwarden.pants_ext.goals.decrypt import (
     DecryptRequest,
     DecryptResponse,
 )
-from pants_backend_bitwarden.pants_ext.secret_request import SecretValue
+from pants_backend_bitwarden.pants_ext.secret_request import SecretsResponse, SecretValue
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import BitWardenFieldField, BitWardenId, BitWardenItemField
+from pants_backend_bitwarden.util_rules.secret import FallibleBitWardenSecretsRequest
 
 
 class DecryptBitwardenRequest(DecryptRequest):
@@ -33,50 +34,29 @@ class DecryptBitwardenFieldSet(DecryptFieldSet):
     required_fields = (BitWardenItemField,)
 
     item: BitWardenItemField
-    field: BitWardenFieldField
 
 
 @rule
 async def decrypt_bitwarden(
     request: DecryptBitwardenRequest, tool: BitwardenTool, platform: Platform
 ) -> DecryptResponse:
-    bw_tool = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
-
-    item = await Get(
-        Addresses,
-        UnparsedAddressInputs,
-        request.field_set.item.to_unparsed_address_inputs(),
-    )
 
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(
-            item[0],
+            request.field_set.address,
             description_of_origin="Resolve BitWarden ID",
         ),
     )
 
-    command = (
-        f"{bw_tool.exe}",
-        "get",
-        "password",
-        f"{wrapped_target.target[BitWardenId].value}",
-    )
-
-    relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "BW_SESSION"]))
-    result = await Get(
-        ProcessResult,
-        Process(
-            command,
-            description=f"Decrypting {request.field_set.item}",
-            input_digest=bw_tool.digest,
-            env=relevant_env,
-            cache_scope=ProcessCacheScope.PER_SESSION,
+    secret_response = await Get(
+        SecretsResponse,
+        FallibleBitWardenSecretsRequest(
+            FallibleBitWardenSecretsRequest.field_set_type.create(wrapped_target.target),
         ),
     )
-    return DecryptResponse(
-        SecretValue(result.stdout.decode("utf-8"), request.field_set.address, "BitWarden")
-    )
+
+    return DecryptResponse(secret_response.value)
 
 
 def rules():

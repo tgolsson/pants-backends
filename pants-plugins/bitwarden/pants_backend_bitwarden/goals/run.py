@@ -16,6 +16,7 @@ from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import BitWardenId, BitWardenItemField
+
 from pants_backend_oci.tools.process import FusedProcess
 
 
