@@ -14,6 +14,7 @@ from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
+
 from pants_backend_oci.subsystem import RuncTool
 from pants_backend_oci.targets import ImageRepository
 from pants_backend_oci.tools.process import FusedProcess

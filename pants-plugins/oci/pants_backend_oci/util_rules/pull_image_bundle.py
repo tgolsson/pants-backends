@@ -11,6 +11,7 @@ from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
+
 from pants_backend_oci.subsystem import SkopeoTool
 from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageRepositoryAnonymous
 from pants_backend_oci.util_rules.image_bundle import (
