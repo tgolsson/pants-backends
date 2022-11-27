@@ -93,7 +93,6 @@ async def get_bitwarden_key(
     request: FallibleBitWardenSecretsRequest, tool: BitwardenTool, platform: Platform
 ) -> FallibleSecretsResponse:
     bw_tool = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
-
     item = await Get(
         Addresses,
         UnparsedAddressInputs,
