@@ -9,7 +9,6 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
-
 from pants_backend_oci.target_types import (
     ImageBase,
     ImageDependencies,
