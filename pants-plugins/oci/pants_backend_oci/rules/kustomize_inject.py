@@ -12,6 +12,7 @@ from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, UnionRule, collect_rules, rule
 from pants.engine.target import FieldSet, Target, WrappedTarget, WrappedTargetRequest
 from pants_backend_kustomize.requests import KustomizeInjectData, KustomizeInjectRequest
+
 from pants_backend_oci.goals.publish import OciPublishProcessRequest
 from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageTag
 from pants_backend_oci.util_rules.image_bundle import (

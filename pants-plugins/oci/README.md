@@ -46,6 +46,7 @@ oci_pull_image(
 | `name`        | The target name                                  | Same as any other target, which is the directory name |
 | `repository`  | Fully qualified repository name                  | **Required**                                          |
 | `sha`         | The digest of the image, minus the @sha: prefix. | **Required**                                          |
+| `anonymous`   | Whether to pull the image anonymously.           | `false`                                               |
 | `decsription` | A description of the target                      |                                                       |
 | `tags`        | List of tags                                     | `[]`                                                  |
 
@@ -69,6 +70,7 @@ oci_pull_image(
 | `name`        | The target name                              | Same as any other target, which is the directory name |
 | `repository`  | Fully qualified repository name              | **Required**                                          |
 | `variants`    | Dictionary with local tags to the remote sha | **Required**                                          |
+| `anonymous`   | Whether to pull the image anonymously        | `false`                                               |
 | `decsription` | A description of the target                  |                                                       |
 | `tags`        | List of tags                                 | `[]`                                                  |
 
@@ -77,7 +79,7 @@ oci_pull_image(
 Pull multiple shas for an image, generating a target for each.
 
 ``` python
-oci_build_image(
+oci_image_build(
     name="my-server",
     base=":python#slim",
     repository="my-registry.example.com/a-namespace/an-image",

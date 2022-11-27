@@ -1,6 +1,8 @@
 [tool.isort]
 profile = "black"
 line_length = 100
+known_first_party = ["pants_backend_oci", "pants_backend_mdbook", "pants_mdbook_kustomize", "pants_mdbook_k8s"]
+default_section = "THIRDPARTY"
 
 [tool.black]
 line-length = 100
