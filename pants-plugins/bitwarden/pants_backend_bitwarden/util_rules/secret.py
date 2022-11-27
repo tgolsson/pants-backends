@@ -134,7 +134,7 @@ async def get_bitwarden_key(
             FallibleProcessResult,
             Process(
                 command,
-                description=f"Decrypting {request.target.item}",
+                description=f"Decrypting {request.target.address}",
                 input_digest=bw_tool.digest,
                 env=command_env,
                 cache_scope=ProcessCacheScope.PER_SESSION,
@@ -179,7 +179,7 @@ async def get_bitwarden_key(
         FallibleProcessResult,
         Process(
             command,
-            description=f"Decrypting {request.target.item}",
+            description=f"Decrypting {request.target.address}",
             input_digest=bw_tool.digest,
             env=command_env,
             cache_scope=ProcessCacheScope.PER_SESSION,
