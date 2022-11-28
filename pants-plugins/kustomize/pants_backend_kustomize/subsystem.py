@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.option.option_types import BoolOption
-from pants.util.strutil import softwrap
 
 
 class KustomizeTool(ExternalTool):

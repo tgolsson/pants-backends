@@ -1,9 +1,11 @@
 md_book(
     dependencies=[
+        "//pants-plugins/bitwarden:package_data",
         "//pants-plugins/k8s:package_data",
         "//pants-plugins/kustomize:package_data",
         "//pants-plugins/mdbook:package_data",
         "//pants-plugins/oci:package_data",
+        "//pants-plugins/secrets:package_data",
         "//:readme",
     ],
 )

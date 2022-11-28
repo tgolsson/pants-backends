@@ -59,7 +59,7 @@ async def create_archive(request: CreateDeterministicTar) -> Digest:
         "--group=0",
         "--numeric-owner",
     ]
-    print(argv)
+
     # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
     env = {"PATH": os.pathsep.join(SEARCH_PATHS)}
 

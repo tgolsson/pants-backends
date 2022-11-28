@@ -2,20 +2,18 @@ resources(
     name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"]
 )
 
-python_distribution_with_secret(
+python_distribution(
     name="package",
     dependencies=[
         ":package_data",
-        "./pants_backend_oci:pants_backend_oci",
+        "./pants_backend_secrets:pants_backend_secrets",
     ],
     provides=python_artifact(
-        name="pants_backend_oci",
+        name="pants_backend_secrets",
         version="0.1.1",
         long_description_content_type="markdown",
     ),
-    long_description_path="pants-plugins/oci/README.md",
+    long_description_path="pants-plugins/secrets/README.md",
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
-    generate_setup=True,
     repositories=["@pypi"],
-    repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )

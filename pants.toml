@@ -6,6 +6,8 @@ pythonpath = [
    "%(buildroot)s/pants-plugins/oci",
    "%(buildroot)s/pants-plugins/k8s",
    "%(buildroot)s/pants-plugins/mdbook",
+   "%(buildroot)s/pants-plugins/bitwarden",
+   "%(buildroot)s/pants-plugins/secrets",
 ]
 
 backend_packages = [
@@ -20,6 +22,8 @@ backend_packages = [
   "pants_backend_kustomize",
   "pants_backend_k8s",
   "pants_backend_oci",
+  "pants_backend_bitwarden",
+  "pants_backend_secrets",
 ]
 
 [source]
