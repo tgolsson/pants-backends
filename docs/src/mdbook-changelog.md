@@ -1,1 +1,1 @@
-{{#include ../../../pants-plugins/secrets/CHANGELOG.md }}
+{{#include ../../pants-plugins/mdbook/CHANGELOG.md }}
