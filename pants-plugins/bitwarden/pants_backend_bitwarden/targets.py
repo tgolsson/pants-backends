@@ -21,7 +21,7 @@ class BitWardenItemName(StringField):
 class BitWardenItemField(SpecialCasedDependencies):
     alias = "item"
 
-    help = "A BitWarden item name. Not guaranteed to be unique, so prefer using a `BitWardenId`."
+    help = "A reference to a BitWarden Item to use as a source of secrets.."
 
 
 class BitWardenFieldField(StringField):
