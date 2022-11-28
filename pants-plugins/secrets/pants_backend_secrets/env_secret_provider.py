@@ -1,14 +1,10 @@
-"""
-
-"""
-
-import os
 from dataclasses import dataclass
 
 from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
+from pants_backend_secrets.exception import MissingSecret
 from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
 from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
@@ -78,7 +74,7 @@ async def decrypt_environment(request: DecryptEnvironmentRequest) -> DecryptResp
     )
 
     if response.exit_code != 0:
-        raise Exception(f"failed retreiving environment: {response.stdout}")
+        raise MissingSecret(f"failed retreiving environment secret: {response.stdout}")
 
     return DecryptResponse(response.response.value)
 
