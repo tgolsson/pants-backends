@@ -24,3 +24,13 @@
 
 - [Introduction](mdbook-readme.md)
 - [Changelog](./mdbook-changelog.md)
+
+# Secrets
+
+- [Introduction](secrets/readme.md)
+- [Changelog](secrets/changelog.md)
+
+# BitWarden
+
+- [Introduction](bitwarden/readme.md)
+- [Changelog](bitwarden/changelog.md)

@@ -13,15 +13,6 @@ from pants.engine.process import FallibleProcessResult, Process, ProcessCacheSco
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
-from pants_backend_bitwarden.pants_ext.exception import NoDecrypterException
-from pants_backend_bitwarden.pants_ext.secret_request import (
-    FallibleSecretsRequest,
-    FallibleSecretsResponse,
-    SecretsRequestRequest,
-    SecretsRequestWrap,
-    SecretsResponse,
-    SecretValue,
-)
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import (
     BitWardenFieldField,
@@ -29,6 +20,15 @@ from pants_backend_bitwarden.targets import (
     BitWardenItem,
     BitWardenItemField,
     BitWardenSessionSecret,
+)
+from pants_backend_secrets.exception import NoDecrypterException
+from pants_backend_secrets.secret_request import (
+    FallibleSecretsRequest,
+    FallibleSecretsResponse,
+    SecretsRequestRequest,
+    SecretsRequestWrap,
+    SecretsResponse,
+    SecretValue,
 )
 
 

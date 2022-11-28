@@ -23,7 +23,7 @@ from pants.engine.target import (
 from pants.engine.unions import UnionMembership, UnionRule, union
 from pants.util.frozendict import FrozenDict
 from pants.version import PANTS_SEMVER, Version
-from pants_backend_bitwarden.pants_ext.secret_request import SecretValue
+from pants_backend_secrets.secret_request import SecretValue
 from typing_extensions import final
 
 

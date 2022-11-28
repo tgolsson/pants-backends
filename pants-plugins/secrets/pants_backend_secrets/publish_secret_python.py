@@ -36,9 +36,9 @@ from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTarget, Wra
 from pants.option.global_options import GlobalOptions
 from pants.util.docutil import doc_url
 from pants.util.strutil import softwrap
-from pants_backend_bitwarden.pants_ext.exception import FailedDecryptException, NoDecrypterException
-from pants_backend_bitwarden.pants_ext.secret import SecretsField
-from pants_backend_bitwarden.pants_ext.secret_request import (
+from pants_backend_secrets.exception import FailedDecryptException, NoDecrypterException
+from pants_backend_secrets.secret import SecretsField
+from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
     FallibleSecretsResponse,
     SecretsRequestRequest,

@@ -13,15 +13,11 @@ from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessCacheScope, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import WrappedTarget, WrappedTargetRequest
-from pants_backend_bitwarden.pants_ext.goals.decrypt import (
-    DecryptFieldSet,
-    DecryptRequest,
-    DecryptResponse,
-)
-from pants_backend_bitwarden.pants_ext.secret_request import SecretsResponse, SecretValue
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import BitWardenFieldField, BitWardenId, BitWardenItemField
 from pants_backend_bitwarden.util_rules.secret import FallibleBitWardenSecretsRequest
+from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
+from pants_backend_secrets.secret_request import SecretsResponse, SecretValue
 
 
 class DecryptBitwardenRequest(DecryptRequest):

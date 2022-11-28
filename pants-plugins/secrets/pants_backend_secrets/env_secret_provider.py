@@ -9,18 +9,14 @@ from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
-from pants_backend_bitwarden.pants_ext.goals.decrypt import (
-    DecryptFieldSet,
-    DecryptRequest,
-    DecryptResponse,
-)
-from pants_backend_bitwarden.pants_ext.secret_request import (
+from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
+from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
     FallibleSecretsResponse,
     SecretsResponse,
     SecretValue,
 )
-from pants_backend_bitwarden.pants_ext.targets import EnvironmentSecretKey
+from pants_backend_secrets.targets import EnvironmentSecretKey
 
 
 @dataclass(frozen=True)

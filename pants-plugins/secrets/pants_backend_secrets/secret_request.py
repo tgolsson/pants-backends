@@ -9,7 +9,7 @@ from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
 from pants.version import PANTS_SEMVER, Version
-from pants_backend_bitwarden.pants_ext.exception import FailedDecryptException
+from pants_backend_secrets.exception import FailedDecryptException
 
 
 @dataclass(frozen=True)
