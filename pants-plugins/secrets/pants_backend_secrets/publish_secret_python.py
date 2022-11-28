@@ -208,7 +208,6 @@ async def twine_upload_with_secret(
         Get(Process, VenvPexProcess, request) for request in pex_proc_requests
     )
 
-    raise Exception("foobar")
     return PublishProcesses(
         PublishPackages(
             names=dists,
