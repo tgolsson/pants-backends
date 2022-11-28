@@ -74,8 +74,11 @@ if PANTS_SEMVER >= Version("2.15.0.dev0"):
     @dataclass(frozen=True)
     class DecryptFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
         """FieldSet for DecryptRequest.
-        Union members may list any fields required to fulfill the instantiation of the
-        `DecryptProcesses` result of the decrypt rule.
+
+        Union members may list any fields required to fulfill the
+        instantiation of the `DecryptResponse` result of the decrypt
+        rule.
+
         """
 
         # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
@@ -104,8 +107,11 @@ else:
     @dataclass(frozen=True)
     class DecryptFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
         """FieldSet for DecryptRequest.
-        Union members may list any fields required to fulfill the instantiation of the
-        `DecryptProcesses` result of the decrypt rule.
+
+        Union members may list any fields required to fulfill the
+        instantiation of the `DecryptResponse` result of the decrypt
+        rule.
+
         """
 
         # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
@@ -127,10 +133,6 @@ else:
 
         def get_output_data(self) -> DecryptOutputData:
             return DecryptOutputData({"target": self.address})
-
-
-class DecryptProcess(Process):
-    pass
 
 
 @goal_rule

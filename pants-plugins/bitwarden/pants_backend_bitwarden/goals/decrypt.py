@@ -6,18 +6,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessCacheScope, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import WrappedTarget, WrappedTargetRequest
 from pants_backend_bitwarden.subsystem import BitwardenTool
-from pants_backend_bitwarden.targets import BitWardenFieldField, BitWardenId, BitWardenItemField
+from pants_backend_bitwarden.targets import BitWardenItemField
 from pants_backend_bitwarden.util_rules.secret import FallibleBitWardenSecretsRequest
 from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
-from pants_backend_secrets.secret_request import SecretsResponse, SecretValue
+from pants_backend_secrets.secret_request import SecretsResponse
 
 
 class DecryptBitwardenRequest(DecryptRequest):
