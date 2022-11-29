@@ -100,10 +100,10 @@ def ibr_to_fibr(
     if len(concrete_requests) != 1:
         raise ValueError(
             f"Multiple or zero registered builders from {ImageBundleRequest.__name__} can "
-            f"build target {tgt.name}. It is ambiguous which implementation to "
+            f"build target {tgt.address}. It is ambiguous which implementation to "
             f"use.\n\n"
             f"Possible implementations:\n\n"
-            f"{bullet_list(sorted(generator.__name__ for generator in concrete_requests))}"
+            f"{bullet_list(sorted(generator.__class__.__name__ for generator in concrete_requests))}"
         )
 
     first_concrete = concrete_requests[0]
