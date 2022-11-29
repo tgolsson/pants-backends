@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest, RunSubsystem
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import MkdirBinary
+from pants.engine.fs import CreateDigest, Digest, Directory, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
@@ -63,26 +64,22 @@ async def prepare_run_image_bundle(
     if image.exit_code != 0:
         raise ValueError(image.stderr)
 
-    mkdir_process = Process(
-        (mkdir_binary.path, "{chroot}/runspace"),
-        description="Creating runspace directory for runc",
-    )
-
+    rundir = await Get(Digest, CreateDigest([Directory("runspace")]))
     packed_image_process = await Get(Process, UnpackedImageBundleRequest(image.output.digest))
 
     name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
     command = (f"{{chroot}}/{tool.exe} --root runspace run -b unpacked_image pants.runc.{name}",)
 
+    input_digest = await Get(Digest, MergeDigests((rundir, tool.digest)))
     return await Get(
         Process,
         FusedProcess(
             (
                 packed_image_process,
-                mkdir_process,
                 Process(
                     command,
                     description=f"Running {request.target}",
-                    input_digest=tool.digest,
+                    input_digest=input_digest,
                 ),
             )
         ),

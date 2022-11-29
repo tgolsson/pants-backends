@@ -25,7 +25,7 @@ from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import UmociTool
-from pants_backend_oci.target_types import ImageBase
+from pants_backend_oci.target_types import ImageBase, ImageDependencies
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar
 from pants_backend_oci.util_rules.image_bundle import (
@@ -40,7 +40,7 @@ from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 
 @dataclass(frozen=True)
 class BuildImageBundleFieldSet(FieldSet):
-    required_fields = (ImageBase,)
+    required_fields = (ImageBase, ImageDependencies)
 
     base: ImageBase
     dependencies: Dependencies

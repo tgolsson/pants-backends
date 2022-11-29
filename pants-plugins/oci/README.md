@@ -76,7 +76,7 @@ oci_pull_image(
 
 ### `oci_build_image`
 
-Pull multiple shas for an image, generating a target for each.
+Build an image with the provided packages embedded.
 
 ``` python
 oci_image_build(
@@ -93,6 +93,32 @@ oci_image_build(
 | `name`        | The target name                                                                | Same as any other target, which is the directory name |
 | `base`        | The base image to use. Matches the `FROM` directive in a Dockerfile            | **Required**                                          |
 | `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                  |
+| `repository`  | Fully qualified repository name                                                | Required when publishing                              |
+| `tag`         | Remote tag to use                                                              | Required when publishing                              |
+| `decsription` | A description of the target                                                    |                                                       |
+| `tags`        | List of tags                                                                   | `[]`                                                  |
+
+### `oci_python_image`
+
+Build a Python image with the provided packages embedded.
+
+``` python
+oci_python_image(
+    name="my-server",
+    base=":python#slim",
+    repository="my-registry.example.com/a-namespace/an-image",
+	main="/app/server/start.py",
+    tag="latest",
+    packages=[":my_pex"]
+)
+```
+
+| Argument      | Meaning                                                                        | Default value                                         |
+|---------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
+| `name`        | The target name                                                                | Same as any other target, which is the directory name |
+| `base`        | The base image to use. Matches the `FROM` directive in a Dockerfile            | **Required**                                          |
+| `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                  |
+| `python_main` | The main file to run                                                           | The last `.pex` in the dependency list                |
 | `repository`  | Fully qualified repository name                                                | Required when publishing                              |
 | `tag`         | Remote tag to use                                                              | Required when publishing                              |
 | `decsription` | A description of the target                                                    |                                                       |
