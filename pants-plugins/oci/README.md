@@ -100,7 +100,7 @@ oci_image_build(
 
 ### `oci_python_image`
 
-Build an image with the provided packages embedded.
+Build a Python image with the provided packages embedded.
 
 ``` python
 oci_python_image(
