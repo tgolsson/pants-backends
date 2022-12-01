@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-* Add support for specializing how other packages are injected into Kustomize files.
+* [bugfix] Ensure layer tars has no metadata or user information
+* [bugfix] Properly pass args to runc
+* [feature] Add proper metadata where possible
+* [feature] Add support for anonymous image pulling (`anonymous=true`)
+* [feature] Add support for passing image SHA along to Kustomize
+* [feature] Add `python_image_target` which will set entrypoint appropriately
 
 ## [0.1.1] - 2022-11-17
 
