@@ -31,10 +31,16 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
 
     common_digest = await Get(Digest, MergeDigests(common_digest_input))
 
-    script = "cd {chroot}\n" + "\n".join(" ".join(p.argv) for p in request.processes)
+    script = """
+    export ROOT_DIR="$(pwd)"
+    export SANDBOX_DIR="{chroot}"
+    cd $SANDBOX_DIR
+    """ + "\n".join(
+        " ".join(p.argv) for p in request.processes
+    )
 
     return Process(
-        (bash.path, "-c", script),
+        (bash.path, "-c", script, "$@"),
         description=f"Fused run of: {common_description}",
         input_digest=common_digest,
         output_files=common_output_files,

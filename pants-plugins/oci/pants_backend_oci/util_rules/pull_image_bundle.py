@@ -71,7 +71,6 @@ async def pull_oci_image(
         ]
     )
 
-    print(args)
     result = await Get(
         ProcessResult,
         Process(
