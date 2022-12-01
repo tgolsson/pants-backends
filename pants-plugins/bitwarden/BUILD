@@ -2,7 +2,7 @@ resources(
     name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"]
 )
 
-python_distribution(
+python_distribution_with_secret(
     name="package",
     dependencies=[
         ":package_data",
@@ -16,4 +16,5 @@ python_distribution(
     long_description_path="pants-plugins/bitwarden/README.md",
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
     repositories=["@pypi"],
+    repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )
