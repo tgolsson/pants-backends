@@ -6,7 +6,9 @@ authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
 
-dependencies = []
+dependencies = [
+    "pants-backend-kustomize~=0.1"
+]
 readme = "README.md"
 license = {file = "LICENSE-MIT.txt"}
 keywords = ["pantsbuild", "pants", "docker", "oci", "container"]
