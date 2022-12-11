@@ -7,7 +7,7 @@ authors = [
 ]
 
 dependencies = [
-    "pants_backend_secrets~=0.1.0"
+    "pants_backend_secrets>=0.1.0"
 ]
 
 readme = "README.md"

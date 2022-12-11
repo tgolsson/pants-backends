@@ -1,36 +1,14 @@
 import os
 
-from pants.core.goals.package import BuiltPackage, PackageFieldSet
-from pants.core.target_types import FileSourceField
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.engine.fs import (
-    AddPrefix,
-    CreateDigest,
-    Digest,
-    DigestContents,
-    FileContent,
-    MergeDigests,
-    RemovePrefix,
-    Snapshot,
-)
+from pants.engine.fs import AddPrefix, Digest, MergeDigests, Snapshot
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    DependenciesRequest,
-    FieldSetsPerTarget,
-    FieldSetsPerTargetRequest,
-    GeneratedSources,
-    GenerateSourcesRequest,
-    SourcesField,
-    Target,
-    Targets,
-    TransitiveTargets,
-    TransitiveTargetsRequest,
-)
+from pants.engine.target import GeneratedSources, GenerateSourcesRequest
 from pants.engine.unions import UnionRule
 from pants.source.source_root import SourceRoot, SourceRootRequest
+
 from pants_backend_k8s.target_types import KubernetesSourceField
 from pants_backend_kustomize.subsystem import KustomizeTool
 from pants_backend_kustomize.target_types import KustomizeSourcesField

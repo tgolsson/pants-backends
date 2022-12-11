@@ -9,6 +9,7 @@ from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
 from pants.version import PANTS_SEMVER, Version
+
 from pants_backend_secrets.exception import FailedDecryptException
 
 
@@ -74,9 +75,7 @@ class SecretsResponse:
     value: SecretValue
 
     def __post_init__(self):
-        assert isinstance(
-            self.value, SecretValue
-        ), f"value must be SecretValue but was {type(self.value)}"
+        assert isinstance(self.value, SecretValue), f"value must be SecretValue but was {type(self.value)}"
 
     def cacheable(self) -> bool:
         return False
@@ -110,8 +109,8 @@ def secrets_request_request(
 
     if len(concrete_requests) != 1:
         raise ValueError(
-            f"Multiple or zero registered decrypters from {SecretsRequestRequest.__name__} can build target "
-            f"{tgt.name}. It is ambiguous which implementation to use.\n\n"
+            f"Multiple or zero registered decrypters from {SecretsRequestRequest.__name__} can "
+            f"build target {tgt.name}. It is ambiguous which implementation to use.\n\n"
             "Possible implementations:\n\n"
             f"{bullet_list(sorted(generator.__name__ for generator in concrete_requests))}"
         )

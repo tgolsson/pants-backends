@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pants.engine.platform import Platform
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import WrappedTarget, WrappedTargetRequest
+
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import BitWardenItemField
 from pants_backend_bitwarden.util_rules.secret import FallibleBitWardenSecretsRequest
@@ -32,7 +33,6 @@ class DecryptBitwardenFieldSet(DecryptFieldSet):
 async def decrypt_bitwarden(
     request: DecryptBitwardenRequest, tool: BitwardenTool, platform: Platform
 ) -> DecryptResponse:
-
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(

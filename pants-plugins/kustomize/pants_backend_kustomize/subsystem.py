@@ -26,10 +26,8 @@ class KustomizeTool(ExternalTool):
             "linux_x86_64": "linux_amd64",
         }
         plat_str = platform_mapping[plat.value]
-        return (
-            f"https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/{self.version}/"
-            f"kustomize_{self.version}_{plat_str}.tar.gz"
-        )
+        base = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize"
+        return f"{base}/{self.version}/kustomize_{self.version}_{plat_str}.tar.gz"
 
     def generate_exe(self, _: Platform) -> str:
-        return f"./kustomize"
+        return "./kustomize"

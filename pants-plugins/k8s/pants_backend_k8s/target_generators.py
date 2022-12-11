@@ -13,6 +13,7 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
+
 from pants_backend_k8s.target_types import (
     KubernetesClusterField,
     KubernetesCommandField,
@@ -127,9 +128,7 @@ async def generate_from_k8s_objects(
             union_membership,
         )
 
-    result = [
-        await create_tgt(c) for c in ("apply", "describe", "delete", "get", "replace", "create")
-    ]
+    result = [await create_tgt(c) for c in ("apply", "describe", "delete", "get", "replace", "create")]
 
     return GeneratedTargets(generator, result)
 

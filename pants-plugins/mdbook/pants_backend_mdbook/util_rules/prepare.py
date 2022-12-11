@@ -44,8 +44,7 @@ async def prepare_md_book_ctx(request: MdBookAnalysisRequest, mdbook: MdBookTool
         Get(
             SourceFiles,
             SourceFilesRequest(
-                [target.get(MdBookSources)]
-                + [t.get(SourcesField) for t in transitive_targets.dependencies],
+                [target.get(MdBookSources)] + [t.get(SourcesField) for t in transitive_targets.dependencies],
             ),
         ),
         Get(

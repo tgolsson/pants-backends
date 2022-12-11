@@ -1,18 +1,13 @@
-"""
-
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.engine.fs import Digest, DigestContents
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, UnionRule, collect_rules, rule
 from pants.engine.target import FieldSet, Target, WrappedTarget, WrappedTargetRequest
-from pants_backend_kustomize.requests import KustomizeInjectData, KustomizeInjectRequest
 
+from pants_backend_kustomize.requests import KustomizeInjectData, KustomizeInjectRequest
 from pants_backend_oci.goals.publish import OciPublishProcessRequest
 from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageTag
 from pants_backend_oci.util_rules.image_bundle import (
@@ -46,9 +41,7 @@ async def generate_oci_tag_injection(
         WrappedTarget,
         WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),
     )
-    image_request = await Get(
-        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
-    )
+    image_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
     image = await Get(FallibleImageBundle, FallibleImageBundleRequest, image_request.request)
     if image.exit_code != 0 or image.dependency_failed:
         raise Exception(
@@ -64,7 +57,10 @@ async def generate_oci_tag_injection(
                 input_digest=image_digest,
                 repository=field_set.repository.value,
                 tag=field_set.tag.value,
-                description=f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}",
+                description=(
+                    f"Publish OCI Image {field_set.address} ->"
+                    f" {field_set.repository.value}:{field_set.tag.value}"
+                ),
             ),
         )
 

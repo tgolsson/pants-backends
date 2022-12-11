@@ -76,7 +76,9 @@ async def publish_oci_process(
         input_digest=sandbox_input,
         argv=(
             skopeo.exe,
-            "--insecure-policy",  # TODO[TSOL]: Should likely provide a way to inject a policy into this... Maybe dependency injector?
+            # TODO[TSOL]: Should likely provide a way to inject a
+            # policy into this... Maybe dependency injector?
+            "--insecure-policy",
             "copy",
             "oci:build",
             f"docker://{request.repository}:{request.tag}",
@@ -105,7 +107,9 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
             input_digest=image_digest,
             repository=field_set.repository.value,
             tag=field_set.tag.value,
-            description=f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}",
+            description=(
+                f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}"
+            ),
         ),
     )
 
