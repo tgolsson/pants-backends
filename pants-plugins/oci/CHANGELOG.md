@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * [feature] Add support for anonymous image pulling (`anonymous=true`)
 * [feature] Add support for passing image SHA along to Kustomize
 * [feature] Add `python_image_target` which will set entrypoint appropriately
+* [feature] Forward PATH env variable to publish step to make credHelpers work
 
 ## [0.1.1] - 2022-11-17
 
