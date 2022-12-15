@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * [bugfix] Ensure layer tars has no metadata or user information
 * [bugfix] Properly pass args to runc
+* [bugfix] Fix log output in package_oci_image
 * [feature] Add proper metadata where possible
 * [feature] Add support for anonymous image pulling (`anonymous=true`)
 * [feature] Add support for passing image SHA along to Kustomize

@@ -118,7 +118,7 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
 
     artifact = BuiltPackageArtifact(
         relpath=f"{name}.{suffix}",
-        extra_log_lines=[f"Packaged image: {image.output.image_sha}"],
+        extra_log_lines=(f"Packaged image: {image.output.image_sha}",),
     )
 
     return BuiltPackage(archive.digest, (artifact,))
