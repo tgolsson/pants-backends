@@ -22,7 +22,6 @@ class UmociTool(ExternalTool):
         return f"https://github.com/opencontainers/umoci/releases/download/{self.version}/umoci.{plat_str}"
 
     def generate_exe(self, plat: Platform) -> str:
-
         platform_mapping = {
             "linux_x86_64": "amd64",
         }

@@ -19,7 +19,6 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     ImageBundle,
 )
-from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 
 
 @dataclass(frozen=True)
@@ -57,7 +56,9 @@ async def pull_oci_image(
 
     args = [
         skopeo.exe,
-        "--insecure-policy",  # TODO[TSOL]: Should likely provide a way to inject a policy into this... Maybe dependency injector?
+        # TODO[TSOL]: Should likely provide a way to inject a policy
+        # into this... Maybe dependency injector?
+        "--insecure-policy",
         "copy",
     ]
 
@@ -71,12 +72,14 @@ async def pull_oci_image(
         ]
     )
 
+    desc = f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}"
+
     result = await Get(
         ProcessResult,
         Process(
             argv=tuple(args),
             input_digest=skopeo.digest,
-            description=f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}",
+            description=desc,
             output_directories=("build",),
         ),
     )

@@ -71,7 +71,6 @@ async def generate_from_oci_base_images(
     generator = request.generator
 
     def create_tgt(name: str, digest: str) -> PullImage:
-
         return PullImage(
             {
                 **request.template,
@@ -83,9 +82,7 @@ async def generate_from_oci_base_images(
             union_membership,
         )
 
-    result = [
-        create_tgt(name, digest) for (name, digest) in generator[_ImageVariants].value.items()
-    ]
+    result = [create_tgt(name, digest) for (name, digest) in generator[_ImageVariants].value.items()]
 
     return GeneratedTargets(generator, result)
 

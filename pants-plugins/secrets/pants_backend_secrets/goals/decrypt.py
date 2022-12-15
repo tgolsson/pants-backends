@@ -10,7 +10,6 @@ from typing import ClassVar, Generic, Type, TypeVar
 
 from pants.engine.console import Console
 from pants.engine.goal import Goal, GoalSubsystem, Outputting
-from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, goal_rule
 from pants.engine.target import (
     FieldSet,
@@ -23,8 +22,8 @@ from pants.engine.target import (
 from pants.engine.unions import UnionMembership, UnionRule, union
 from pants.util.frozendict import FrozenDict
 from pants.version import PANTS_SEMVER, Version
+
 from pants_backend_secrets.secret_request import SecretValue
-from typing_extensions import final
 
 
 class DecryptSubsystem(Outputting, GoalSubsystem):
@@ -84,12 +83,10 @@ if PANTS_SEMVER >= Version("2.15.0.dev0"):
         # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
         decrypt_request_type: ClassVar[Type[_T]]  # type: ignore[misc]
 
-        @final
         def _request(self) -> _T:
             """Internal helper for the core decrypt goal."""
             return self.decrypt_request_type(field_set=self)
 
-        @final
         @classmethod
         def rules(cls) -> tuple[UnionRule, ...]:
             """Helper method for registering the union members."""
@@ -117,12 +114,10 @@ else:
         # Subclasses must provide this, to a union member (subclass) of `DecryptRequest`.
         decrypt_request_type: ClassVar[Type[_T]]  # type: ignore[misc]
 
-        @final
         def _request(self) -> _T:
             """Internal helper for the core decrypt goal."""
             return self.decrypt_request_type(field_set=self)
 
-        @final
         @classmethod
         def rules(cls) -> tuple[UnionRule, ...]:
             """Helper method for registering the union members."""

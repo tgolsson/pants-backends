@@ -6,10 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.engine.addresses import Address, Addresses
-from pants.engine.fs import Digest, MergeDigests
+from pants.engine.addresses import Address
+from pants.engine.fs import Digest
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
 

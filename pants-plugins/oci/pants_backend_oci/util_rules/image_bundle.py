@@ -19,7 +19,6 @@ class ImageBundleRequest:
 
 
 if PANTS_SEMVER >= Version("2.15.0.dev0"):
-
     from pants.engine.environment import EnvironmentName
 
     @union(in_scope_types=[EnvironmentName])
@@ -66,15 +65,11 @@ class FallibleImageBundle(EngineAwareReturnType):
     dependency_failed: bool = False
 
     def level(self) -> LogLevel:
-        return (
-            LogLevel.ERROR if self.exit_code != 0 and not self.dependency_failed else LogLevel.DEBUG
-        )
+        return LogLevel.ERROR if self.exit_code != 0 and not self.dependency_failed else LogLevel.DEBUG
 
     def message(self) -> str:
         message = self.import_path
-        message += (
-            " succeeded." if self.exit_code == 0 else f" failed (exit code {self.exit_code})."
-        )
+        message += " succeeded." if self.exit_code == 0 else f" failed (exit code {self.exit_code})."
         if self.stdout:
             message += f"\n{self.stdout}"
         if self.stderr:
@@ -101,8 +96,8 @@ def ibr_to_fibr(
         raise ValueError(
             f"Multiple or zero registered builders from {ImageBundleRequest.__name__} can "
             f"build target {tgt.address}. It is ambiguous which implementation to "
-            f"use.\n\n"
-            f"Possible implementations:\n\n"
+            "use.\n\n"
+            "Possible implementations:\n\n"
             f"{bullet_list(sorted(generator.__class__.__name__ for generator in concrete_requests))}"
         )
 

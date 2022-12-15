@@ -36,7 +36,6 @@ build-backend = "pdm.pep517.api"
 
 [tool.isort]
 profile = "black"
-
 known_first_party = ["pants_backend_kustomize"]
 line_length = 100
 include_trailing_comma = true

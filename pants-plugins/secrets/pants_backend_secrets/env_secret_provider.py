@@ -4,6 +4,7 @@ from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
+
 from pants_backend_secrets.exception import MissingSecret
 from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
 from pants_backend_secrets.secret_request import (
@@ -48,9 +49,7 @@ async def get_environment_key(
     return FallibleSecretsResponse(
         exit_code=0,
         response=SecretsResponse(
-            SecretValue(
-                relevant_env[request.target.key.value], request.target.address, "Environment"
-            ),
+            SecretValue(relevant_env[request.target.key.value], request.target.address, "Environment"),
         ),
     )
 
@@ -69,9 +68,7 @@ class DecryptEnvironmentFieldSet(DecryptFieldSet):
 
 @rule
 async def decrypt_environment(request: DecryptEnvironmentRequest) -> DecryptResponse:
-    response = await Get(
-        FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set)
-    )
+    response = await Get(FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set))
 
     if response.exit_code != 0:
         raise MissingSecret(f"failed retreiving environment secret: {response.stdout}")

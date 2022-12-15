@@ -19,5 +19,5 @@ def main():
     print(f"Processor: {my_system.processor}")
 
     print("Env:")
-    for (k, v) in os.environ.items():
+    for k, v in os.environ.items():
         print("\t", k, v)

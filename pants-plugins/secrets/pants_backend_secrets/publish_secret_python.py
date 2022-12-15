@@ -1,8 +1,3 @@
-"""
-
-"""
-
-
 from dataclasses import dataclass
 
 from pants.backend.python.goals.publish import (
@@ -36,6 +31,7 @@ from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTarget, Wra
 from pants.option.global_options import GlobalOptions
 from pants.util.docutil import doc_url
 from pants.util.strutil import softwrap
+
 from pants_backend_secrets.exception import FailedDecryptException, NoDecrypterException
 from pants_backend_secrets.secret import SecretsField
 from pants_backend_secrets.secret_request import (
@@ -49,9 +45,7 @@ from pants_backend_secrets.secret_request import (
 class PublishSecretsField(SecretsField):
     alias = "repo_secrets"
 
-    help = softwrap(
-        "Dictionary with all secrets to request. Each key should match a repository name."
-    )
+    help = softwrap("Dictionary with all secrets to request. Each key should match a repository name.")
 
 
 class PublishPythonWithSecretPackageRequest(PublishPythonPackageRequest):
@@ -107,10 +101,7 @@ async def twine_upload_with_secret(
     global_options: GlobalOptions,
 ) -> PublishProcesses:
     dists = tuple(
-        artifact.relpath
-        for pkg in request.packages
-        for artifact in pkg.artifacts
-        if artifact.relpath
+        artifact.relpath for pkg in request.packages for artifact in pkg.artifacts if artifact.relpath
     )
 
     if twine_subsystem.skip or not dists:
@@ -163,24 +154,21 @@ async def twine_upload_with_secret(
         )
         wrapped_target = await Get(
             WrappedTarget,
-            WrappedTargetRequest(
-                secret_address[0], description_of_origin="twine_upload_with_secret"
-            ),
+            WrappedTargetRequest(secret_address[0], description_of_origin="twine_upload_with_secret"),
         )
 
         secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
         if secret_request.request is None:
             raise NoDecrypterException(
-                f"No valid decrypter found for secret: `{secret_address[0]}` of type `{wrapped_target.target.alias}`"
+                f"No valid decrypter found for secret: `{secret_address[0]}` of "
+                f"type `{wrapped_target.target.alias}`"
             )
 
-        secret_requests.append(
-            Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
-        )
+        secret_requests.append(Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request))
 
     fallible_secrets = await MultiGet(*secret_requests)
     secrets = []
-    for (repo, maybe_secret) in zip(request.field_set.repositories.value, fallible_secrets):
+    for repo, maybe_secret in zip(request.field_set.repositories.value, fallible_secrets):
         if maybe_secret.exit_code != 0:
             raise FailedDecryptException(
                 f"Failed decrypting secret for repo: {repo}",
@@ -204,9 +192,7 @@ async def twine_upload_with_secret(
             )
         )
 
-    processes = await MultiGet(
-        Get(Process, VenvPexProcess, request) for request in pex_proc_requests
-    )
+    processes = await MultiGet(Get(Process, VenvPexProcess, request) for request in pex_proc_requests)
 
     return PublishProcesses(
         PublishPackages(

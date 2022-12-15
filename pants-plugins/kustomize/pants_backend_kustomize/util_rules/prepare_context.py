@@ -12,6 +12,7 @@ from pants.engine.target import (
     Target,
     Targets,
 )
+
 from pants_backend_kustomize.requests import (
     KustomizeInjectData,
     KustomizeInjectRequest,
@@ -53,12 +54,11 @@ async def prepare_build_context(
     other_deps = []
     dep_names = []
     inject_data_queries = []
-    for (dependency, dependency_name) in zip(
+    for dependency, dependency_name in zip(
         root_dependencies, request.target[KustomizeDependenciesField].value or []
     ):
         kir = await Get(KustomizeInjectRequestWrap, KustomizeInjectRequestQuery(dependency))
         if isinstance(dependency, KustomizeTarget):
-
             root_contexts_get.append(
                 Get(KustomizationContext, KustomizationContextRequest(target=dependency))
             )
@@ -82,8 +82,7 @@ async def prepare_build_context(
 
     # Package binary dependencies for build context.
     embedded_pkgs = await MultiGet(
-        Get(BuiltPackage, PackageFieldSet, field_set)
-        for field_set in embedded_pkgs_per_target.field_sets
+        Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
     )
 
     root_contents = await Get(DigestContents, Digest, root.snapshot.digest)
@@ -104,14 +103,10 @@ async def prepare_build_context(
 
     embedded_pkgs = embedded_pkgs or []
     for dep, pkg in zip(dep_names, embedded_pkgs):
-        root_manifest = root_manifest.replace(
-            dep, os.path.relpath(pkg.artifacts[0].relpath, root_dir)
-        )
+        root_manifest = root_manifest.replace(dep, os.path.relpath(pkg.artifacts[0].relpath, root_dir))
 
     for kustomize_inject in inject_data_queries:
-        root_manifest = root_manifest.replace(
-            f"//{kustomize_inject.address}", kustomize_inject.value
-        )
+        root_manifest = root_manifest.replace(f"//{kustomize_inject.address}", kustomize_inject.value)
 
     patched_root = await Get(
         Digest,

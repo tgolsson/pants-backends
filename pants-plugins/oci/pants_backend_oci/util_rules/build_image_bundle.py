@@ -70,12 +70,8 @@ async def build_oci_bundle_package(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(
-        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
-    )
-    maybe_built_base = await Get(
-        FallibleImageBundle, FallibleImageBundleRequest, build_request.request
-    )
+    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -94,8 +90,7 @@ async def build_oci_bundle_package(
 
         # Package binary dependencies for build context.
         embedded_pkgs = await MultiGet(
-            Get(BuiltPackage, PackageFieldSet, field_set)
-            for field_set in embedded_pkgs_per_target.field_sets
+            Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
         )
 
         embedded_pkgs_digest = [built_package.digest for built_package in embedded_pkgs]
@@ -108,9 +103,7 @@ async def build_oci_bundle_package(
 
         snapshot = await Get(Snapshot, Digest, layer_digest)
 
-        raw_layer_digest = await Get(
-            Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
-        )
+        raw_layer_digest = await Get(Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar"))
 
         command_digest = await Get(
             Digest,

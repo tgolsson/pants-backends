@@ -24,7 +24,8 @@ class BitwardenTool(ExternalTool):
             "linux_x86_64": "linux",
         }
         platform = platform_mapping[plat.value]
-        return f"https://github.com/bitwarden/clients/releases/download/cli-v{self.version}/bw-{platform}-{self.version}.zip"
+        base = "https://github.com/bitwarden/clients/releases/download"
+        return f"{base}/cli-v{self.version}/bw-{platform}-{self.version}.zip"
 
     def generate_exe(self, _: Platform) -> str:
         return "./bw"

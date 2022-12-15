@@ -16,6 +16,7 @@ backend_packages = [
 
   "pants.backend.python.lint.black",
   "pants.backend.python.lint.isort",
+  "pants.backend.python.lint.flake8",
 
   "pants.backend.plugin_development",
   "pants_backend_mdbook",

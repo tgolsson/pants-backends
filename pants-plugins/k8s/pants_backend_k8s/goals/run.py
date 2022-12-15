@@ -18,6 +18,7 @@ from pants.engine.target import (
     WrappedTargetRequest,
 )
 from pants.engine.unions import UnionRule
+
 from pants_backend_k8s.subsystem import KubernetesTool
 from pants_backend_k8s.target_types import (
     KubernetesClusterField,
@@ -45,9 +46,7 @@ class RunKubernetesCommand(RunFieldSet):
 
 
 @rule
-async def compute_command_line(
-    request: KubernetesCommandLineProcessRequest, tool: KubernetesTool
-) -> Process:
+async def compute_command_line(request: KubernetesCommandLineProcessRequest, tool: KubernetesTool) -> Process:
     kubernetes_command = request.target
     download_kubernetes_get = Get(
         DownloadedExternalTool, ExternalToolRequest, tool.get_request(Platform.current)
