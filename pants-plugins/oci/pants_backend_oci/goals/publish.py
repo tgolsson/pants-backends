@@ -74,7 +74,7 @@ async def publish_oci_process(
     )
     sandbox_input = await Get(Digest, MergeDigests([skopeo.digest, request.input_digest]))
 
-    relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH"]))
+    relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
     return Process(
         input_digest=sandbox_input,
         argv=(
