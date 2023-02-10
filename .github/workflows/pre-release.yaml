@@ -12,6 +12,9 @@ concurrency:
   group: "pre-release"
   cancel-in-progress: true
 
+env:
+  PANTS_PANTSD: False
+
 jobs:
   check_date:
     runs-on: ubuntu-latest
