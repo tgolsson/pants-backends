@@ -35,7 +35,6 @@ class ImageFieldSet(PackageFieldSet):
 
 @dataclass(frozen=True)
 class OciArchiveRequest:
-
     input_digest: Digest
     output_filename: str
     description: str
@@ -65,7 +64,9 @@ async def package_oci_archive(
             input_digest=sandbox_input,
             argv=(
                 skopeo.exe,
-                "--insecure-policy",  # TODO[TSOL]: Should likely provide a way to inject a policy into this... Maybe dependency injector?
+                # TODO[TSOL]: Should likely provide a way to inject a
+                # policy into this... Maybe dependency injector?
+                "--insecure-policy",
                 "copy",
                 "oci:build:build",
                 f"oci-archive:{request.output_filename}",
@@ -87,7 +88,8 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
     target = wrapped_target.target
     if field_set.tag.value is not None and field_set.digest.value is not None:
         raise InvalidTargetException(
-            f"The {repr(target.alias)} target {field_set.address} must specify one of `digest` and `tag` but not both: {field_set.tag} {field_set.digest}."
+            f"The {repr(target.alias)} target {field_set.address} must specify one of `digest` and"
+            f" `tag` but not both: {field_set.tag} {field_set.digest}."
         )
 
     request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
@@ -116,7 +118,7 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
 
     artifact = BuiltPackageArtifact(
         relpath=f"{name}.{suffix}",
-        extra_log_lines=[f"Packaged image: {image.output.image_sha}"],
+        extra_log_lines=(f"Packaged image: {image.output.image_sha}",),
     )
 
     return BuiltPackage(archive.digest, (artifact,))

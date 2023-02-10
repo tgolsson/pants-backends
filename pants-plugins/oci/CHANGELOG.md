@@ -5,14 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.2.0 - 2022-12-06
 
 * [bugfix] Ensure layer tars has no metadata or user information
 * [bugfix] Properly pass args to runc
+* [bugfix] Fix log output in package_oci_image
 * [feature] Add proper metadata where possible
 * [feature] Add support for anonymous image pulling (`anonymous=true`)
 * [feature] Add support for passing image SHA along to Kustomize
 * [feature] Add `python_image_target` which will set entrypoint appropriately
+* [feature] Forward PATH env variable to publish step to make credHelpers work
 
 ## [0.1.1] - 2022-11-17
 

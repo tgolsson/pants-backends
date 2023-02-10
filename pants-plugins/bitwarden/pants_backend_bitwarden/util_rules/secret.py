@@ -13,6 +13,7 @@ from pants.engine.process import FallibleProcessResult, Process, ProcessCacheSco
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
+
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import (
     BitWardenFieldField,
@@ -78,7 +79,8 @@ async def get_bitwarden_session_secret(request: BitWardenSessionKeyRequest) -> S
     secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
     if secret_request.request is None:
         raise NoDecrypterException(
-            f"No valid decrypter found for secret: `{secret_address[0]}` of type `{wrapped_target.target.alias}`"
+            f"No valid decrypter found for secret: `{secret_address[0]}` of type"
+            f" `{wrapped_target.target.alias}`"
         )
 
     response = await Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
@@ -110,9 +112,7 @@ async def get_bitwarden_key(
     env_request = ["HOME"]
     extra_env = Environment()
     if wrapped_target.target[BitWardenSessionSecret].value is not None:
-        bw_session_secret = await Get(
-            SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target)
-        )
+        bw_session_secret = await Get(SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target))
         extra_env = Environment(**{"BW_SESSION": bw_session_secret.value.value})
     else:
         env_request.append("BW_SESSION")
@@ -162,7 +162,10 @@ async def get_bitwarden_key(
         return FallibleSecretsResponse(
             exit_code=1,
             stdout="",
-            stderr=f"no field `{request.target.field.field_name}` for id `{wrapped_target.target[BitWardenId].value}`",
+            stderr=(
+                f"no field `{request.target.field.field_name}` for id"
+                f" `{wrapped_target.target[BitWardenId].value}`"
+            ),
             response=None,
         )
 

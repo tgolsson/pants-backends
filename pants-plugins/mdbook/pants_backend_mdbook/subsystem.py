@@ -25,7 +25,8 @@ class MdBookTool(ExternalTool):
 
     def generate_url(self, plat: Platform) -> str:
         plat_str = _mdbook_platform_mapping[plat.value]
-        return f"https://github.com/rust-lang/mdBook/releases/download/{self.version}/mdbook-{self.version}-{plat_str}.tar.gz"
+        base = "https://github.com/rust-lang/mdBook/releases/download"
+        return f"{base}/{self.version}/mdbook-{self.version}-{plat_str}.tar.gz"
 
     def generate_exe(self, plat: Platform) -> str:
         return "./mdbook"

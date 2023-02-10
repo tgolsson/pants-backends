@@ -19,9 +19,7 @@ class FusedProcess:
 
 @rule
 async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
-    common_output_directories = list(
-        set(sum([list(p.output_directories) for p in request.processes], []))
-    )
+    common_output_directories = list(set(sum([list(p.output_directories) for p in request.processes], [])))
 
     common_output_files = list(set(sum([list(p.output_files) for p in request.processes], [])))
 

@@ -11,6 +11,7 @@ from pants.core.goals.publish import (
     PublishRequest,
 )
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
@@ -72,17 +73,22 @@ async def publish_oci_process(
         skopeo.get_request(platform),
     )
     sandbox_input = await Get(Digest, MergeDigests([skopeo.digest, request.input_digest]))
+
+    relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH"]))
     return Process(
         input_digest=sandbox_input,
         argv=(
             skopeo.exe,
-            "--insecure-policy",  # TODO[TSOL]: Should likely provide a way to inject a policy into this... Maybe dependency injector?
+            # TODO[TSOL]: Should likely provide a way to inject a
+            # policy into this... Maybe dependency injector?
+            "--insecure-policy",
             "copy",
             "oci:build",
             f"docker://{request.repository}:{request.tag}",
         ),
         description=f"Publishing OCI Archive: {request.repository}:{request.tag}",
         output_files=tuple(),
+        env=relevant_env,
     )
 
 
@@ -105,19 +111,21 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
             input_digest=image_digest,
             repository=field_set.repository.value,
             tag=field_set.tag.value,
-            description=f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}",
+            description=(
+                f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}"
+            ),
         ),
     )
 
     return PublishProcesses(
-        [
+        (
             PublishPackages(
                 names=(f"{field_set.repository.value}:{field_set.tag.value}",),
                 process=InteractiveProcess.from_process(process),
                 description=process.description,
                 data=PublishOutputData({"repository": process.description}),
-            )
-        ]
+            ),
+        )
     )
 
 
