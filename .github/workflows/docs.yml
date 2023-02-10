@@ -38,7 +38,6 @@ jobs:
         with:
           gha-cache-key: cache0-test-py3.9
           named-caches-hash: ${{ hashFiles('pants.lock') }}
-          pants-python-version: 3.9
 
       - name: Build docs
         run: ./pants package docs:docs
