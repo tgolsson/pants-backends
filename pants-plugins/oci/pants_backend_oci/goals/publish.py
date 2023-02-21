@@ -86,7 +86,7 @@ async def publish_oci_process(
             "oci:build",
             f"docker://{request.repository}:{request.tag}",
         ),
-        description=f"Publishing OCI Archive: {request.repository}:{request.tag}",
+        description=f"{request.repository}:{request.tag}",
         output_files=tuple(),
         env=relevant_env,
     )
@@ -120,7 +120,7 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
     return PublishProcesses(
         (
             PublishPackages(
-                names=(f"{field_set.repository.value}:{field_set.tag.value}",),
+                names=(f"{image.output.image_sha}",),
                 process=InteractiveProcess.from_process(process),
                 description=process.description,
                 data=PublishOutputData({"repository": process.description}),
