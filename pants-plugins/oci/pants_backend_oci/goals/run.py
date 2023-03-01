@@ -34,6 +34,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequestWrap,
     ImageBundleRequest,
 )
+from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
 
@@ -50,30 +51,6 @@ class RunImageBundleProcessRequest:
     target: Target
 
 
-class JqBinary(BinaryPath):
-    pass
-
-
-@dataclass(frozen=True)
-class JqBinaryRequest:
-    pass
-
-
-@rule
-async def find_jq_wrapper(_: JqBinaryRequest, jq_binary: JqBinary) -> JqBinary:
-    return jq_binary
-
-
-@rule(desc="Finding the `jq` binary")
-async def find_jq() -> JqBinary:
-    request = BinaryPathRequest(
-        binary_name="jq", search_path=SEARCH_PATHS, test=BinaryPathTest(args=["--version"])
-    )
-    paths = await Get(BinaryPaths, BinaryPathRequest, request)
-    first_path = paths.first_path_or_raise(request, rationale="work with `json` data")
-    return JqBinary(first_path.path, first_path.fingerprint)
-
-
 @rule
 async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
@@ -82,7 +59,9 @@ async def prepare_run_image_bundle(
     mv: MvBinary,
     platform: Platform,
 ) -> Process:
-    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    download_runc_tool = Get(
+        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
+    )
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),

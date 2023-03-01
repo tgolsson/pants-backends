@@ -31,7 +31,7 @@ async def make_unpack_process(
     command = (
         f"{{chroot}}/{umoci.exe}",
         "unpack",
-        "--rootless",
+        #        "--rootless",
         "--image",
         "build:build",
         "unpacked_image",
@@ -41,7 +41,7 @@ async def make_unpack_process(
         command,
         description="Unpacking OCI bundle",
         input_digest=input_digest,
-        output_directories=("unpacked_image",),
+        #        output_directories=("unpacked_image",),
     )
 
 
