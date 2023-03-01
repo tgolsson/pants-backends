@@ -12,6 +12,8 @@ from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
     ImageBase,
+    ImageBuildCommand,
+    ImageBuildOutputs,
     ImageDependencies,
     ImageDigest,
     ImageEmptyMarker,
@@ -84,7 +86,9 @@ async def generate_from_oci_base_images(
             union_membership,
         )
 
-    result = [create_tgt(name, digest) for (name, digest) in generator[_ImageVariants].value.items()]
+    result = [
+        create_tgt(name, digest) for (name, digest) in generator[_ImageVariants].value.items()
+    ]
 
     return GeneratedTargets(generator, result)
 
@@ -111,8 +115,20 @@ class ImageEmpty(Target):
     help = "An imported OCI image."
 
 
+class ImageBuildStep(Target):
+    alias = "oci_build_artifact"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageBase,
+        ImageDependencies,
+        ImageBuildOutputs,
+        ImageBuildCommand,
+    )
+    help = "An imported OCI image."
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild, ImageEmpty]
+    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty]
 
 
 def rules():

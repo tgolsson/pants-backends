@@ -51,6 +51,7 @@ pants-214 = "pants-plugins/214.lock"
 pants-215 = "pants-plugins/215.lock"
 pants-216 = "pants-plugins/216.lock"
 pants-217 = "pants-plugins/217.lock"
+example-1 = "pants-plugins/example-1.lock"
 
 [python.resolves_to_interpreter_constraints]
 pants-plugins = [">=3.7,<3.10"]
