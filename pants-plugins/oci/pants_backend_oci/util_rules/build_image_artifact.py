@@ -50,6 +50,7 @@ from pants_backend_oci.util_rules.archive import (
     CreateDeterministicDirectoryTar,
     CreateDeterministicTar,
 )
+from pants_backend_oci.util_rules.copy import CopyFromRequest
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -58,7 +59,9 @@ from pants_backend_oci.util_rules.image_bundle import (
     ImageBundleRequest,
 )
 from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
+from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
 from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
+from pants_backend_oci.util_rules.run import RunContainerRequest
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
 
@@ -91,7 +94,7 @@ async def build_image_artifact(
     cat: CatBinary,
     cp: CpBinary,
     mkdir: MkdirBinary,
-) -> Process:
+) -> ProcessResult:
     base = await Get(
         Addresses,
         UnparsedAddressInputs,
@@ -113,54 +116,53 @@ async def build_image_artifact(
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
 
-    umoci = await Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
+    umoci_request = Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
     base = maybe_built_base.output
     base_digest = base.digest
 
     if request.target.dependencies:
-        root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))
-
-        embedded_pkgs_per_target = await Get(
-            FieldSetsPerTarget,
-            FieldSetsPerTargetRequest(PackageFieldSet, root_dependencies),
+        dependencies = await MultiGet(
+            Get(Targets, DependenciesRequest(request.target.dependencies)),
         )
 
-        # Package binary dependencies for build context.
-        embedded_pkgs = await MultiGet(
-            Get(BuiltPackage, PackageFieldSet, field_set)
-            for field_set in embedded_pkgs_per_target.field_sets
+        layers = []
+        for dependency in dependencies:
+            layers.append(Get(ImageLayer, ImageLayerRequest(dependency[0])))
+
+        umoci, *layers = await MultiGet(
+            umoci_request,
+            *layers,
         )
 
-        embedded_pkgs_digest = [built_package.digest for built_package in embedded_pkgs]
-        all_digests = embedded_pkgs_digest
+        for layer in layers:
+            input_digest = await Get(
+                Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
+            )
 
-        layer_digest = await Get(
-            Digest,
-            MergeDigests(all_digests),
-        )
+            image_with_layer = await Get(
+                ProcessResult,
+                Process(
+                    (umoci.exe, *layer.layer_command),
+                    input_digest=input_digest,
+                    description=f"Package OCI Image Bundle: {layer.address}",
+                    output_directories=("build/",),
+                ),
+            )
 
-        snapshot = await Get(Snapshot, Digest, layer_digest)
+            digest = image_with_layer.output_digest
+            input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
+            image_with_config = await Get(
+                ProcessResult,
+                Process(
+                    (umoci.exe, *layer.config_command),
+                    input_digest=input_digest,
+                    description=f"Configure OCI Image Bundle: {layer.address}",
+                    output_directories=("build/",),
+                ),
+            )
+            base_digest = image_with_config.output_digest
 
-        raw_layer_digest = await Get(
-            Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
-        )
-
-        command_digest = await Get(
-            Digest,
-            MergeDigests([raw_layer_digest, umoci.digest, base_digest]),
-        )
-
-        import datetime
-
-        timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
-
-        config = [
-            "--config.env",
-            "BUILT_BY=pants.oci",
-            "--author=pants_backend_oci",
-            f"--created={timestamp}",
-            "--no-history",
-        ]
+        config = []
         for value in request.target.environment.value:
             config.extend(
                 [
@@ -168,128 +170,38 @@ async def build_image_artifact(
                     value,
                 ]
             )
-        compile_result = await Get(
-            FallibleProcessResult,
-            FusedProcess(
+
+        output_digest = base_digest
+        image_with_config = await Get(
+            ProcessResult,
+            Process(
                 (
-                    Process(
-                        (
-                            umoci.exe,
-                            "raw",
-                            "add-layer",
-                            "--history.author=pants_backend_oci",
-                            f"--history.created_by='Layer target: {request.target.address}'",
-                            f"--history.comment='Layer target: {request.target.address}'",
-                            f"--history.created={timestamp}",
-                            "--image",
-                            "build:build",
-                            "layers/image_bundle.tar",
-                        ),
-                        input_digest=command_digest,
-                        description=f"Package OCI Image Bundle: {request.target.address}",
-                    ),
-                    Process(
-                        (
-                            umoci.exe,
-                            "config",
-                            *config,
-                            "--image",
-                            "build:build",
-                        ),
-                        input_digest=command_digest,
-                        description=f"Configure OCI Image: {request.target.address}",
-                        output_directories=("build",),
-                    ),
+                    umoci.exe,
+                    "config",
+                    *config,
+                    "--image",
+                    "build:build",
                 ),
+                input_digest=input_digest,
+                description=f"Configure OCI Image Bundle: {layer.address}",
+                output_directories=("build/",),
             ),
         )
 
-        if compile_result.exit_code != 0:
-            return FallibleImageBundle(
-                None,
-                compile_result.exit_code,
-                stdout=compile_result.stdout.decode("utf-8"),
-                stderr=compile_result.stderr.decode("utf-8"),
-            )
-
-        compilation_digest = compile_result.output_digest
-        output_digest = compilation_digest
-
+        output_digest = image_with_config.output_digest
     else:
         output_digest = base_digest
 
-    download_runc_tool = Get(
-        DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)
-    )
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),
-    )
+    bundle = ImageBundle(output_digest, "", True)
 
-    tool, rundir, jq = await MultiGet(
-        download_runc_tool,
-        Get(Digest, CreateDigest([Directory("runspace")])),
-        Get(JqBinary, JqBinaryRequest()),
+    modified_image = await Get(
+        ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
     )
-
-    packed_image_process = await Get(Process, UnpackedImageBundleRequest(output_digest))
-    name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
-    script = dedent(
-        f"""
-        ROOT=`pwd`
-        for arg in "$@"; do
-            echo "$arg" | {jq.path} -R --argjson config "$({cat.path} $ROOT/unpacked_image/config.json)" '
-                    .  as $arg  | $config | .process.args += [$arg]
-                ' > "$ROOT/unpacked_image/config.json"
-        done
-        set -x
-        {cat.path} <<< $({jq.path} '.process.terminal = false' "$ROOT/unpacked_image/config.json") > "$ROOT/unpacked_image/config.json"
-        echo $ROOT
-        `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc.{name}
-    """
+    bundle = ImageBundle(modified_image.output_digest, "", True)
+    artifacts = await Get(
+        ProcessResult, CopyFromRequest(bundle, tuple(), request.target.outputs.value)
     )
-    script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
-    input_digest, tar_process = await MultiGet(
-        Get(Digest, MergeDigests((rundir, tool.digest, script_digest))),
-        Get(Process, CreateDeterministicDirectoryTar("out", "out.tar")),
-    )
-    copy_list = ["set -x"]
-    for path in request.target.outputs.value:
-        copy_list.extend(
-            [
-                f"{mkdir.path} -p out/{os.path.dirname(path)}",
-                f"{cp.path} -r unpacked_image/rootfs/{path} out/{path}",
-            ]
-        )
-
-    copy_digest = await Get(
-        Digest,
-        CreateDigest(
-            [
-                FileContent("copy.sh", ";\n".join(copy_list).encode("utf-8")),
-                Directory("out"),
-            ]
-        ),
-    )
-    return await Get(
-        Process,
-        FusedProcess(
-            (
-                packed_image_process,
-                Process(
-                    (bash.path, "{chroot}/run.sh", f"{request.target.commands.value}"),
-                    description=f"Running {request.target.address}",
-                    input_digest=input_digest,
-                ),
-                Process(
-                    (bash.path, "{chroot}/copy.sh"),
-                    description="Copying outputs",
-                    input_digest=copy_digest,
-                ),
-                tar_process,
-            )
-        ),
-    )
+    return artifacts
 
 
 def rules():

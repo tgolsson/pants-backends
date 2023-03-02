@@ -50,13 +50,11 @@ async def package_oci_image(field_set: ImageArtifactBuildFieldSet) -> BuiltPacka
     )
     target = wrapped_target.target
 
-    process = await Get(
-        Process,
+    output = await Get(
+        ProcessResult,
         ImageArtifactBuildRequest(ImageArtifactBuildRequest.field_set_type.create(target)),
     )
 
-    output = await Get(ProcessResult, Process, process)
-    print(process)
     artifact = BuiltPackageArtifact(
         relpath="qwe",
         extra_log_lines=(f"Built artifacts: {output.output_digest}",),

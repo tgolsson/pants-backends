@@ -11,12 +11,14 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    ImageArgs,
     ImageBase,
     ImageBuildCommand,
     ImageBuildOutputs,
     ImageDependencies,
     ImageDigest,
     ImageEmptyMarker,
+    ImageEntrypoint,
     ImageEnvironment,
     ImageRepository,
     ImageRepositoryAnonymous,
@@ -112,6 +114,9 @@ class ImageEmpty(Target):
     core_fields = (
         *COMMON_TARGET_FIELDS,
         ImageEmptyMarker,
+        ImageEnvironment,
+        ImageEntrypoint,
+        ImageArgs,
     )
     help = "An imported OCI image."
 

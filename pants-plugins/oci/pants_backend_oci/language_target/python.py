@@ -149,7 +149,6 @@ async def build_python_image(
             ),
         )
         digest = image_with_config.output_digest
-
     input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
     image_with_layer = await Get(
         ProcessResult,

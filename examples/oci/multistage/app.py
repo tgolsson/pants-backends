@@ -4,4 +4,6 @@
 
 import tensorflow
 
-print("Tensorflow version:", tensorflow.__version__)
+
+def run():
+    print("Tensorflow version:", tensorflow.__version__)

@@ -135,3 +135,23 @@ class ImageBuildCommand(StringField):
         Globs to capture as outputs from the build step.
         """
     )
+
+
+class ImageEntrypoint(StringField):
+    alias = "entrypoint"
+
+    help = softwrap(
+        """
+        The entrypoint to use
+        """
+    )
+
+
+class ImageArgs(StringSequenceField):
+    alias = "args"
+
+    help = softwrap(
+        """
+        Globs to capture as outputs from the build step.
+        """
+    )

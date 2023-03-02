@@ -7,7 +7,7 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
+from pants.engine.process import FallibleProcessResult, Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
     Dependencies,
@@ -22,7 +22,13 @@ from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import UmociTool
-from pants_backend_oci.target_types import ImageBase, ImageDependencies
+from pants_backend_oci.target_types import (
+    ImageArgs,
+    ImageBase,
+    ImageDependencies,
+    ImageEntrypoint,
+    ImageEnvironment,
+)
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
@@ -41,6 +47,9 @@ class BuildImageBundleFieldSet(FieldSet):
 
     base: ImageBase
     dependencies: Dependencies
+    environment: ImageEnvironment
+    entrypoint: ImageEntrypoint
+    args: ImageArgs
 
 
 @dataclass(frozen=True)
@@ -67,8 +76,12 @@ async def build_oci_bundle_package(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
-    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
+    build_request = await Get(
+        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
+    )
+    maybe_built_base = await Get(
+        FallibleImageBundle, FallibleImageBundleRequest, build_request.request
+    )
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -76,7 +89,6 @@ async def build_oci_bundle_package(
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
     base = maybe_built_base.output
     base_digest = base.digest
-
     if request.target.dependencies:
         root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))
 
@@ -87,7 +99,9 @@ async def build_oci_bundle_package(
         layers = await MultiGet(*layers)
 
         for layer in layers:
-            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
+            input_digest = await Get(
+                Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
+            )
 
             image_with_layer = await Get(
                 ProcessResult,
@@ -108,12 +122,68 @@ async def build_oci_bundle_package(
                     )
                 ),
             )
+            if image_with_layer.exit_code != 0:
+                return FallibleImageBundle(
+                    None,
+                    image_with_layer.exit_code,
+                    stdout=image_with_layer.stdout.decode("utf-8"),
+                    stderr=image_with_layer.stderr.decode("utf-8"),
+                )
+
             base_digest = image_with_layer.output_digest
 
         output_digest = base_digest
 
     else:
         output_digest = base_digest
+
+    config = []
+    if request.target.environment.value:
+        for value in request.target.environment.value:
+            config.extend(
+                [
+                    "--config.env",
+                    value,
+                ]
+            )
+
+    if request.target.entrypoint.value:
+        config.extend(["--config.entrypoint", request.target.entrypoint.value])
+
+    if request.target.args.value:
+        for arg in request.target.args.value:
+            config.extend(["--config.cmd", arg])
+
+    if config:
+        output_digest = base_digest
+        compile_result = await Get(
+            FallibleProcessResult,
+            Process(
+                (
+                    umoci.exe,
+                    "config",
+                    *config,
+                    "--image",
+                    "build:build",
+                ),
+                input_digest=input_digest,
+                description=f"Configure OCI Image Bundle: {layer.address}",
+                output_directories=("build/",),
+            ),
+        )
+
+        output_digest = compile_result.output_digest
+
+        if compile_result.exit_code != 0:
+            return FallibleImageBundle(
+                None,
+                compile_result.exit_code,
+                stdout=compile_result.stdout.decode("utf-8"),
+                stderr=compile_result.stderr.decode("utf-8"),
+            )
+            base_digest = image_with_layer.output_digest
+
+        output_digest = compile_result.output_digest
 
     image_digest = await Get(OciSha, OciShaRequest(output_digest))
 

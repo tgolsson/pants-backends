@@ -32,6 +32,7 @@ backend_packages = [
 root_patterns = [
   '/',
   '/pants-plugins',
+  '/examples/oci',
 ]
 marker_filenames = ["pyproject.toml"]
 
