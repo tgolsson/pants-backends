@@ -4,13 +4,20 @@
 from __future__ import annotations
 
 import dataclasses
+import os
 from dataclasses import dataclass
 from textwrap import dedent
 from typing import ClassVar
 
 from pants.core.goals.package import BuiltPackage, PackageFieldSet
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import BashBinary
+from pants.core.util_rules.system_binaries import (
+    BashBinary,
+    CatBinary,
+    CpBinary,
+    MkdirBinary,
+    TarBinary,
+)
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
 from pants.engine.platform import Platform
@@ -36,9 +43,13 @@ from pants_backend_oci.target_types import (
     ImageBuildCommand,
     ImageBuildOutputs,
     ImageDependencies,
+    ImageEnvironment,
 )
 from pants_backend_oci.tools.process import FusedProcess
-from pants_backend_oci.util_rules.archive import CreateDeterministicTar
+from pants_backend_oci.util_rules.archive import (
+    CreateDeterministicDirectoryTar,
+    CreateDeterministicTar,
+)
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -61,6 +72,7 @@ class ImageArtifactBuildFieldSet(PackageFieldSet):
     outputs: ImageBuildOutputs
 
     dependencies: ImageDependencies
+    environment: ImageEnvironment
 
 
 class ImageArtifactBuildRequest(FallibleImageBundleRequest):
@@ -76,6 +88,9 @@ async def build_image_artifact(
     runc: RuncTool,
     platform: Platform,
     bash: BashBinary,
+    cat: CatBinary,
+    cp: CpBinary,
+    mkdir: MkdirBinary,
 ) -> Process:
     base = await Get(
         Addresses,
@@ -138,16 +153,21 @@ async def build_image_artifact(
         import datetime
 
         timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
+
         config = [
             "--config.env",
             "BUILT_BY=pants.oci",
-            "--config.entrypoint",
-            f"/{embedded_pkgs[0].artifacts[0].relpath}",
             "--author=pants_backend_oci",
             f"--created={timestamp}",
             "--no-history",
         ]
-
+        for value in request.target.environment.value:
+            config.extend(
+                [
+                    "--config.env",
+                    value,
+                ]
+            )
         compile_result = await Get(
             FallibleProcessResult,
             FusedProcess(
@@ -218,28 +238,55 @@ async def build_image_artifact(
         f"""
         ROOT=`pwd`
         for arg in "$@"; do
-            echo "$arg" | {jq.path} -R --argjson config "$(cat $ROOT/unpacked_image/config.json)" '
+            echo "$arg" | {jq.path} -R --argjson config "$({cat.path} $ROOT/unpacked_image/config.json)" '
                     .  as $arg  | $config | .process.args += [$arg]
                 ' > "$ROOT/unpacked_image/config.json"
         done
-        `pwd`/{tool.exe} --root runspace run -b unpacked_image pants.runc.{name}
-        exit 1
+        set -x
+        {cat.path} <<< $({jq.path} '.process.terminal = false' "$ROOT/unpacked_image/config.json") > "$ROOT/unpacked_image/config.json"
+        echo $ROOT
+        `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc.{name}
     """
     )
     script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
-    input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
+    input_digest, tar_process = await MultiGet(
+        Get(Digest, MergeDigests((rundir, tool.digest, script_digest))),
+        Get(Process, CreateDeterministicDirectoryTar("out", "out.tar")),
+    )
+    copy_list = ["set -x"]
+    for path in request.target.outputs.value:
+        copy_list.extend(
+            [
+                f"{mkdir.path} -p out/{os.path.dirname(path)}",
+                f"{cp.path} -r unpacked_image/rootfs/{path} out/{path}",
+            ]
+        )
 
+    copy_digest = await Get(
+        Digest,
+        CreateDigest(
+            [
+                FileContent("copy.sh", ";\n".join(copy_list).encode("utf-8")),
+                Directory("out"),
+            ]
+        ),
+    )
     return await Get(
         Process,
         FusedProcess(
             (
                 packed_image_process,
                 Process(
-                    (bash.path, "{chroot}/run.sh", "$*"),
-                    description=f"Running {request.target}",
+                    (bash.path, "{chroot}/run.sh", f"{request.target.commands.value}"),
+                    description=f"Running {request.target.address}",
                     input_digest=input_digest,
-                    output_directories=tuple(f"runspace/{v}" for v in request.target.outputs.value),
                 ),
+                Process(
+                    (bash.path, "{chroot}/copy.sh"),
+                    description="Copying outputs",
+                    input_digest=copy_digest,
+                ),
+                tar_process,
             )
         ),
     )

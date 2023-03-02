@@ -56,12 +56,13 @@ async def package_oci_image(field_set: ImageArtifactBuildFieldSet) -> BuiltPacka
     )
 
     output = await Get(ProcessResult, Process, process)
+    print(process)
     artifact = BuiltPackageArtifact(
         relpath="qwe",
-        extra_log_lines=(f"Built artifacts: {output.digest}",),
+        extra_log_lines=(f"Built artifacts: {output.output_digest}",),
     )
 
-    return BuiltPackage(output.digest, (artifact,))
+    return BuiltPackage(output.output_digest, (artifact,))
 
 
 def rules():

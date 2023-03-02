@@ -14,9 +14,12 @@ oci_build_artifact(
     base=["//examples/oci:python3-d11#latest"],
     packages=[":binary-deps"],
     commands=(
-        "RUN PEX_TOOLS=1 /usr/local/bin/python3.10 /binary-deps.pex venv --scope=deps --compile /bin/app"
+        "/examples.oci.multistage/binary-deps.pex venv --scope=srcs --compile /bin/app"
     ),
-    outputs=["/bin/app/"],
+    env=[
+        "PEX_TOOLS=1",
+    ],
+    outputs=["bin/app/"],
 )
 
 pex_binary(
@@ -32,9 +35,9 @@ oci_build_artifact(
     base=["//examples/oci:python3-d11#latest"],
     packages=[":binary-srcs"],
     commands=(
-        "RUN PEX_TOOLS=1 /usr/local/bin/python3.10 /binary-srcs.pex venv --scope=srcs --compile /bin/app"
+        "python /examples.oci.multistage/binary-deps.pex venv --scope=srcs --compile /bin/app"
     ),
-    outputs=["/bin/app/"],
+    outputs=["bin/app/"],
 )
 
 oci_python_image(

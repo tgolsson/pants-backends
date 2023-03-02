@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.fs import Digest, MergeDigests
+from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import Get, collect_rules, rule
@@ -25,13 +25,13 @@ async def make_unpack_process(
     request: UnpackedImageBundleRequest, tool: UmociTool, platform: Platform
 ) -> Process:
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
-
-    input_digest = await Get(Digest, MergeDigests([request.bundle, umoci.digest]))
+    output_dir = await Get(Digest, CreateDigest([Directory("unpacked_image")]))
+    input_digest = await Get(Digest, MergeDigests([request.bundle, umoci.digest, output_dir]))
 
     command = (
         f"{{chroot}}/{umoci.exe}",
         "unpack",
-        #        "--rootless",
+        "--rootless",
         "--image",
         "build:build",
         "unpacked_image",

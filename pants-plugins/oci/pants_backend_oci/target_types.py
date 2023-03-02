@@ -117,6 +117,16 @@ class ImageBuildOutputs(StringSequenceField):
     )
 
 
+class ImageEnvironment(StringSequenceField):
+    alias = "env"
+
+    help = softwrap(
+        """
+        Environment variables to set.
+        """
+    )
+
+
 class ImageBuildCommand(StringField):
     alias = "commands"
 

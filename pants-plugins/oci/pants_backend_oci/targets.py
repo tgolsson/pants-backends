@@ -17,6 +17,7 @@ from pants_backend_oci.target_types import (
     ImageDependencies,
     ImageDigest,
     ImageEmptyMarker,
+    ImageEnvironment,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -123,6 +124,7 @@ class ImageBuildStep(Target):
         ImageDependencies,
         ImageBuildOutputs,
         ImageBuildCommand,
+        ImageEnvironment,
     )
     help = "An imported OCI image."
 
