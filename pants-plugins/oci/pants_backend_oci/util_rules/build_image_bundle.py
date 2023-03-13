@@ -103,34 +103,33 @@ async def build_oci_bundle_package(
                 Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
             )
 
-            image_with_layer = await Get(
-                ProcessResult,
+            image = await Get(
+                FallibleProcessResult,
                 FusedProcess(
                     (
                         Process(
                             (umoci.exe, *layer.layer_command),
                             input_digest=input_digest,
                             description=f"Package OCI Image Bundle: {layer.address}",
-                            output_directories=("build/",),
                         ),
                         Process(
                             (umoci.exe, *layer.config_command),
-                            input_digest=input_digest,
                             description=f"Configure OCI Image Bundle: {layer.address}",
                             output_directories=("build/",),
                         ),
                     )
                 ),
             )
-            if image_with_layer.exit_code != 0:
+
+            if image.exit_code != 0:
                 return FallibleImageBundle(
                     None,
-                    image_with_layer.exit_code,
-                    stdout=image_with_layer.stdout.decode("utf-8"),
-                    stderr=image_with_layer.stderr.decode("utf-8"),
+                    image.exit_code,
+                    stdout=image.stdout.decode("utf-8"),
+                    stderr=image.stderr.decode("utf-8"),
                 )
 
-            base_digest = image_with_layer.output_digest
+            base_digest = image.output_digest
 
         output_digest = base_digest
 
@@ -155,7 +154,8 @@ async def build_oci_bundle_package(
             config.extend(["--config.cmd", arg])
 
     if config:
-        output_digest = base_digest
+        input_digest = await Get(Digest, MergeDigests([umoci.digest, output_digest]))
+
         compile_result = await Get(
             FallibleProcessResult,
             Process(
@@ -167,12 +167,10 @@ async def build_oci_bundle_package(
                     "build:build",
                 ),
                 input_digest=input_digest,
-                description=f"Configure OCI Image Bundle: {layer.address}",
+                description="Configure OCI environment",
                 output_directories=("build/",),
             ),
         )
-
-        output_digest = compile_result.output_digest
 
         if compile_result.exit_code != 0:
             return FallibleImageBundle(
@@ -181,7 +179,7 @@ async def build_oci_bundle_package(
                 stdout=compile_result.stdout.decode("utf-8"),
                 stderr=compile_result.stderr.decode("utf-8"),
             )
-            base_digest = image_with_layer.output_digest
+            base_digest = compile_result.output_digest
 
         output_digest = compile_result.output_digest
 

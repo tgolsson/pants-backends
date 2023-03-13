@@ -107,7 +107,6 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         "BUILT_BY=pants.oci",
         "--author=pants_backend_oci",
         f"--created={timestamp}",
-        "--no-history",
     ]
 
     if embedded_pkgs:

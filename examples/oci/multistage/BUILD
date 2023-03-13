@@ -1,12 +1,21 @@
-python_requirement(name="reqs", requirements=["tensorflow"], resolve="example-1")
+
 python_sources(resolve="example-1")
+
+python_requirements(
+    name="reqs",
+    module_mapping={
+        "tensorflow-cpu": ["tensorflow"],
+    },
+    resolve="example-1"
+)
 
 pex_binary(
     name="binary-deps",
-    entry_point="multistage.app:run",
+    entry_point="app.py",
     layout="packed",
     include_sources=False,
     include_tools=True,
+    resolve="example-1",
 )
 
 oci_build_artifact(
@@ -23,11 +32,19 @@ oci_build_artifact(
 )
 
 pex_binary(
+    name="test",
+    entry_point="app.py",
+    dependencies=[":multistage", ""],
+    resolve="example-1",
+)
+
+pex_binary(
     name="binary-srcs",
-    entry_point="multistage.app:run",
+    entry_point="app.py",
     layout="packed",
     include_requirements=False,
     include_tools=True,
+    resolve="example-1",
 )
 
 oci_build_artifact(

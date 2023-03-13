@@ -24,12 +24,12 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
     )
     common_output_files = list(set(sum([list(p.output_files) for p in request.processes], [])))
     common_digest_input = list(set([p.input_digest for p in request.processes if p.input_digest]))
-
     common_description = " | ".join(p.description for p in request.processes)
 
     common_digest = await Get(Digest, MergeDigests(common_digest_input))
 
     script = """
+    set -euo pipefail
     export ROOT_DIR="$(pwd)"
     export SANDBOX_DIR="{chroot}"
     cd $SANDBOX_DIR
