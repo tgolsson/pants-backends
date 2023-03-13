@@ -1,4 +1,4 @@
-[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/tgolsson/pants-backends/Publish%20Documentation?label=Documentation)](https://tgolsson.github.io/pants-backends/)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/tgolsson/pants-backends/docs.yml?label=Documentation)](https://tgolsson.github.io/pants-backends/)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-oci?label=pants-backend-oci)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-mdbook?label=pants-backend-mdbook)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-k8s?label=pants-backend-k8s)
