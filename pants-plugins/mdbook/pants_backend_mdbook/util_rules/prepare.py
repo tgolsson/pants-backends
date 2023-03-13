@@ -32,7 +32,9 @@ class MdBookAnalysisRequest:
 
 
 @rule(desc="Prepare MD Book Build Context")
-async def prepare_md_book_ctx(request: MdBookAnalysisRequest, mdbook: MdBookTool) -> MdBookAnalysis:
+async def prepare_md_book_ctx(
+    request: MdBookAnalysisRequest, mdbook: MdBookTool, platform: Platform
+) -> MdBookAnalysis:
     (targets, transitive_targets) = await MultiGet(
         Get(Targets, Addresses([request.address])),
         Get(TransitiveTargets, TransitiveTargetsRequest([request.address])),
@@ -50,7 +52,7 @@ async def prepare_md_book_ctx(request: MdBookAnalysisRequest, mdbook: MdBookTool
         Get(
             DownloadedExternalTool,
             ExternalToolRequest,
-            mdbook.get_request(Platform.current),
+            mdbook.get_request(platform),
         ),
     )
 

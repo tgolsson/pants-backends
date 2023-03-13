@@ -25,14 +25,16 @@ class GenerateKubernetesFromKustomizeRequest(GenerateSourcesRequest):
 
 @rule
 async def generate_kubernetes_from_kustomize(
-    request: GenerateKubernetesFromKustomizeRequest, kustomize: KustomizeTool
+    request: GenerateKubernetesFromKustomizeRequest,
+    kustomize: KustomizeTool,
+    platform: Platform,
 ) -> GeneratedSources:
     (context, kustomize) = await MultiGet(
         Get(KustomizationContext, KustomizationContextRequest(request.protocol_target)),
         Get(
             DownloadedExternalTool,
             ExternalToolRequest,
-            kustomize.get_request(Platform.current),
+            kustomize.get_request(platform),
         ),
     )
 

@@ -3,6 +3,8 @@
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-mdbook?label=pants-backend-mdbook)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-k8s?label=pants-backend-k8s)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-kustomize?label=pants-backend-kustomize)
+![Pants](https://img.shields.io/badge/Pants-2.14.0--2.16.0a0-%2355acee)
+
 # Tom's Pants backends
 
 This is the documentation for my Pants backend, which I use for my own projects - especially managing my own cloud, but
