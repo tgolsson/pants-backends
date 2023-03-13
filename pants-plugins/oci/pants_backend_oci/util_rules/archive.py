@@ -85,9 +85,7 @@ async def create_archive(request: CreateDeterministicTar) -> Digest:
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.
     # passing a list of filenames into the utilities fixes this.
     FILE_LIST_FILENAME = "__pants_archive_filelist__"
-    file_list_file = FileContent(
-        FILE_LIST_FILENAME, "\n".join(request.snapshot.files).encode("utf-8")
-    )
+    file_list_file = FileContent(FILE_LIST_FILENAME, "\n".join(request.snapshot.files).encode("utf-8"))
     file_list_file_digest = await Get(Digest, CreateDigest([file_list_file]))
     files_digests = [file_list_file_digest, request.snapshot.digest]
     input_digests = []

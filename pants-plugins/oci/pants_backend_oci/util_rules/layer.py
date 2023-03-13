@@ -69,8 +69,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     # Package binary dependencies for build context.
     embedded_pkgs = await MultiGet(
-        Get(BuiltPackage, PackageFieldSet, field_set)
-        for field_set in embedded_pkgs_per_target.field_sets
+        Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
     )
 
     packages_str = ", ".join(a.relpath for p in embedded_pkgs for a in p.artifacts if a.relpath)
@@ -96,9 +95,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         raw_layer_digest = snapshot.digest
         layer_name = snapshot.files[0]
     else:
-        raw_layer_digest = await Get(
-            Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
-        )
+        raw_layer_digest = await Get(Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar"))
         layer_name = "layers/image_bundle.tar"
 
     timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"

@@ -63,9 +63,7 @@ async def run_in_container(
     cp: CpBinary,
     mkdir: MkdirBinary,
 ) -> ProcessResult:
-    download_runc_tool = Get(
-        DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)
-    )
+    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform))
 
     tool, rundir, jq = await MultiGet(
         download_runc_tool,

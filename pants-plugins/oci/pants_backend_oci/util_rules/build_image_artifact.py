@@ -106,12 +106,8 @@ async def build_image_artifact(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(
-        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
-    )
-    maybe_built_base = await Get(
-        FallibleImageBundle, FallibleImageBundleRequest, build_request.request
-    )
+    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -135,9 +131,7 @@ async def build_image_artifact(
         )
 
         for layer in layers:
-            input_digest = await Get(
-                Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
-            )
+            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
 
             image_with_layer = await Get(
                 ProcessResult,
@@ -198,9 +192,7 @@ async def build_image_artifact(
         ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
     )
     bundle = ImageBundle(modified_image.output_digest, "", True)
-    artifacts = await Get(
-        ProcessResult, CopyFromRequest(bundle, tuple(), request.target.outputs.value)
-    )
+    artifacts = await Get(ProcessResult, CopyFromRequest(bundle, tuple(), request.target.outputs.value))
     return artifacts
 
 
