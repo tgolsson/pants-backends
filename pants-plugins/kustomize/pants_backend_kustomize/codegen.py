@@ -8,8 +8,8 @@ from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import GeneratedSources, GenerateSourcesRequest
 from pants.engine.unions import UnionRule
 from pants.source.source_root import SourceRoot, SourceRootRequest
-
 from pants_backend_k8s.target_types import KubernetesSourceField
+
 from pants_backend_kustomize.subsystem import KustomizeTool
 from pants_backend_kustomize.target_types import KustomizeSourcesField
 from pants_backend_kustomize.util_rules.prepare_context import (
@@ -25,14 +25,16 @@ class GenerateKubernetesFromKustomizeRequest(GenerateSourcesRequest):
 
 @rule
 async def generate_kubernetes_from_kustomize(
-    request: GenerateKubernetesFromKustomizeRequest, kustomize: KustomizeTool
+    request: GenerateKubernetesFromKustomizeRequest,
+    kustomize: KustomizeTool,
+    platform: Platform,
 ) -> GeneratedSources:
     (context, kustomize) = await MultiGet(
         Get(KustomizationContext, KustomizationContextRequest(request.protocol_target)),
         Get(
             DownloadedExternalTool,
             ExternalToolRequest,
-            kustomize.get_request(Platform.current),
+            kustomize.get_request(platform),
         ),
     )
 
