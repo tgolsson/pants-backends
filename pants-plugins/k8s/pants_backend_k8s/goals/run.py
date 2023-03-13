@@ -50,9 +50,7 @@ async def compute_command_line(
     request: KubernetesCommandLineProcessRequest, tool: KubernetesTool, platform: Platform
 ) -> Process:
     kubernetes_command = request.target
-    download_kubernetes_get = Get(
-        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
-    )
+    download_kubernetes_get = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
 
     deps = await Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]))
     (sources, tool) = await MultiGet(
@@ -99,9 +97,7 @@ async def prepare_kubernetes_command_process(
     tool: KubernetesTool,
     platform: Platform,
 ) -> Process:
-    download_kubernetes_get = Get(
-        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
-    )
+    download_kubernetes_get = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
 
     kubernetes_command: KubernetesTarget = request.target
     deps = await Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]))
