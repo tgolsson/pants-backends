@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
-        pants-version: ["2.13.0", "2.14.0", "2.15.0rc6"]
+        pants-version: ["2.14.0", "2.15.0", "2.16.0a0"]
 
     steps:
     - uses: actions/checkout@v3
@@ -51,7 +51,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
-        pants-version: ["2.13.0", "2.14.0", "2.15.0a1"]
+        pants-version: ["2.14.0", "2.15.0", "2.16.0a0"]
 
     steps:
     - uses: actions/checkout@v3
