@@ -1,4 +1,3 @@
-
 python_sources(resolve="example-1")
 
 python_requirements(
@@ -6,7 +5,7 @@ python_requirements(
     module_mapping={
         "tensorflow-cpu": ["tensorflow"],
     },
-    resolve="example-1"
+    resolve="example-1",
 )
 
 pex_binary(
@@ -22,9 +21,7 @@ oci_build_artifact(
     name="app-deps",
     base=["//examples/oci:python3-d11#latest"],
     packages=[":binary-deps"],
-    commands=(
-        "/examples.oci.multistage/binary-deps.pex venv --scope=deps --compile /bin/app"
-    ),
+    commands="/examples.oci.multistage/binary-deps.pex venv --scope=deps --compile /bin/app",
     env=[
         "PEX_TOOLS=1",
     ],
@@ -51,9 +48,7 @@ oci_build_artifact(
     name="app-srcs",
     base=["//examples/oci:python3-d11#latest"],
     packages=[":binary-srcs"],
-    commands=(
-        "/examples.oci.multistage/binary-srcs.pex venv --scope=srcs --compile /bin/app"
-    ),
+    commands="/examples.oci.multistage/binary-srcs.pex venv --scope=srcs --compile /bin/app",
     env=[
         "PEX_TOOLS=1",
     ],
@@ -65,5 +60,5 @@ oci_image_build(
     base=["//examples/oci:python3-d11#latest"],
     packages=[":app-deps", ":app-srcs"],
     entrypoint="/bin/app/pex",
-    args=[]
+    args=[],
 )
