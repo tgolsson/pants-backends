@@ -59,7 +59,9 @@ async def prepare_run_image_bundle(
     mv: MvBinary,
     platform: Platform,
 ) -> Process:
-    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    download_runc_tool = Get(
+        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
+    )
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),

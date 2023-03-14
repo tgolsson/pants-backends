@@ -4,23 +4,11 @@ import os
 from dataclasses import dataclass
 from textwrap import dedent
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
-from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
+from pants.core.util_rules.system_binaries import BashBinary, CpBinary, MkdirBinary
+from pants.engine.fs import CreateDigest, Digest, Directory, FileContent
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process, ProcessResult
+from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    Dependencies,
-    DependenciesRequest,
-    FieldSet,
-    FieldSetsPerTarget,
-    FieldSetsPerTargetRequest,
-    Target,
-    Targets,
-    WrappedTarget,
-    WrappedTargetRequest,
-)
 
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.archive import CreateDeterministicDirectoryTar

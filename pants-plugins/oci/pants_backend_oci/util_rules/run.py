@@ -7,35 +7,11 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process, ProcessResult
+from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    Dependencies,
-    DependenciesRequest,
-    FieldSet,
-    FieldSetsPerTarget,
-    FieldSetsPerTargetRequest,
-    Target,
-    Targets,
-    WrappedTarget,
-    WrappedTargetRequest,
-)
-from pants.engine.unions import UnionRule
-from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import RuncTool, SkopeoTool, UmociTool
-from pants_backend_oci.target_types import (
-    ImageBase,
-    ImageBuildCommand,
-    ImageBuildOutputs,
-    ImageDependencies,
-    ImageEnvironment,
-)
+from pants_backend_oci.subsystem import RuncTool, UmociTool
 from pants_backend_oci.tools.process import FusedProcess
-from pants_backend_oci.util_rules.archive import (
-    CreateDeterministicDirectoryTar,
-    CreateDeterministicTar,
-)
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
 from pants_backend_oci.util_rules.unpack import (
@@ -63,7 +39,9 @@ async def run_in_container(
     cp: CpBinary,
     mkdir: MkdirBinary,
 ) -> ProcessResult:
-    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform))
+    download_runc_tool = Get(
+        DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)
+    )
 
     tool, rundir, jq = await MultiGet(
         download_runc_tool,
@@ -82,7 +60,9 @@ async def run_in_container(
                 ' > "$ROOT/unpacked_image/config.json"
         done
         set -x
-        {cat.path} <<< $({jq.path} '.process.terminal = false' "$ROOT/unpacked_image/config.json") > "$ROOT/unpacked_image/config.json"
+        {cat.path} <<< $({jq.path} '
+            .process.terminal = false
+        ' "$ROOT/unpacked_image/config.json") > "$ROOT/unpacked_image/config.json"
         echo $ROOT
         `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc
     """
@@ -96,7 +76,7 @@ async def run_in_container(
         packed_image_process,
         Process(
             (bash.path, "{chroot}/run.sh", f"{request.command}"),
-            description=f"Running container build command",
+            description="Running container build command",
             input_digest=input_digest,
         ),
     ]

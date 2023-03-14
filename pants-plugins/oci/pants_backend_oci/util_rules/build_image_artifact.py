@@ -4,51 +4,34 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 from dataclasses import dataclass
-from textwrap import dedent
 from typing import ClassVar
 
-from pants.core.goals.package import BuiltPackage, PackageFieldSet
+from pants.core.goals.package import PackageFieldSet
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import (
-    BashBinary,
-    CatBinary,
-    CpBinary,
-    MkdirBinary,
-    TarBinary,
-)
+from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
+from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process, ProcessResult
+from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
-    Dependencies,
     DependenciesRequest,
     FieldSet,
-    FieldSetsPerTarget,
-    FieldSetsPerTargetRequest,
     Target,
     Targets,
     WrappedTarget,
     WrappedTargetRequest,
 )
-from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import RuncTool, SkopeoTool, UmociTool
+from pants_backend_oci.subsystem import RuncTool, UmociTool
 from pants_backend_oci.target_types import (
     ImageBase,
     ImageBuildCommand,
     ImageBuildOutputs,
     ImageDependencies,
     ImageEnvironment,
-)
-from pants_backend_oci.tools.process import FusedProcess
-from pants_backend_oci.util_rules.archive import (
-    CreateDeterministicDirectoryTar,
-    CreateDeterministicTar,
 )
 from pants_backend_oci.util_rules.copy import CopyFromRequest
 from pants_backend_oci.util_rules.image_bundle import (
@@ -58,11 +41,8 @@ from pants_backend_oci.util_rules.image_bundle import (
     ImageBundle,
     ImageBundleRequest,
 )
-from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
 from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
-from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 from pants_backend_oci.util_rules.run import RunContainerRequest
-from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
 
 @dataclass(frozen=True)
@@ -106,8 +86,12 @@ async def build_image_artifact(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
-    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
+    build_request = await Get(
+        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
+    )
+    maybe_built_base = await Get(
+        FallibleImageBundle, FallibleImageBundleRequest, build_request.request
+    )
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -131,7 +115,9 @@ async def build_image_artifact(
         )
 
         for layer in layers:
-            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
+            input_digest = await Get(
+                Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
+            )
 
             image_with_layer = await Get(
                 ProcessResult,
@@ -192,7 +178,9 @@ async def build_image_artifact(
         ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
     )
     bundle = ImageBundle(modified_image.output_digest, "", True)
-    artifacts = await Get(ProcessResult, CopyFromRequest(bundle, tuple(), request.target.outputs.value))
+    artifacts = await Get(
+        ProcessResult, CopyFromRequest(bundle, tuple(), request.target.outputs.value)
+    )
     return artifacts
 
 
