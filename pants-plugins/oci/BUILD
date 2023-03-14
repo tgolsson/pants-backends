@@ -10,7 +10,7 @@ python_distribution_with_secret(
     ],
     provides=python_artifact(
         name="pants_backend_oci",
-        version="0.2.0",
+        version="0.3.0",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/oci/README.md",
