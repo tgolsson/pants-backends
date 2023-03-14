@@ -15,6 +15,7 @@ pex_binary(
     include_sources=False,
     include_tools=True,
     resolve="example-1",
+    interpreter_constraints=[">=3.8,<3.11"]
 )
 
 oci_build_artifact(
@@ -30,19 +31,13 @@ oci_build_artifact(
 )
 
 pex_binary(
-    name="test",
-    entry_point="app.py",
-    dependencies=[":multistage", ""],
-    resolve="example-1",
-)
-
-pex_binary(
     name="binary-srcs",
     entry_point="app.py",
     layout="packed",
     include_requirements=False,
     include_tools=True,
     resolve="example-1",
+    interpreter_constraints=[">=3.8,<3.11"]
 )
 
 oci_build_artifact(
