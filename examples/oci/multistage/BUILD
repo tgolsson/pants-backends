@@ -24,6 +24,7 @@ oci_build_artifact(
     commands="/examples.oci.multistage/binary-deps.pex venv --scope=deps --compile /bin/app",
     env=[
         "PEX_TOOLS=1",
+        "PY=python3.9",
     ],
     outputs=["bin/app/"],
 )
@@ -51,6 +52,7 @@ oci_build_artifact(
     commands="/examples.oci.multistage/binary-srcs.pex venv --scope=srcs --compile /bin/app",
     env=[
         "PEX_TOOLS=1",
+        "PY=python3.9",
     ],
     outputs=["bin/app/"],
 )
