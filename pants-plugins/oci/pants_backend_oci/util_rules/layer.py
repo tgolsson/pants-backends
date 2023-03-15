@@ -99,14 +99,9 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     snapshot = await Get(Snapshot, Digest, layer_digest)
 
-    if len(snapshot.files) == 1 and snapshot.files[0].endswith(".tar"):
-        raw_layer_digest = snapshot.digest
-        layer_name = snapshot.files[0]
-    else:
-        raw_layer_digest = await Get(
-            Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
-        )
-        layer_name = "layers/image_bundle.tar"
+    raw_layer_digest = await Get(
+        Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
+    )
 
     timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
     logging.info("%s", embedded_pkgs)
@@ -138,7 +133,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
             f"--history.created={timestamp}",
             "--image",
             "build:build",
-            layer_name,
+            "layers/image_bundle.tar",
         ),
         (
             "config",
