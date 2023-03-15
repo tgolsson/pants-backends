@@ -26,7 +26,7 @@ file(
         len=11019805,
         sha256="c72704c9cd49fb18f8df28de26e29c2563b6515e38efee65a6c3a29ec7368a91",
         filename="grpc_health_probe",
-    )
+    ),
 )
 
 oci_image_build(

@@ -14,17 +14,7 @@ from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest, MergeDigests, Snapshot
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    Dependencies,
-    DependenciesRequest,
-    FieldSetsPerTarget,
-    FieldSetsPerTargetRequest,
-    SourcesField,
-    Target,
-    Targets,
-    TransitiveTargets,
-    TransitiveTargetsRequest,
-)
+from pants.engine.target import FieldSetsPerTarget, FieldSetsPerTargetRequest, SourcesField, Target
 
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar
 
@@ -79,8 +69,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     # Package binary dependencies for build context.
     embedded_pkgs = await MultiGet(
-        Get(BuiltPackage, PackageFieldSet, field_set)
-        for field_set in embedded_pkgs_per_target.field_sets
+        Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
     )
 
     packages_str = ", ".join(a.relpath for p in embedded_pkgs for a in p.artifacts if a.relpath)
@@ -99,9 +88,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     snapshot = await Get(Snapshot, Digest, layer_digest)
 
-    raw_layer_digest = await Get(
-        Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar")
-    )
+    raw_layer_digest = await Get(Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar"))
 
     timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
     logging.info("%s", embedded_pkgs)
