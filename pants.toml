@@ -55,3 +55,6 @@ pants-plugins = [">=3.7,<3.10"]
 pants-214 = [">=3.7,<3.10"]
 pants-215 = [">=3.7,<3.10"]
 pants-216 = [">=3.7,<3.10"]
+
+[isort]
+config = "['pyproject.toml']"

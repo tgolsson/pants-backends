@@ -17,10 +17,10 @@ for name, constraint in name_to_constraint.items():
         resolve=name,
     )
 
-all_targets = ("pants-plugins", *tuple(name_to_constraint.keys()))
+all_targets = (*tuple(name_to_constraint.keys()), "pants-plugins")
 __defaults__(
     {
-        python_sources: dict(resolve="pants-plugins"),
+        python_sources: dict(resolve=parametrize(*all_targets)),
         python_tests: dict(
             resolve=parametrize(*all_targets[1:])
         ),  # we don't parametrize test for host... assume test with ::
