@@ -15,7 +15,7 @@ def test_run_oci_container() -> None:
                 oci_pull_images(
                     name="python3-d11",
                     repository="gcr.io/distroless/python3-debian11",
-                    variants={"latest": "42ff8b00a03517f39a968d2e2a6e82c6445586c95e484ff079cbf06f7590cfa7"},
+                    variants=dict(latest="42ff8b00a03517f39a968d2e2a6e82c6445586c95e484ff079cbf06f7590cfa7"),
                 )
 
                 pex_binary(name="example", entry_point="example.py:main", shebang="#!/usr/bin/python")
@@ -40,10 +40,10 @@ def test_run_oci_container() -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                "--backend-packages=pants.backend.python",
                 "run",
                 f"{tmpdir}/oci:oci",
             ]
         )
 
-    assert result.stdout == "Hello world!\n"
-    assert result.exit_code == 0
+    result.assert_success()
