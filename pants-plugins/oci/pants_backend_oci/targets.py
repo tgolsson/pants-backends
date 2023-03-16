@@ -16,6 +16,7 @@ from pants_backend_oci.target_types import (
     ImageDigest,
     ImageRepository,
     ImageRepositoryAnonymous,
+    ImageRunTty,
     ImageTag,
 )
 
@@ -95,6 +96,7 @@ class ImageBuild(Target):
         ImageTag,
         ImageBase,
         ImageDependencies,
+        ImageRunTty,
     )
     help = "An imported OCI image."
 

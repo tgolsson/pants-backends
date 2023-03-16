@@ -15,10 +15,10 @@ def test_run_oci_container() -> None:
                 oci_pull_images(
                     name="python3-d11",
                     repository="gcr.io/distroless/python3-debian11",
-                    variants=dict(latest="42ff8b00a03517f39a968d2e2a6e82c6445586c95e484ff079cbf06f7590cfa7"),
+                    variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
                 )
 
-                pex_binary(name="example", entry_point="example.py:main", shebang="#!/usr/bin/python")
+                pex_binary(name="example", entry_point="example.py", shebang="#!/usr/bin/python")
 
                 oci_image_build(
                     name="oci",
@@ -47,3 +47,4 @@ def test_run_oci_container() -> None:
         )
 
     result.assert_success()
+    assert result.stdout == "Hello world!\n"

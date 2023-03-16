@@ -43,6 +43,7 @@ jobs:
 
     - name: Test everything
       run: |
+        ./pants generate-lockfiles --resolve=pants-plugins
         ./pants test ::
 
   package:
