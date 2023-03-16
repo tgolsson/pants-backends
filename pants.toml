@@ -45,7 +45,7 @@ enable_resolves = true
 default_resolve = "pants-plugins"
 
 [python.resolves]
-pants-plugins = "pants-plugins/lock.txt"
+pants-plugins = "pants-plugins/pants.lock"
 pants-214 = "pants-plugins/214.lock"
 pants-215 = "pants-plugins/215.lock"
 pants-216 = "pants-plugins/216.lock"
