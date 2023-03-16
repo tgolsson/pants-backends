@@ -77,7 +77,7 @@ class ImageRunTty(BoolField):
     default = False
 
     help = softwrap(
-        """
-        Whether the image requires an interactive tty to execute. This prevents the image from running in many situations and isn't recommended.
-        """
+        """Whether the image requires an interactive tty to execute.
+
+        This prevents the image from running in many situations and isn't recommended."""
     )

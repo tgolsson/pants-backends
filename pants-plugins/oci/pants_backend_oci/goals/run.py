@@ -82,7 +82,9 @@ async def prepare_run_image_bundle(
     mv: MvBinary,
     platform: Platform,
 ) -> Process:
-    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    download_runc_tool = Get(
+        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
+    )
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),
@@ -119,7 +121,9 @@ async def prepare_run_image_bundle(
         components.append(
             dedent(
                 f"""
-                {jq.path} '.process.terminal = false' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
+                {jq.path} '
+                    .process.terminal = false
+                ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
                 {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
                 """
             )
