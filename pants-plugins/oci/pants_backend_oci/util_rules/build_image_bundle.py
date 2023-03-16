@@ -67,12 +67,8 @@ async def build_oci_bundle_package(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(
-        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
-    )
-    maybe_built_base = await Get(
-        FallibleImageBundle, FallibleImageBundleRequest, build_request.request
-    )
+    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -91,9 +87,7 @@ async def build_oci_bundle_package(
         layers = await MultiGet(*layers)
 
         for layer in layers:
-            input_digest = await Get(
-                Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
-            )
+            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
 
             image_with_layer = await Get(
                 ProcessResult,

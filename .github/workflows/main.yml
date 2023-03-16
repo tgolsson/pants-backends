@@ -43,7 +43,6 @@ jobs:
     - name: Test everything
       run: |
         ./get-pants.sh
-        /home/runner/bin/pants generate-lockfiles --resolve=pants-plugins
         /home/runner/bin/pants test ::
 
   package:
