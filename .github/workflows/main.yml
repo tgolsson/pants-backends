@@ -43,8 +43,8 @@ jobs:
     - name: Test everything
       run: |
         ./get-pants.sh
-        pants generate-lockfiles --resolve=pants-plugins
-        pants test ::
+        /home/runner/bin/pants generate-lockfiles --resolve=pants-plugins
+        /home/runner/bin/pants test ::
 
   package:
     runs-on: ubuntu-20.04
@@ -76,7 +76,7 @@ jobs:
     - name: Package all targets
       run: |
         ./get-pants.sh
-        pants package ::
+        /home/runner/bin/pants package ::
 
   check-and-lint:
     runs-on: ubuntu-20.04
@@ -94,7 +94,7 @@ jobs:
     - name: Run linters on all targets
       run: |
         ./get-pants.sh
-        pants update-build-files --check lint check ::
+        /home/runner/bin/pants update-build-files --check lint check ::
 
   validate-tailor:
     runs-on: ubuntu-20.04
@@ -112,4 +112,4 @@ jobs:
     - name: Validate that tailor files are up to date
       run: |
         ./get-pants.sh
-        pants tailor --check ::
+        /home/runner/bin/pants tailor --check ::
