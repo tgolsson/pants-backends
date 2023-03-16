@@ -19,22 +19,11 @@ oci_image_build(
 
 pex_binary(name="example2", entry_point="example2.py:main", shebang="#!/usr/bin/python")
 
-file(
-    name="grpc_health_probe",
-    source=http_source(
-        "https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.16/grpc_health_probe-linux-amd64",
-        len=11019805,
-        sha256="c72704c9cd49fb18f8df28de26e29c2563b6515e38efee65a6c3a29ec7368a91",
-        filename="grpc_health_probe",
-    ),
-)
-
 oci_image_build(
     name="oci2",
     base=[":oci#latest"],
     packages=[
         ":example2",
-        ":grpc_health_probe",
     ],
     repository="harbor.sbg.dev/test/pants-plugin-oci-example-2",
     tag="latest",

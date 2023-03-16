@@ -97,6 +97,7 @@ async def prepare_run_image_bundle(
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(JqBinary, JqBinaryRequest()),
     )
+
     if image.exit_code != 0:
         raise ValueError(image.stderr)
 

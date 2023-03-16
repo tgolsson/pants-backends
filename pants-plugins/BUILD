@@ -17,7 +17,7 @@ for name, constraint in name_to_constraint.items():
         resolve=name,
     )
 
-all_targets = (*tuple(name_to_constraint.keys()), "pants-plugins")
+all_targets = ("pants-plugins", *tuple(name_to_constraint.keys()))
 __defaults__(
     {
         python_sources: dict(resolve=parametrize(*all_targets)),
