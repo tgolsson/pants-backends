@@ -45,7 +45,9 @@ jobs:
           named-caches-hash: ${{ hashFiles('pants.lock') }}
 
       - name: Build docs
-        run: ./pants package docs:docs
+        run: |
+          ./get-pants.sh
+          /home/runner/bin/pants package docs:docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
