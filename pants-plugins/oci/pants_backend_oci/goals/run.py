@@ -16,6 +16,7 @@ from pants.core.util_rules.system_binaries import (
     BinaryPaths,
     BinaryPathTest,
     MkdirBinary,
+    MvBinary,
 )
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
 from pants.engine.platform import Platform
@@ -25,7 +26,7 @@ from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 
 from pants_backend_oci.subsystem import RuncTool
-from pants_backend_oci.targets import ImageRepository
+from pants_backend_oci.target_types import ImageRepository, ImageRunTty
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
@@ -41,6 +42,7 @@ class RunImageBundleCommand(RunFieldSet):
     required_fields = (ImageRepository,)
 
     repository: ImageRepository
+    run_tty: ImageRunTty
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,7 @@ async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
     tool: RuncTool,
     mkdir_binary: MkdirBinary,
+    mv: MvBinary,
     platform: Platform,
 ) -> Process:
     download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
@@ -94,25 +97,48 @@ async def prepare_run_image_bundle(
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(JqBinary, JqBinaryRequest()),
     )
+
     if image.exit_code != 0:
         raise ValueError(image.stderr)
 
     packed_image_process = await Get(Process, UnpackedImageBundleRequest(image.output.digest))
 
     name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
-    script = dedent(
-        f"""
+    components = [
+        dedent(
+            f"""
         ROOT=`pwd`
         for arg in "$@"; do
             echo "$arg" | {jq.path} -R --argjson config "$(cat $ROOT/unpacked_image/config.json)" '
                     .  as $arg  | $config | .process.args += [$arg]
                 ' > "$ROOT/unpacked_image/config.json"
-        done
-        `pwd`/{tool.exe} --root runspace run -b unpacked_image pants.runc.{name}
-        exit 1
-    """
+        done"""
+        )
+    ]
+
+    if not request.target.get(ImageRunTty).value:
+        components.append(
+            dedent(
+                f"""
+                {jq.path} '
+                    .process.terminal = false
+                ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
+                {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+                """
+            )
+        )
+
+    components.append(
+        dedent(
+            f"""
+            `pwd`/{tool.exe} --root runspace run -b unpacked_image pants.runc.{name}
+            exit
+            """
+        )
     )
-    script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
+    script_digest = await Get(
+        Digest, CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
+    )
     input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
 
     return await Get(
