@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from pants.engine.target import BoolField, Dependencies, SpecialCasedDependencies, StringField
+from typing import Optional
+
+from pants.engine.addresses import Address
+from pants.engine.target import (
+    BoolField,
+    Dependencies,
+    ScalarField,
+    SpecialCasedDependencies,
+    StringField,
+)
 from pants.util.strutil import softwrap
 
 
@@ -81,3 +90,17 @@ class ImageRunTty(BoolField):
 
         This prevents the image from running in many situations and isn't recommended."""
     )
+
+
+NoneType = type(None)
+
+
+class ImageEmptyMarker(ScalarField):
+    alias = "_marker"
+    expected_type = type(None)
+    expected_type_description = ""
+    default = None
+
+    @classmethod
+    def compute_value(cls, raw_value: Optional[NoneType], address: Address) -> Optional[NoneType]:
+        return super().compute_value(raw_value, address=address)

@@ -1,6 +1,14 @@
+from pants.build_graph.build_file_aliases import BuildFileAliases
 from pants.engine.rules import collect_rules
 
-from pants_backend_oci import goals, language_target, subsystem, targets, util_rules
+from pants_backend_oci import (
+    goals,
+    language_target,
+    subsystem,
+    synthetic_targets,
+    targets,
+    util_rules,
+)
 from pants_backend_oci.rules import kustomize_inject
 from pants_backend_oci.tools import process
 
@@ -22,4 +30,17 @@ def rules():
         *subsystem.rules(),
         *targets.rules(),
         *util_rules.rules(),
+        *synthetic_targets.rules(),
     ]
+
+
+def make_empty():
+    return "empty"
+
+
+def build_file_aliases():
+    return BuildFileAliases(
+        objects={
+            "empty": make_empty,
+        },
+    )

@@ -1,6 +1,7 @@
 from pants_backend_oci.util_rules import (
     archive,
     build_image_bundle,
+    empty_image_bundle,
     image_bundle,
     layer,
     oci_sha,
@@ -18,4 +19,5 @@ def rules():
         *oci_sha.rules(),
         *pull_image_bundle.rules(),
         *unpack.rules(),
+        *empty_image_bundle.rules(),
     ]

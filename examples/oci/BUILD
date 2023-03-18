@@ -28,3 +28,12 @@ oci_image_build(
     repository="harbor.sbg.dev/test/pants-plugin-oci-example-2",
     tag="latest",
 )
+
+oci_image_build(
+    name="with_empty_base",
+    base=[f'//:empty'],
+    packages=[
+        ":example2",
+    ],
+    tag="latest",
+)

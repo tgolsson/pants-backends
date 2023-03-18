@@ -14,6 +14,7 @@ from pants_backend_oci.target_types import (
     ImageBase,
     ImageDependencies,
     ImageDigest,
+    ImageEmptyMarker,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -83,7 +84,9 @@ async def generate_from_oci_base_images(
             union_membership,
         )
 
-    result = [create_tgt(name, digest) for (name, digest) in generator[_ImageVariants].value.items()]
+    result = [
+        create_tgt(name, digest) for (name, digest) in generator[_ImageVariants].value.items()
+    ]
 
     return GeneratedTargets(generator, result)
 
@@ -101,8 +104,17 @@ class ImageBuild(Target):
     help = "An imported OCI image."
 
 
+class ImageEmpty(Target):
+    alias = "oci_image_empty"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageEmptyMarker,
+    )
+    help = "An imported OCI image."
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild]
+    return [PullImage, PullImagesGenerator, ImageBuild, ImageEmpty]
 
 
 def rules():
