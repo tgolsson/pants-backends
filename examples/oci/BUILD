@@ -31,7 +31,7 @@ oci_image_build(
 
 oci_image_build(
     name="with_empty_base",
-    base=[f'//:empty'],
+    base=[f"//:empty"],
     packages=[
         ":example2",
     ],

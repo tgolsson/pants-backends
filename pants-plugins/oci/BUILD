@@ -18,3 +18,15 @@ python_distribution_with_secret(
     repositories=["@pypi"],
     repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )
+
+__defaults__(
+    {
+        python_tests: dict(
+            dependencies=[
+                "//BUILD_ROOT:files",
+                "//pants-plugins/oci/pants_backend_oci/register.py",
+            ],
+        ),
+    },
+    extend=True,
+)

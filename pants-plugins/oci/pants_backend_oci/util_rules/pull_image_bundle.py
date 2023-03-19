@@ -62,9 +62,7 @@ async def pull_oci_image(
         ]
     )
 
-    desc = (
-        f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}"
-    )
+    desc = f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}"
 
     result = await Get(
         ProcessResult,

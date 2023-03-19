@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -48,6 +49,7 @@ async def make_empty_oci_image(
         umoci.get_request(platform),
     )
 
+    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
     result = await Get(
         ProcessResult,
         FusedProcess(
@@ -63,12 +65,25 @@ async def make_empty_oci_image(
                     description="Creating a new empty base image",
                     output_directories=("build",),
                 ),
+                Process(
+                    argv=(
+                        umoci.exe,
+                        "config",
+                        "--image",
+                        "build:build",
+                        "--config.env",
+                        "BUILT_BY=pants.oci",
+                        "--author=pants_backend_oci",
+                        f"--created={timestamp}",
+                        "--no-history",
+                    ),
+                    description="Erasing timestamps and other info",
+                ),
             ),
         ),
     )
 
     image_digest = await Get(OciSha, OciShaRequest(result.output_digest))
-
     return FallibleImageBundle(
         ImageBundle(result.output_digest, image_sha=image_digest.image_digest, is_local=True)
     )
