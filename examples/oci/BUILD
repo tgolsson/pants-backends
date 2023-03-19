@@ -29,9 +29,18 @@ oci_image_build(
     tag="latest",
 )
 
+# in pants 2.15+ we use a synthetic target so no need to declare an empty image base
+empty_base = "//:empty"
+
+if not pants_at_least("2.15.0.dev0"):
+    empty_base = ":empty"
+    oci_image_empty(
+        name="empty",
+    )
+
 oci_image_build(
     name="with_empty_base",
-    base=[f"//:empty"],
+    base=[empty_base],
     packages=[
         ":example2",
     ],
