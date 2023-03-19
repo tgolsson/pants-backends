@@ -14,6 +14,7 @@ from pants_backend_oci.target_types import (
     ImageBase,
     ImageDependencies,
     ImageDigest,
+    ImageEmptyMarker,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -101,8 +102,17 @@ class ImageBuild(Target):
     help = "An imported OCI image."
 
 
+class ImageEmpty(Target):
+    alias = "oci_image_empty"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageEmptyMarker,
+    )
+    help = "An imported OCI image."
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild]
+    return [PullImage, PullImagesGenerator, ImageBuild, ImageEmpty]
 
 
 def rules():

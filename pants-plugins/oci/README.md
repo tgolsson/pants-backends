@@ -16,7 +16,6 @@ This is a backend implementing support for building OCI images in pants; running
 * Currently there's no support for pulling tags, as that would break determinism
 * Multi-platform SHA/.sig is untested/unsupported
 * skopeo doesn't support MacOS, preventing pulling and pushing images.
-* No empty image base
 * No "in-container" build steps
 
 ## Targets
@@ -25,9 +24,10 @@ There's three targets currently implemented:
 
 * `oci_pull_image`
 * `oci_pull_images`
-* `oci_build_image`
+* `oci_image_build`
+* `oci_image_empty`
 
-There are also plans to support targets optimized for various languages.
+There are also plans to support targets optimized for various languages. There's currently one special target for Python, which will preferentially set the entrypoint to Pex files, `oci_python_image`.
 
 ### `oci_pull_image`
 
@@ -121,5 +121,21 @@ oci_python_image(
 | `python_main` | The main file to run                                                           | The last `.pex` in the dependency list                |
 | `repository`  | Fully qualified repository name                                                | Required when publishing                              |
 | `tag`         | Remote tag to use                                                              | Required when publishing                              |
+| `decsription` | A description of the target                                                    |                                                       |
+| `tags`        | List of tags                                                                   | `[]`                                                  |
+
+### `oci_image_empty`
+
+An empty base image with no contents at all. It is suggested to declare this in the root and use `//:empty` to reference it. **Note that from 2.15 this is automatically created by the plugin using a synthetic target.**
+
+``` python
+oci_image_empty(
+    name="empty",
+)
+```
+
+| Argument      | Meaning                                                                        | Default value                                         |
+|---------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
+| `name`        | The target name                                                                | Same as any other target, which is the directory name |
 | `decsription` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |

@@ -12,17 +12,19 @@ for name, constraint in name_to_constraint.items():
         requirements=(
             f"pantsbuild.pants.testutil{constraint}",
             f"pantsbuild.pants{constraint}",
+            "pytest",
         ),
-        modules=("pants.testutil", "pants"),
+        modules=("pants.testutil", "pants", "pytest"),
         resolve=name,
     )
 
 all_targets = ("pants-plugins", *tuple(name_to_constraint.keys()))
+
 __defaults__(
     {
         python_sources: dict(resolve=parametrize(*all_targets)),
         python_tests: dict(
-            resolve=parametrize(*all_targets[1:])
-        ),  # we don't parametrize test for host... assume test with ::
+            resolve=parametrize(*all_targets[1:]),
+        ),
     }
 )
