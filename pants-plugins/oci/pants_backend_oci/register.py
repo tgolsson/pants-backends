@@ -1,4 +1,3 @@
-from pants.build_graph.build_file_aliases import BuildFileAliases
 from pants.engine.rules import collect_rules
 
 from pants_backend_oci import (
@@ -32,15 +31,3 @@ def rules():
         *util_rules.rules(),
         *synthetic_targets.rules(),
     ]
-
-
-def make_empty():
-    return "empty"
-
-
-def build_file_aliases():
-    return BuildFileAliases(
-        objects={
-            "empty": make_empty,
-        },
-    )
