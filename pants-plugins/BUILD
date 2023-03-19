@@ -12,8 +12,9 @@ for name, constraint in name_to_constraint.items():
         requirements=(
             f"pantsbuild.pants.testutil{constraint}",
             f"pantsbuild.pants{constraint}",
+            "pytest",
         ),
-        modules=("pants.testutil", "pants"),
+        modules=("pants.testutil", "pants", "pytest"),
         resolve=name,
     )
 

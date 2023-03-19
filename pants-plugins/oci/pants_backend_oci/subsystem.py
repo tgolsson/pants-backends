@@ -3,11 +3,20 @@ from __future__ import annotations
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
 from pants.engine.rules import SubsystemRule
+from pants.option.option_types import StrOption
+from pants.version import PANTS_SEMVER, Version
 
 
 class UmociTool(ExternalTool):
-    options_scope = "umoci"
+    options_scope = "oci"
     help = "Wrapper for kustomize."
+
+    if PANTS_SEMVER >= Version("2.15.0.dev0"):
+        empty_image_target = StrOption(
+            default="empty",
+            advanced=False,
+            help="The name of the synthetic target for an empty base image.",
+        )
 
     default_version = "v0.4.7"
     default_known_versions = [

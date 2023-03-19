@@ -10,7 +10,8 @@
 //   ],
 //   "generated_with_requirements": [
 //     "pantsbuild.pants.testutil==2.16.0a0",
-//     "pantsbuild.pants==2.16.0a0"
+//     "pantsbuild.pants==2.16.0a0",
+//     "pytest"
 //   ],
 //   "manylinux": "manylinux2014",
 //   "requirement_constraints": [],
@@ -522,13 +523,13 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "7efb448ec9a5e313a57655d35aa54cd3e01b7e1fbcf72dce1bf06119420f5bad",
-              "url": "https://files.pythonhosted.org/packages/26/a7/9da7d5b23fc98ab3d424ac2c65613d63c1f401efb84ad50f2fa27b2caab4/importlib_metadata-6.0.0-py3-none-any.whl"
+              "hash": "ff80f3b5394912eb1b108fcfd444dc78b7f1f3e16b16188054bd01cb9cb86f09",
+              "url": "https://files.pythonhosted.org/packages/f8/7d/e3adad613703c86d62aa991b45d6f090cf59975078a8c8100b50a0c86948/importlib_metadata-6.1.0-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "e354bedeb60efa6affdcc8ae121b73544a7aa74156d047311948f6d711cd378d",
-              "url": "https://files.pythonhosted.org/packages/90/07/6397ad02d31bddf1841c9ad3ec30a693a3ff208e09c2ef45c9a8a5f85156/importlib_metadata-6.0.0.tar.gz"
+              "hash": "43ce9281e097583d758c2c708c4376371261a02c34682491a8e98352365aad20",
+              "url": "https://files.pythonhosted.org/packages/e2/d8/3d431bade4598ad9e33be9da41d15e6607b878008e922d122659ab01b077/importlib_metadata-6.1.0.tar.gz"
             }
           ],
           "project_name": "importlib-metadata",
@@ -557,7 +558,7 @@
             "zipp>=0.5"
           ],
           "requires_python": ">=3.7",
-          "version": "6"
+          "version": "6.1"
         },
         {
           "artifacts": [
@@ -1690,7 +1691,8 @@
   "prefer_older_binary": false,
   "requirements": [
     "pantsbuild.pants.testutil==2.16.0a0",
-    "pantsbuild.pants==2.16.0a0"
+    "pantsbuild.pants==2.16.0a0",
+    "pytest"
   ],
   "requires_python": [
     "<3.10,>=3.7"

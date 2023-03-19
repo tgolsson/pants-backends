@@ -30,7 +30,7 @@ oci_image_build(
 )
 
 # in pants 2.15+ we use a synthetic target so no need to declare an empty image base
-empty_base = "//:empty"
+empty_base = "//:empty"  # also see [oci].empty_image_target configuration
 
 if not pants_at_least("2.15.0.dev0"):
     empty_base = ":empty"
