@@ -15,10 +15,10 @@ pex_binary(
     include_sources=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.8,<3.11"]
+    interpreter_constraints=[">=3.8,<3.11"],
 )
 
-oci_build_artifact(
+oci_build_layer(
     name="app-deps",
     base=["//examples/oci:python3-d11#latest"],
     packages=[":binary-deps"],
@@ -37,10 +37,10 @@ pex_binary(
     include_requirements=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.8,<3.11"]
+    interpreter_constraints=[">=3.8,<3.11"],
 )
 
-oci_build_artifact(
+oci_build_layer(
     name="app-srcs",
     base=["//examples/oci:python3-d11#latest"],
     packages=[":binary-srcs"],

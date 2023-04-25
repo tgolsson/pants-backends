@@ -9,15 +9,7 @@ from textwrap import dedent
 
 from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import (
-    SEARCH_PATHS,
-    BinaryPath,
-    BinaryPathRequest,
-    BinaryPaths,
-    BinaryPathTest,
-    MkdirBinary,
-    MvBinary,
-)
+from pants.core.util_rules.system_binaries import MkdirBinary, MvBinary
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
@@ -59,9 +51,7 @@ async def prepare_run_image_bundle(
     mv: MvBinary,
     platform: Platform,
 ) -> Process:
-    download_runc_tool = Get(
-        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
-    )
+    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
     wrapped_target = await Get(
         WrappedTarget,
         WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),

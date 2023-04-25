@@ -7,7 +7,7 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process, ProcessResult
+from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
     Dependencies,
@@ -77,6 +77,7 @@ async def build_oci_bundle_package(
     )
 
     build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+
     maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
@@ -173,7 +174,6 @@ async def build_oci_bundle_package(
                 stdout=compile_result.stdout.decode("utf-8"),
                 stderr=compile_result.stderr.decode("utf-8"),
             )
-            base_digest = compile_result.output_digest
 
         output_digest = compile_result.output_digest
 

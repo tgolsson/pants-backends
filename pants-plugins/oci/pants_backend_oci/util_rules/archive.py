@@ -69,7 +69,6 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Pro
     if output_dir != "":
         input_digest = await Get(Digest, CreateDigest([Directory(output_dir)]))
 
-    print(argv)
     return Process(
         argv=argv,
         env=env,

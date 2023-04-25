@@ -5,6 +5,7 @@ from pants.engine.addresses import Address
 from pants.testutil.rule_runner import RuleRunner, engine_error
 from pants.version import PANTS_SEMVER, Version
 
+from pants_backend_oci import synthetic_targets
 from pants_backend_oci.targets import ImageEmpty
 
 pytestmark = pytest.mark.skipif(
@@ -14,8 +15,6 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_synthetic_target_exists() -> None:
-    from pants_backend_oci import synthetic_targets
-
     rule_runner = RuleRunner(
         target_types=[ImageEmpty],
         rules=[

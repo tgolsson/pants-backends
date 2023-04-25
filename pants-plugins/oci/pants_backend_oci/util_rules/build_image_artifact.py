@@ -7,7 +7,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.core.goals.package import PackageFieldSet
+from pants.core.goals.package import OutputPathField, PackageFieldSet
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
@@ -57,6 +57,8 @@ class ImageArtifactBuildFieldSet(PackageFieldSet):
     dependencies: ImageDependencies
     environment: ImageEnvironment
 
+    output_path: OutputPathField
+
 
 class ImageArtifactBuildRequest(FallibleImageBundleRequest):
     target: Target
@@ -86,12 +88,8 @@ async def build_image_artifact(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(
-        FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)
-    )
-    maybe_built_base = await Get(
-        FallibleImageBundle, FallibleImageBundleRequest, build_request.request
-    )
+    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -115,9 +113,7 @@ async def build_image_artifact(
         )
 
         for layer in layers:
-            input_digest = await Get(
-                Digest, MergeDigests([umoci.digest, base_digest, layer.digest])
-            )
+            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
 
             image_with_layer = await Get(
                 ProcessResult,
@@ -179,7 +175,13 @@ async def build_image_artifact(
     )
     bundle = ImageBundle(modified_image.output_digest, "", True)
     artifacts = await Get(
-        ProcessResult, CopyFromRequest(bundle, tuple(), request.target.outputs.value)
+        ProcessResult,
+        CopyFromRequest(
+            request.target.output_path.value_or_default(file_ending="tar"),
+            bundle,
+            tuple(),
+            request.target.outputs.value,
+        ),
     )
     return artifacts
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from typing import Optional
 
 from pants.engine.addresses import Address
@@ -9,7 +8,7 @@ from pants.engine.target import (
     Dependencies,
     ScalarField,
     SpecialCasedDependencies,
-    StringField,,
+    StringField,
     StringSequenceField,
 )
 from pants.util.strutil import softwrap
@@ -106,6 +105,7 @@ class ImageEmptyMarker(ScalarField):
     @classmethod
     def compute_value(cls, raw_value: Optional[NoneType], address: Address) -> Optional[NoneType]:
         return super().compute_value(raw_value, address=address)
+
 
 class ImageBuildOutputs(StringSequenceField):
     alias = "outputs"

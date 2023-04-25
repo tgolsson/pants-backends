@@ -18,6 +18,7 @@ from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
 @dataclass(frozen=True)
 class CopyFromRequest:
+    tar_name: str
     bundle: ImageBundle
     output_files: tuple[str]
     output_directories: tuple[str]
@@ -53,7 +54,7 @@ async def copy_from_container(
 
     unpack, tar, workspace_digest = await MultiGet(
         Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
-        Get(Process, CreateDeterministicDirectoryTar("out", "out.tar")),
+        Get(Process, CreateDeterministicDirectoryTar("out", request.tar_name)),
         Get(
             Digest,
             CreateDigest(

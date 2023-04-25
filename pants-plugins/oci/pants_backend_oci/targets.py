@@ -1,3 +1,4 @@
+from pants.core.goals.package import OutputPathField
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
@@ -103,6 +104,10 @@ class ImageBuild(Target):
         ImageBase,
         ImageDependencies,
         ImageRunTty,
+        ImageEnvironment,
+        ImageEntrypoint,
+        ImageArgs,
+        OutputPathField,
     )
     help = "An imported OCI image."
 
@@ -112,15 +117,12 @@ class ImageEmpty(Target):
     core_fields = (
         *COMMON_TARGET_FIELDS,
         ImageEmptyMarker,
-        ImageEnvironment,
-        ImageEntrypoint,
-        ImageArgs,
     )
     help = "An imported OCI image."
 
 
 class ImageBuildStep(Target):
-    alias = "oci_build_artifact"
+    alias = "oci_build_layer"
     core_fields = (
         *COMMON_TARGET_FIELDS,
         ImageBase,
@@ -128,6 +130,7 @@ class ImageBuildStep(Target):
         ImageBuildOutputs,
         ImageBuildCommand,
         ImageEnvironment,
+        OutputPathField,
     )
     help = "An imported OCI image."
 
