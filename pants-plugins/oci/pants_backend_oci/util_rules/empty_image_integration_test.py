@@ -24,18 +24,20 @@ def test_package_empty_with_file() -> None:
                         ":files",
                     ],
                 )
-                """
+                """,
         ),
     }
 
     if PANTS_SEMVER < Version("2.15.0.dev0"):
-        build_inputs["oci/BUILD"] = build_inputs["oci/BUILD"].replace(
-            "//:empty", ":empty"
-        ) + dedent(
-            """\
+        build_file = build_inputs["oci/BUILD"]
+        build_file = build_file.replace("//:empty", ":empty")
+        build_file += dedent(
+            """\n\
             oci_image_empty(name="empty")
             """
         )
+
+        build_inputs["oci/BUILD"] = build_file
 
     with setup_tmpdir(build_inputs) as tmpdir:
         result = run_pants(

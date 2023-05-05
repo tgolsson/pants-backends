@@ -8,7 +8,8 @@ from pants.version import PANTS_SEMVER, Version
 from pants_backend_oci.targets import ImageEmpty
 
 pytestmark = pytest.mark.skipif(
-    PANTS_SEMVER < Version("2.15.0.dev0"), reason="no synthetic targets in 2.14"
+    PANTS_SEMVER < Version("2.15.0.dev0"),
+    reason="no synthetic targets in 2.14",
 )
 
 
