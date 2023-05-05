@@ -93,9 +93,21 @@ class RuncTool(ExternalTool):
         return f"./runc.{plat_str}"
 
 
-def rules():
-    return [
-        *SkopeoTool.rules(),
-        *RuncTool.rules(),
-        *UmociTool.rules(),
-    ]
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+
+    def rules():
+        return [
+            *SkopeoTool.rules(),
+            *RuncTool.rules(),
+            *UmociTool.rules(),
+        ]
+
+else:
+    from pants.engine.rules import SubsystemRule
+
+    def rules():
+        return [
+            SubsystemRule(SkopeoTool),
+            SubsystemRule(RuncTool),
+            SubsystemRule(UmociTool),
+        ]
