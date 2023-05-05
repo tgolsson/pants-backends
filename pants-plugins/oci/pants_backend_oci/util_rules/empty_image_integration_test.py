@@ -29,7 +29,9 @@ def test_package_empty_with_file() -> None:
     }
 
     if PANTS_SEMVER < Version("2.15.0.dev0"):
-        build_inputs["oci/BUILD"] = build_inputs["oci/BUILD"].replace("//:empty", ":empty") + dedent(
+        build_inputs["oci/BUILD"] = build_inputs["oci/BUILD"].replace(
+            "//:empty", ":empty"
+        ) + dedent(
             """\
             oci_image_empty(name="empty")
             """

@@ -13,15 +13,6 @@ from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.version import PANTS_SEMVER, Version
-from pants_backend_secrets.exception import NoDecrypterException
-from pants_backend_secrets.secret_request import (
-    FallibleSecretsRequest,
-    FallibleSecretsResponse,
-    SecretsRequestRequest,
-    SecretsRequestWrap,
-    SecretsResponse,
-    SecretValue,
-)
 
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import (
@@ -30,6 +21,15 @@ from pants_backend_bitwarden.targets import (
     BitWardenItem,
     BitWardenItemField,
     BitWardenSessionSecret,
+)
+from pants_backend_secrets.exception import NoDecrypterException
+from pants_backend_secrets.secret_request import (
+    FallibleSecretsRequest,
+    FallibleSecretsResponse,
+    SecretsRequestRequest,
+    SecretsRequestWrap,
+    SecretsResponse,
+    SecretValue,
 )
 
 if PANTS_SEMVER >= Version("2.15.0.dev0"):
@@ -118,9 +118,7 @@ async def get_bitwarden_key(
     env_request = ["HOME"]
     extra_env = Environment()
     if wrapped_target.target[BitWardenSessionSecret].value is not None:
-        bw_session_secret = await Get(
-            SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target)
-        )
+        bw_session_secret = await Get(SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target))
         extra_env = Environment(**{"BW_SESSION": bw_session_secret.value.value})
     else:
         env_request.append("BW_SESSION")
