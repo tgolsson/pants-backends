@@ -7,21 +7,12 @@ from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process, ProcessCacheScope
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
-
-from pants_backend_bitwarden.subsystem import BitwardenTool
-from pants_backend_bitwarden.targets import (
-    BitWardenFieldField,
-    BitWardenId,
-    BitWardenItem,
-    BitWardenItemField,
-    BitWardenSessionSecret,
-)
+from pants.version import PANTS_SEMVER, Version
 from pants_backend_secrets.exception import NoDecrypterException
 from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
@@ -31,6 +22,21 @@ from pants_backend_secrets.secret_request import (
     SecretsResponse,
     SecretValue,
 )
+
+from pants_backend_bitwarden.subsystem import BitwardenTool
+from pants_backend_bitwarden.targets import (
+    BitWardenFieldField,
+    BitWardenId,
+    BitWardenItem,
+    BitWardenItemField,
+    BitWardenSessionSecret,
+)
+
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+    from pants.engine.env_vars import EnvironmentVars as Environment
+    from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
+else:
+    from pants.engine.environment import Environment, EnvironmentRequest
 
 
 @dataclass(frozen=True)
@@ -112,7 +118,9 @@ async def get_bitwarden_key(
     env_request = ["HOME"]
     extra_env = Environment()
     if wrapped_target.target[BitWardenSessionSecret].value is not None:
-        bw_session_secret = await Get(SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target))
+        bw_session_secret = await Get(
+            SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target)
+        )
         extra_env = Environment(**{"BW_SESSION": bw_session_secret.value.value})
     else:
         env_request.append("BW_SESSION")
