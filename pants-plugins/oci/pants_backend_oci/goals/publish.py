@@ -11,7 +11,9 @@ from pants.core.goals.publish import (
     PublishRequest,
 )
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.environment import Environment, EnvironmentRequest
+from pants.engine.env_vars import EnvironmentVars, EnvironmentVarsRequest
+
+# from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
@@ -74,7 +76,8 @@ async def publish_oci_process(
     )
     sandbox_input = await Get(Digest, MergeDigests([skopeo.digest, request.input_digest]))
 
-    relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
+    # relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
+    relevant_env = await Get(EnvironmentVars, EnvironmentVarsRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
     return Process(
         input_digest=sandbox_input,
         argv=(

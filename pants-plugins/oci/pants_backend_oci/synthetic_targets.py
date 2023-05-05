@@ -35,6 +35,7 @@ if PANTS_SEMVER >= Version("2.15.0.dev0"):
                         TargetAdaptor(
                             "oci_image_empty",
                             oci.empty_image_target,
+                            "synthetic target",
                         ),
                     ),
                 ),

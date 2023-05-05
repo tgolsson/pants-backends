@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.engine.rules import SubsystemRule
 from pants.option.option_types import StrOption
 from pants.version import PANTS_SEMVER, Version
 
@@ -96,7 +95,7 @@ class RuncTool(ExternalTool):
 
 def rules():
     return [
-        SubsystemRule(SkopeoTool),
-        SubsystemRule(RuncTool),
-        SubsystemRule(UmociTool),
+        *SkopeoTool.rules(),
+        *RuncTool.rules(),
+        *UmociTool.rules(),
     ]

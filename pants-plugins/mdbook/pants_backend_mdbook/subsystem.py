@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.engine.rules import SubsystemRule
 
 _mdbook_platform_mapping = {
     "linux_x86_64": "x86_64-unknown-linux-gnu",
@@ -34,5 +33,5 @@ class MdBookTool(ExternalTool):
 
 def rules():
     return [
-        SubsystemRule(MdBookTool),
+        *MdBookTool.rules(),
     ]
