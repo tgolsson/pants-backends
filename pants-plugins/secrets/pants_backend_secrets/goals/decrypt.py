@@ -33,6 +33,7 @@ class DecryptSubsystem(Outputting, GoalSubsystem):
 
 class Decrypt(Goal):
     subsystem_cls = DecryptSubsystem
+    environment_behavior = Goal.EnvironmentBehavior.LOCAL_ONLY
 
 
 _F = TypeVar("_F", bound=FieldSet)
