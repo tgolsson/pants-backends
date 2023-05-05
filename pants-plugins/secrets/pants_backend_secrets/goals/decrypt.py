@@ -33,7 +33,8 @@ class DecryptSubsystem(Outputting, GoalSubsystem):
 
 class Decrypt(Goal):
     subsystem_cls = DecryptSubsystem
-    environment_behavior = Goal.EnvironmentBehavior.LOCAL_ONLY
+    if PANTS_SEMVER >= Version("2.15.0.dev0"):
+        environment_behavior = Goal.EnvironmentBehavior.LOCAL_ONLY
 
 
 _F = TypeVar("_F", bound=FieldSet)
