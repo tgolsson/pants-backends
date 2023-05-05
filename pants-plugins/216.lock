@@ -85,7 +85,7 @@
             "zope-interface; extra == \"tests\""
           ],
           "requires_python": ">=3.7",
-          "version": "23.1"
+          "version": "23.1.0"
         },
         {
           "artifacts": [
@@ -306,7 +306,7 @@
           "project_name": "charset-normalizer",
           "requires_dists": [],
           "requires_python": ">=3.7.0",
-          "version": "3.1"
+          "version": "3.1.0"
         },
         {
           "artifacts": [
@@ -324,7 +324,7 @@
           "project_name": "chevron",
           "requires_dists": [],
           "requires_python": null,
-          "version": "0.14"
+          "version": "0.14.0"
         },
         {
           "artifacts": [
@@ -552,7 +552,7 @@
             "zipp>=0.5"
           ],
           "requires_python": ">=3.7",
-          "version": "6.6"
+          "version": "6.6.0"
         },
         {
           "artifacts": [
@@ -600,7 +600,7 @@
           "project_name": "iniconfig",
           "requires_dists": [],
           "requires_python": ">=3.7",
-          "version": "2"
+          "version": "2.0.0"
         },
         {
           "artifacts": [
@@ -697,7 +697,7 @@
             "typing-extensions==4.3.0"
           ],
           "requires_python": "<3.10,>=3.7",
-          "version": "2.16a0"
+          "version": "2.16.0a0"
         },
         {
           "artifacts": [
@@ -713,7 +713,7 @@
             "pytest<7.1.0,>=6.2.4"
           ],
           "requires_python": "<3.10,>=3.7",
-          "version": "2.16a0"
+          "version": "2.16.0a0"
         },
         {
           "artifacts": [
@@ -757,7 +757,7 @@
             "tox; extra == \"dev\""
           ],
           "requires_python": ">=3.6",
-          "version": "1"
+          "version": "1.0.0"
         },
         {
           "artifacts": [
@@ -822,7 +822,7 @@
             "wmi; sys_platform == \"win32\" and extra == \"test\""
           ],
           "requires_python": "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.6",
-          "version": "5.9"
+          "version": "5.9.0"
         },
         {
           "artifacts": [
@@ -840,7 +840,7 @@
           "project_name": "py",
           "requires_dists": [],
           "requires_python": "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7",
-          "version": "1.11"
+          "version": "1.11.0"
         },
         {
           "artifacts": [
@@ -922,7 +922,7 @@
             "ujson>=3.0.0"
           ],
           "requires_python": null,
-          "version": "1"
+          "version": "1.0.0"
         },
         {
           "artifacts": [
@@ -1000,7 +1000,7 @@
           "project_name": "pyyaml",
           "requires_dists": [],
           "requires_python": ">=3.6",
-          "version": "6"
+          "version": "6.0"
         },
         {
           "artifacts": [
@@ -1025,7 +1025,7 @@
             "urllib3<3,>=1.21.1"
           ],
           "requires_python": ">=3.7",
-          "version": "2.30"
+          "version": "2.30.0"
         },
         {
           "artifacts": [
@@ -1311,7 +1311,7 @@
           "project_name": "six",
           "requires_dists": [],
           "requires_python": "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7",
-          "version": "1.16"
+          "version": "1.16.0"
         },
         {
           "artifacts": [
@@ -1419,7 +1419,7 @@
           "project_name": "typing-extensions",
           "requires_dists": [],
           "requires_python": ">=3.7",
-          "version": "4.3"
+          "version": "4.3.0"
         },
         {
           "artifacts": [
@@ -1607,7 +1607,7 @@
           "project_name": "ujson",
           "requires_dists": [],
           "requires_python": ">=3.7",
-          "version": "5.7"
+          "version": "5.7.0"
         },
         {
           "artifacts": [
@@ -1672,14 +1672,14 @@
             "sphinx>=3.5; extra == \"docs\""
           ],
           "requires_python": ">=3.7",
-          "version": "3.15"
+          "version": "3.15.0"
         }
       ],
       "platform_tag": null
     }
   ],
   "path_mappings": {},
-  "pex_version": "2.1.108",
+  "pex_version": "2.1.111",
   "pip_version": "20.3.4-patched",
   "prefer_older_binary": false,
   "requirements": [
