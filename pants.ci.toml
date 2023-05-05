@@ -8,7 +8,7 @@ print_stacktrace = true
 log = true
 
 [test]
-use_coverage = true
+use_coverage = false
 
 [coverage-py]
 report = ["xml"]
