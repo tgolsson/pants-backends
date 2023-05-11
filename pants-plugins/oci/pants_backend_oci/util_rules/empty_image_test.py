@@ -21,7 +21,12 @@ def test_empty_image_has_fixed_sha() -> None:
             *process.rules(),
             *fprocess.rules(),
             *synthetic_targets.rules(),
-            QueryRule(image_bundle.FallibleImageBundle, [empty_image_bundle.ImageBundleEmptyRequest]),
+            QueryRule(
+                image_bundle.FallibleImageBundle,
+                [
+                    empty_image_bundle.ImageBundleEmptyRequest,
+                ],
+            ),
         ],
     )
 

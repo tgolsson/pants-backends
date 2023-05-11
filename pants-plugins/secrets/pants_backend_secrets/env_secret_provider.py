@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
-from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
+from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_secrets.exception import MissingSecret
 from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
@@ -14,6 +14,12 @@ from pants_backend_secrets.secret_request import (
     SecretValue,
 )
 from pants_backend_secrets.targets import EnvironmentSecretKey
+
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+    from pants.engine.env_vars import EnvironmentVars as Environment
+    from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
+else:
+    from pants.engine.environment import Environment, EnvironmentRequest
 
 
 @dataclass(frozen=True)

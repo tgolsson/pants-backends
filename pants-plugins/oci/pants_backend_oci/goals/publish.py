@@ -11,7 +11,6 @@ from pants.core.goals.publish import (
     PublishRequest,
 )
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.environment import Environment, EnvironmentRequest
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
@@ -20,6 +19,7 @@ from pants.engine.rules import collect_rules, rule
 from pants.engine.target import WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
+from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import SkopeoTool
 from pants_backend_oci.target_types import ImageRepository, ImageTag
@@ -29,6 +29,12 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequestWrap,
     ImageBundleRequest,
 )
+
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+    from pants.engine.env_vars import EnvironmentVars as Environment
+    from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
+else:
+    from pants.engine.environment import Environment, EnvironmentRequest
 
 
 class PublishImageRequest(PublishRequest):

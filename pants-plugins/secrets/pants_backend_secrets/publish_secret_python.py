@@ -21,7 +21,12 @@ from pants.backend.python.target_types import (
     WheelField,
 )
 from pants.backend.python.util_rules.pex import PexRequest, VenvPex, VenvPexProcess
-from pants.core.goals.publish import PublishOutputData, PublishPackages, PublishProcesses
+from pants.core.goals.publish import (
+    PublishFieldSet,
+    PublishOutputData,
+    PublishPackages,
+    PublishProcesses,
+)
 from pants.core.util_rules.config_files import ConfigFiles, ConfigFilesRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import CreateDigest, Digest, MergeDigests, Snapshot
@@ -53,7 +58,7 @@ class PublishPythonWithSecretPackageRequest(PublishPythonPackageRequest):
 
 
 @dataclass(frozen=True)
-class PublishPythonWithSecretPackageFieldSet(PublishPythonPackageFieldSet):
+class PublishPythonWithSecretPackageFieldSet(PublishFieldSet):
     publish_request_type = PublishPythonWithSecretPackageRequest
     required_fields = PublishPythonPackageFieldSet.required_fields + (PublishSecretsField,)
 
@@ -176,6 +181,7 @@ async def twine_upload_with_secret(
                 maybe_secret.stderr,
             )
 
+        assert maybe_secret.response is not None, "cannot be None if exit_code is 0"
         secrets.append(maybe_secret.response.value)
 
     for repo, secret in zip(request.field_set.repositories.value, secrets):

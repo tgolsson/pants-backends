@@ -3,13 +3,12 @@ colors = true
 plugins = ["hdrhistogram"]
 
 print_stacktrace = true
-level = "debug"
 
 [stats]
 log = true
 
 [test]
-use_coverage = true
+use_coverage = false
 
 [coverage-py]
 report = ["xml"]

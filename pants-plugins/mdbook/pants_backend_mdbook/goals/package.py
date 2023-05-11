@@ -24,6 +24,10 @@ class MdBookFieldSet(PackageFieldSet):
 @rule(desc="Package MDBOOK Image")
 async def package_mdbook_image(field_set: MdBookFieldSet) -> BuiltPackage:
     build = await Get(FallibleMdBookBuildOutput, MdbookBuildRequest(field_set.address))
+    if not build.success:
+        raise Exception("Failed to build mdbook")
+
+    assert build.output.digest is not None, "Expected a digest"
     return BuiltPackage(build.output.digest, tuple())
 
 

@@ -4,6 +4,7 @@ name_to_constraint = {
     "pants-214": ">=2.14.0a0,<2.15.0",
     "pants-215": ">=2.15.0a0,<2.16.0",
     "pants-216": "==2.16.0a0",
+    "pants-217": "==2.17.0.dev4",
 }
 
 for name, constraint in name_to_constraint.items():

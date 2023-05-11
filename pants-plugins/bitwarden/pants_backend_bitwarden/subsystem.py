@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
+from pants.version import PANTS_SEMVER, Version
 
 
 class BitwardenTool(ExternalTool):
@@ -29,3 +30,19 @@ class BitwardenTool(ExternalTool):
 
     def generate_exe(self, _: Platform) -> str:
         return "./bw"
+
+
+if PANTS_SEMVER >= Version("2.15.0.dev0"):
+
+    def rules():
+        return [
+            *BitwardenTool.rules(),
+        ]
+
+else:
+    from pants.engine.rules import SubsystemRule
+
+    def rules():
+        return [
+            SubsystemRule(BitwardenTool),
+        ]
