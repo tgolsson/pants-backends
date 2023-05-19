@@ -18,9 +18,9 @@ global_report = true
 args = ["-vv", "--no-header"]
 
 [oci]
-rootless = true
-uid_map = ["0:1001:1", "1:100000:65536"]
-gid_map = ["0:121:1", "1:100000:65536"]
+rootless = false
+uid_map = []
+gid_map = []
 
 
 [umoci]
