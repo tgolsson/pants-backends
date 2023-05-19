@@ -23,7 +23,7 @@ args = ["-vv", "--no-header"]
 # uid_map = ['0:0:4294967295']
 # gid_map = ['0:0:4294967295']
 
-rootless = false
+rootless = true
 uid_map = []
 gid_map = []
 
