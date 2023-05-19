@@ -53,6 +53,7 @@ async def make_unpack_process(
     for gid in oci.gid_map:
         command.append(f"--gid-map={gid}")
 
+    print(command)
     return Process(
         tuple(command),
         description="Unpacking OCI bundle",
