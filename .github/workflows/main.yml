@@ -77,6 +77,8 @@ jobs:
         ./get-pants.sh
         docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
         docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map
+        id -u
+        id -g
         /home/runner/bin/pants package ::
 
   check-and-lint:
