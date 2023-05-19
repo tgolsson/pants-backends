@@ -107,7 +107,6 @@ async def run_in_container(
         f"""
         ROOT=`pwd`
         set -euxo
-        ls -alh
         cp $ROOT/unpacked_image/config.json $ROOT/unpacked_image/config.json.bak
         {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
                     .process.args = [{", ".join(shell_command)}, "{request.command}"]
