@@ -6,7 +6,7 @@ from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import Get, collect_rules, rule
 
-from pants_backend_oci.subsystem import UmociTool
+from pants_backend_oci.subsystem import OciSubsystem, UmociTool
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 
 
@@ -27,25 +27,29 @@ class UnpackedImageBundle:
 
 @rule
 async def make_unpack_process(
-    request: UnpackedImageBundleRequest, tool: UmociTool, platform: Platform
+    request: UnpackedImageBundleRequest, tool: UmociTool, platform: Platform, oci: OciSubsystem
 ) -> Process:
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
     output_dir = await Get(Digest, CreateDigest([Directory("unpacked_image")]))
     input_digest = await Get(Digest, MergeDigests([request.bundle, umoci.digest, output_dir]))
 
-    command = (
+    command = [
         f"{{chroot}}/{umoci.exe}",
         "unpack",
-        "--rootless",
         "--keep-dirlinks",
-        "--uid-map=0:1000:1",
-        "--uid-map=1:100000:65536",
-        "--gid-map=0:1000:1",
-        "--gid-map=1:100000:65536",
         "--image",
         "build:build",
         "unpacked_image",
-    )
+    ]
+
+    if oci.rootless:
+        command[2:2] = [
+            "--rootless",
+            "--uid-map=0:1000:1",
+            "--uid-map=1:100000:65536",
+            "--gid-map=0:1000:1",
+            "--gid-map=1:100000:65536",
+        ]
 
     return Process(
         command,

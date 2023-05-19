@@ -16,3 +16,6 @@ global_report = true
 
 [pytest]
 args = ["-vv", "--no-header"]
+
+[oci]
+rootless = false
