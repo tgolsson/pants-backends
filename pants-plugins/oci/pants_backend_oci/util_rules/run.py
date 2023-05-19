@@ -108,70 +108,24 @@ async def run_in_container(
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
             {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.capabilities.effective += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.capabilities.inheritable += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.capabilities.permitted += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.capabilities.ambient += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
+                    [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_SYS_CHROOT"
+                    ] as $caps |
+                    .process.capabilities.effective += $caps |
+                    .process.capabilities.inheritable += $caps |
+                    .process.capabilities.permitted += $caps |
+                    .process.capabilities.bounding += $caps |
+                    .process.capabilities.ambient += $caps
                 ' > "$ROOT/unpacked_image/config.json.tmp"
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
@@ -181,17 +135,20 @@ async def run_in_container(
                                 "containerID": 0,
                                 "hostID": 1000,
                                 "size": 1
+
                         }},
                         {{
                                 "containerID": 1,
                                 "hostID": 100000,
                                 "size": 65536
+
                         }}
                      ] | .linux.gidMappings = [
                         {{
                                 "containerID": 0,
                                 "hostID": 1000,
                                 "size": 1
+
                         }},
                         {{
                                 "containerID": 1,
