@@ -26,6 +26,18 @@ class OciSubsystem(Subsystem):
         ),
     )
 
+    uid_map = StrListOption(
+        default=["0:1000:1", "1:100000:65536"],
+        advanced=True,
+        help="The UID map to use.",
+    )
+
+    gid_map = StrListOption(
+        default=["0:1000:1", "1:100000:65536"],
+        advanced=True,
+        help="The GID map to use.",
+    )
+
     if PANTS_SEMVER >= Version("2.15.0.dev0"):
         empty_image_target = StrOption(
             default="empty",

@@ -45,11 +45,13 @@ async def make_unpack_process(
     if oci.rootless:
         command[2:2] = [
             "--rootless",
-            # "--uid-map=0:1000:1",
-            # "--uid-map=1:100000:65536",
-            # "--gid-map=0:1000:1",
-            # "--gid-map=1:100000:65536",
         ]
+
+    for uid in oci.uid_map:
+        command.append(f"--uid-map={uid}")
+
+    for gid in oci.gid_map:
+        command.append(f"--gid-map={gid}")
 
     return Process(
         tuple(command),

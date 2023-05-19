@@ -19,3 +19,5 @@ args = ["-vv", "--no-header"]
 
 [oci]
 rootless = true
+uid_map = ["0:1001:1"]
+gid_map = ["0:121:1"]
