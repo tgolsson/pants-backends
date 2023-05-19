@@ -18,4 +18,4 @@ global_report = true
 args = ["-vv", "--no-header"]
 
 [oci]
-rootless = false
+rootless = true

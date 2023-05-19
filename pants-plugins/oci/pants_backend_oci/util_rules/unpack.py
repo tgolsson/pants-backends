@@ -46,9 +46,9 @@ async def make_unpack_process(
         command[2:2] = [
             "--rootless",
             "--uid-map=0:1000:1",
-            "--uid-map=1:100000:65536",
+            # "--uid-map=1:100000:65536",
             "--gid-map=0:1000:1",
-            "--gid-map=1:100000:65536",
+            # "--gid-map=1:100000:65536",
         ]
 
     return Process(
