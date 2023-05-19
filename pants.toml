@@ -42,7 +42,7 @@ repo_id = "e32e6905-7a7d-405f-82b1-86d2723b0c4d"
 
 [python]
 tailor_pex_binary_targets = true
-interpreter_constraints = [">=3.7"]
+interpreter_constraints = [">=3.7,<3.10"]
 enable_resolves = true
 default_resolve = "pants-plugins"
 

@@ -2,13 +2,29 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.option.option_types import StrOption
+from pants.option.option_types import BoolOption, StrListOption, StrOption
+from pants.option.subsystem import Subsystem
 from pants.version import PANTS_SEMVER, Version
 
 
-class UmociTool(ExternalTool):
+class OciSubsystem(Subsystem):
     options_scope = "oci"
-    help = "Wrapper for kustomize."
+    help = "The OCI image target."
+
+    command_shell = StrListOption(
+        default=["/bin/sh", "-c"],
+        advanced=True,
+        help="The default shell to use for container build commands.",
+    )
+
+    rootless = BoolOption(
+        default=True,
+        advanced=True,
+        help=(
+            "Whether to run in rootless mode, which changes behavior for some commands. Recommended on but"
+            " may require more setup.."
+        ),
+    )
 
     if PANTS_SEMVER >= Version("2.15.0.dev0"):
         empty_image_target = StrOption(
@@ -16,6 +32,16 @@ class UmociTool(ExternalTool):
             advanced=False,
             help="The name of the synthetic target for an empty base image.",
         )
+
+
+class Oci(ExternalTool):
+    options_scope = "umoci"
+    help = "Wrapper for kustomize."
+
+
+class UmociTool(ExternalTool):
+    options_scope = "umoci"
+    help = "Wrapper for kustomize."
 
     default_version = "v0.4.7"
     default_known_versions = [
@@ -100,6 +126,7 @@ if PANTS_SEMVER >= Version("2.15.0.dev0"):
             *SkopeoTool.rules(),
             *RuncTool.rules(),
             *UmociTool.rules(),
+            *OciSubsystem.rules(),
         ]
 
 else:
@@ -110,4 +137,5 @@ else:
             SubsystemRule(SkopeoTool),
             SubsystemRule(RuncTool),
             SubsystemRule(UmociTool),
+            SubsystemRule(OciSubsystem),
         ]

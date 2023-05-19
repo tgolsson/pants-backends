@@ -108,6 +108,7 @@ class ImageBuild(Target):
         ImageEntrypoint,
         ImageArgs,
         OutputPathField,
+        ImageBuildCommand,
     )
     help = "An imported OCI image."
 

@@ -7,7 +7,7 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process
+from pants.engine.process import FallibleProcessResult, Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
     Dependencies,
@@ -25,6 +25,7 @@ from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import (
     ImageArgs,
     ImageBase,
+    ImageBuildCommand,
     ImageDependencies,
     ImageEntrypoint,
     ImageEnvironment,
@@ -39,6 +40,7 @@ from pants_backend_oci.util_rules.image_bundle import (
 )
 from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
 from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
+from pants_backend_oci.util_rules.run import RunContainerRequest
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,8 @@ class BuildImageBundleFieldSet(FieldSet):
     environment: ImageEnvironment
     entrypoint: ImageEntrypoint
     args: ImageArgs
+
+    commands: ImageBuildCommand
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,7 @@ async def build_oci_bundle_package(
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
     base = maybe_built_base.output
     base_digest = base.digest
+    output_digest = base_digest
     if request.target.dependencies:
         root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))
 
@@ -93,43 +98,49 @@ async def build_oci_bundle_package(
         for dependency in root_dependencies:
             layers.append(Get(ImageLayer, ImageLayerRequest(dependency)))
 
-        layers = await MultiGet(*layers)
+        if layers:
+            layers = await MultiGet(*layers)
 
-        for layer in layers:
-            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
+            for layer in layers:
+                input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
 
-            image = await Get(
-                FallibleProcessResult,
-                FusedProcess(
-                    (
-                        Process(
-                            (umoci.exe, *layer.layer_command),
-                            input_digest=input_digest,
-                            description=f"Package OCI Image Bundle: {layer.address}",
-                        ),
-                        Process(
-                            (umoci.exe, *layer.config_command),
-                            description=f"Configure OCI Image Bundle: {layer.address}",
-                            output_directories=("build/",),
-                        ),
-                    )
-                ),
-            )
-
-            if image.exit_code != 0:
-                return FallibleImageBundle(
-                    None,
-                    image.exit_code,
-                    stdout=image.stdout.decode("utf-8"),
-                    stderr=image.stderr.decode("utf-8"),
+                image = await Get(
+                    FallibleProcessResult,
+                    FusedProcess(
+                        (
+                            Process(
+                                (umoci.exe, *layer.layer_command),
+                                input_digest=input_digest,
+                                description=f"Package OCI Image Bundle: {layer.address}",
+                            ),
+                            Process(
+                                (umoci.exe, *layer.config_command),
+                                description=f"Configure OCI Image Bundle: {layer.address}",
+                                output_directories=("build/",),
+                            ),
+                        )
+                    ),
                 )
 
-            base_digest = image.output_digest
+                if image.exit_code != 0:
+                    return FallibleImageBundle(
+                        None,
+                        image.exit_code,
+                        stdout=image.stdout.decode("utf-8"),
+                        stderr=image.stderr.decode("utf-8"),
+                    )
 
-        output_digest = base_digest
+                base_digest = image.output_digest
 
-    else:
-        output_digest = base_digest
+            output_digest = base_digest
+
+    if request.target.commands.value:
+        bundle = ImageBundle(output_digest, "", False)
+        modified_image = await Get(
+            ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
+        )
+
+        output_digest = modified_image.output_digest
 
     config = []
     if request.target.environment.value:

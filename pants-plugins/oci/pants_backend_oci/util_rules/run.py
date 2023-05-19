@@ -4,13 +4,23 @@ from dataclasses import dataclass
 from textwrap import dedent
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
+from pants.core.util_rules.system_binaries import (
+    SEARCH_PATHS,
+    BashBinary,
+    BinaryShims,
+    BinaryShimsRequest,
+    CatBinary,
+    CpBinary,
+    MkdirBinary,
+    MvBinary,
+)
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
+from pants.version import PANTS_SEMVER, Version
 
-from pants_backend_oci.subsystem import RuncTool, UmociTool
+from pants_backend_oci.subsystem import OciSubsystem, RuncTool, UmociTool
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
@@ -33,42 +43,200 @@ async def run_in_container(
     request: RunContainerRequest,
     umoci: UmociTool,
     runc: RuncTool,
+    oci: OciSubsystem,
     platform: Platform,
     bash: BashBinary,
     cat: CatBinary,
     cp: CpBinary,
     mkdir: MkdirBinary,
+    mv: MvBinary,
 ) -> ProcessResult:
-    download_runc_tool = Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform))
+    tools = ["newuidmap", "newgidmap", "jq", "cp"]
+    kwargs = dict(
+        rationale="runc",
+        search_path=SEARCH_PATHS,
+    )
+    if PANTS_SEMVER < Version("2.16.0.dev0"):
+        kwargs["output_directory"] = "."
 
-    tool, rundir, jq = await MultiGet(
-        download_runc_tool,
+    binary_shims = BinaryShimsRequest.for_binaries(
+        *tools,
+        **kwargs,
+    )
+    tool, rundir, jq, shims, packed_image_process = await MultiGet(
+        Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)),
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(JqBinary, JqBinaryRequest()),
+        Get(
+            BinaryShims,
+            BinaryShimsRequest,
+            binary_shims,
+        ),
+        Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
     )
 
-    packed_image_process = await Get(Process, UnpackedImageBundleRequest(request.bundle.digest))
     # name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
     script = dedent(
         f"""
         ROOT=`pwd`
-        for arg in "$@"; do
-            echo "$arg" | {jq.path} -R --argjson config "$({cat.path} $ROOT/unpacked_image/config.json)" '
-                    .  as $arg  | $config | .process.args += [$arg]
-                ' > "$ROOT/unpacked_image/config.json"
-        done
-        set -x
+        set -euxo
+        cp $ROOT/unpacked_image/config.json $ROOT/unpacked_image/config.json.bak
+        {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.args = [{", ".join(oci.command_shell)}, '{request.command}']
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+        {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+
+
         {cat.path} <<< $({jq.path} '
             .process.terminal = false
         ' "$ROOT/unpacked_image/config.json") > "$ROOT/unpacked_image/config.json"
-        echo $ROOT
-        `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc
+        {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.capabilities.bounding += [
+                         "CAP_CHOWN",
+                         "CAP_DAC_OVERRIDE",
+                         "CAP_FSETID",
+                         "CAP_FOWNER",
+                         "CAP_MKNOD",
+                         "CAP_NET_RAW",
+                         "CAP_SETGID",
+                         "CAP_SETUID",
+                         "CAP_SETFCAP",
+                         "CAP_SETPCAP",
+                         "CAP_SYS_CHROOT"
+                    ]
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+
+            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.capabilities.effective += [
+                         "CAP_CHOWN",
+                         "CAP_DAC_OVERRIDE",
+                         "CAP_FSETID",
+                         "CAP_FOWNER",
+                         "CAP_MKNOD",
+                         "CAP_NET_RAW",
+                         "CAP_SETGID",
+                         "CAP_SETUID",
+                         "CAP_SETFCAP",
+                         "CAP_SETPCAP",
+                         "CAP_SYS_CHROOT"
+                    ]
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+
+            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.capabilities.inheritable += [
+                         "CAP_CHOWN",
+                         "CAP_DAC_OVERRIDE",
+                         "CAP_FSETID",
+                         "CAP_FOWNER",
+                         "CAP_MKNOD",
+                         "CAP_NET_RAW",
+                         "CAP_SETGID",
+                         "CAP_SETUID",
+                         "CAP_SETFCAP",
+                         "CAP_SETPCAP",
+                         "CAP_SYS_CHROOT"
+                    ]
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+
+            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.capabilities.permitted += [
+                         "CAP_CHOWN",
+                         "CAP_DAC_OVERRIDE",
+                         "CAP_FSETID",
+                         "CAP_FOWNER",
+                         "CAP_MKNOD",
+                         "CAP_NET_RAW",
+                         "CAP_SETGID",
+                         "CAP_SETUID",
+                         "CAP_SETFCAP",
+                         "CAP_SETPCAP",
+                         "CAP_SYS_CHROOT"
+                    ]
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+
+            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.capabilities.ambient += [
+                         "CAP_CHOWN",
+                         "CAP_DAC_OVERRIDE",
+                         "CAP_FSETID",
+                         "CAP_FOWNER",
+                         "CAP_MKNOD",
+                         "CAP_NET_RAW",
+                         "CAP_SETGID",
+                         "CAP_SETUID",
+                         "CAP_SETFCAP",
+                         "CAP_SETPCAP",
+                         "CAP_SYS_CHROOT"
+                    ]
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+
+            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .linux.uidMappings = [
+                        {{
+                                "containerID": 0,
+                                "hostID": 1000,
+                                "size": 1
+                        }},
+                        {{
+                                "containerID": 1,
+                                "hostID": 100000,
+                                "size": 65536
+                        }}
+                     ] | .linux.gidMappings = [
+                        {{
+                                "containerID": 0,
+                                "hostID": 1000,
+                                "size": 1
+                        }},
+                        {{
+                                "containerID": 1,
+                                "hostID": 100000,
+                                "size": 65536
+                        }}
+                     ]
+                       | .mounts[0].options = [
+                             "nosuid",
+                             "noexec",
+                             "nodev"
+                       ]
+                       | .process.user.uid = 0
+                       | .process.user.gid = 0
+                       | .mounts += [ {{
+                              "destination": "/sys",
+                              "type": "bind",
+                              "source": "/sys",
+                              "options": [
+                                "rprivate",
+                                "nosuid",
+                                "noexec",
+                                "nodev",
+                                "ro",
+                                "rbind"
+                              ]
+                            }}
+                       ]
+            ' > "$ROOT/unpacked_image/config.json.tmp"
+        {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+        `pwd`/{tool.exe} --debug --root runspace --rootless true run -b unpacked_image pants.runc
+        cp $ROOT/unpacked_image/config.json.bak $ROOT/unpacked_image/config.json
     """
     )
     script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
-    (input_digest,) = await MultiGet(
-        Get(Digest, MergeDigests((rundir, tool.digest, script_digest))),
-    )
+
+    if PANTS_SEMVER >= Version("2.16.0.dev0"):
+        immutable_input_digests = shims.immutable_input_digests
+        env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
+        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
+
+    else:
+        env = {"PATH": "{chroot}/bins", "XDG_RUNTIME_DIR": "{chroot}/tmp"}
+        immutable_input_digests = None
+        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest, shims.digest)))
 
     steps = [
         packed_image_process,
@@ -76,6 +244,8 @@ async def run_in_container(
             (bash.path, "{chroot}/run.sh", f"{request.command}"),
             description="Running container build command",
             input_digest=input_digest,
+            immutable_input_digests=immutable_input_digests,
+            env=env,
         ),
     ]
 

@@ -94,6 +94,7 @@ def test_run_oci_container_file() -> None:
             [
                 "--backend-packages=pants_backend_oci",
                 "--backend-packages=pants.backend.python",
+                "--keep-sandboxes=on_failure",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
                 "run",
                 f"{tmpdir}/oci:oci",
