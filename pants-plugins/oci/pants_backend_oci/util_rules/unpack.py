@@ -43,7 +43,6 @@ async def make_unpack_process(
         "unpacked_image",
     ]
 
-    print(f"OCI: {oci.rootless}")
     if oci.rootless:
         command.append("--rootless")
 

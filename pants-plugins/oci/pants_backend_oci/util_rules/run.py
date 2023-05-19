@@ -76,6 +76,33 @@ async def run_in_container(
     )
 
     shell_command = [f'"{c}"' for c in oci.command_shell]
+
+    uid_mappings = ",\n".join(
+        [
+            f"""
+        {{
+            "containerID": {container_id},
+            "hostID": {host_id},
+            "size": {size}
+        }}
+        """
+            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)
+        ]
+    )
+
+    gid_mappings = ",\n".join(
+        [
+            f"""
+        {{
+            "containerID": {container_id},
+            "hostID": {host_id},
+            "size": {size}
+        }}
+        """
+            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)
+        ]
+    )
+
     script = dedent(
         f"""
         ROOT=`pwd`
@@ -86,28 +113,8 @@ async def run_in_container(
                 ' > "$ROOT/unpacked_image/config.json.tmp"
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
-
-        {cat.path} <<< $({jq.path} '
-            .process.terminal = false
-        ' "$ROOT/unpacked_image/config.json") > "$ROOT/unpacked_image/config.json"
         {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.capabilities.bounding += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
+                    .process.terminal = false |
                     [
                         "CAP_AUDIT_WRITE",
                         "CAP_CHOWN",
@@ -133,33 +140,9 @@ async def run_in_container(
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
             {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .linux.uidMappings = [
-                        {{
-                                "containerID": 0,
-                                "hostID": 1000,
-                                "size": 1
-
-                        }},
-                        {{
-                                "containerID": 1,
-                                "hostID": 100000,
-                                "size": 65536
-
-                        }}
-                     ] | .linux.gidMappings = [
-                        {{
-                                "containerID": 0,
-                                "hostID": 1000,
-                                "size": 1
-
-                        }},
-                        {{
-                                "containerID": 1,
-                                "hostID": 100000,
-                                "size": 65536
-                        }}
-                     ]
-                       | .mounts[0].options = [
+                    .linux.uidMappings = [{uid_mappings}] |
+                    .linux.gidMappings = [{gid_mappings}] |
+                    .mounts[0].options = [
                              "nosuid",
                              "noexec",
                              "nodev"
