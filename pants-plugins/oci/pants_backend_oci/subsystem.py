@@ -60,6 +60,12 @@ class UmociTool(ExternalTool):
         "v0.4.7|linux_x86_64|6abecdbe7ac96a8e48fdb73fb53f08d21d4dc5e040f7590d2ca5547b7f2b2e85|7499776",
     ]
 
+    log = StrOption(
+        default="warn",
+        advanced=False,
+        help="The log level for umoci.",
+    )
+
     def generate_url(self, plat: Platform) -> str:
         platform_mapping = {
             "linux_x86_64": "amd64",

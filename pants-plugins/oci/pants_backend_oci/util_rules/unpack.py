@@ -35,6 +35,7 @@ async def make_unpack_process(
 
     command = [
         f"{{chroot}}/{umoci.exe}",
+        f"--log={tool.log}",
         "unpack",
         "--keep-dirlinks",
         "--image",
@@ -43,7 +44,7 @@ async def make_unpack_process(
     ]
 
     if oci.rootless:
-        command[2:2] = [
+        command[3:3] = [
             "--rootless",
         ]
 
@@ -69,6 +70,7 @@ async def make_repack_process(
 
     command = (
         f"{{chroot}}/{umoci.exe}",
+        f"--log={tool.log}",
         "repack",
         "--image",
         "build:build",
