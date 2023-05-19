@@ -43,10 +43,9 @@ async def make_unpack_process(
         "unpacked_image",
     ]
 
+    print(f"OCI: {oci.rootless}")
     if oci.rootless:
-        command[3:3] = [
-            "--rootless",
-        ]
+        command.append("--rootless")
 
     for uid in oci.uid_map:
         command.append(f"--uid-map={uid}")
