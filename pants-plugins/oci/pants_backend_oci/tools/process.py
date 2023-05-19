@@ -39,7 +39,7 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
     export ROOT_DIR="$(pwd)"
     export SANDBOX_DIR="{chroot}"
     cd $SANDBOX_DIR
-    ls -alh
+    /usr/bin/ls -alh
     """ + "\n".join(
         " ".join(p.argv) for p in request.processes
     )
