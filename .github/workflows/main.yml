@@ -76,8 +76,8 @@ jobs:
       run: |
         ./get-pants.sh
         id
-        echo "github:100000:65536" > /etc/subuid
-        echo "github:100000:65536" > /etc/subgid
+        sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
+        sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
         docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
         docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map
 
