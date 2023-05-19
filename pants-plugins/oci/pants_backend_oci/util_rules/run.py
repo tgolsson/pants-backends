@@ -57,7 +57,7 @@ async def run_in_container(
         search_path=SEARCH_PATHS,
     )
     if PANTS_SEMVER < Version("2.16.0.dev0"):
-        kwargs["output_directory"] = "."
+        kwargs["output_directory"] = "bins"
 
     binary_shims = BinaryShimsRequest.for_binaries(
         *tools,
@@ -75,14 +75,14 @@ async def run_in_container(
         Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
     )
 
-    # name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
+    shell_command = [f'"{c}"' for c in oci.command_shell]
     script = dedent(
         f"""
         ROOT=`pwd`
         set -euxo
         cp $ROOT/unpacked_image/config.json $ROOT/unpacked_image/config.json.bak
         {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.args = [{", ".join(oci.command_shell)}, '{request.command}']
+                    .process.args = [{", ".join(shell_command)}, "{request.command}"]
                 ' > "$ROOT/unpacked_image/config.json.tmp"
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
