@@ -109,23 +109,26 @@ async def run_in_container(
 
             {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
                     [
+                        "CAP_AUDIT_WRITE",
                         "CAP_CHOWN",
                         "CAP_DAC_OVERRIDE",
-                        "CAP_FSETID",
                         "CAP_FOWNER",
+                        "CAP_FSETID",
+                        "CAP_KILL",
                         "CAP_MKNOD",
+                        "CAP_NET_BIND_SERVICE",
                         "CAP_NET_RAW",
-                        "CAP_SETGID",
-                        "CAP_SETUID",
                         "CAP_SETFCAP",
+                        "CAP_SETGID",
                         "CAP_SETPCAP",
+                        "CAP_SETUID",
                         "CAP_SYS_CHROOT"
                     ] as $caps |
-                    .process.capabilities.effective += $caps |
-                    .process.capabilities.inheritable += $caps |
-                    .process.capabilities.permitted += $caps |
-                    .process.capabilities.bounding += $caps |
-                    .process.capabilities.ambient += $caps
+                    .process.capabilities.effective = $caps |
+                    .process.capabilities.inheritable = $caps |
+                    .process.capabilities.permitted = $caps |
+                    .process.capabilities.bounding = $caps |
+                    .process.capabilities.ambient = $caps
                 ' > "$ROOT/unpacked_image/config.json.tmp"
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
