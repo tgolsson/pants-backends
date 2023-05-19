@@ -1,7 +1,8 @@
 [GLOBAL]
 colors = true
 plugins = ["hdrhistogram"]
-
+process_execution_local_parallelism = 1
+rule_threads_core = 1
 print_stacktrace = true
 
 [stats]
