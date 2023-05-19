@@ -37,7 +37,6 @@ async def make_unpack_process(
         f"{{chroot}}/{umoci.exe}",
         f"--log={tool.log}",
         "unpack",
-        "--keep-dirlinks",
         "--image",
         "build:build",
         "unpacked_image",
