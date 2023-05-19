@@ -51,7 +51,7 @@ async def run_in_container(
     mkdir: MkdirBinary,
     mv: MvBinary,
 ) -> ProcessResult:
-    tools = ["newuidmap", "newgidmap", "jq", "cp"]
+    tools = ["newuidmap", "newgidmap", "jq", "cp", "ls"]
     kwargs = dict(
         rationale="runc",
         search_path=SEARCH_PATHS,
@@ -107,6 +107,7 @@ async def run_in_container(
         f"""
         ROOT=`pwd`
         set -euxo
+        ls -alh
         cp $ROOT/unpacked_image/config.json $ROOT/unpacked_image/config.json.bak
         {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
                     .process.args = [{", ".join(shell_command)}, "{request.command}"]
