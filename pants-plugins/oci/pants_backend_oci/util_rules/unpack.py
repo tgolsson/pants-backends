@@ -52,7 +52,7 @@ async def make_unpack_process(
         ]
 
     return Process(
-        command,
+        tuple(command),
         description="Unpacking OCI bundle",
         input_digest=input_digest,
         #        output_directories=("unpacked_image",),
