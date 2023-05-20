@@ -44,14 +44,12 @@ async def make_unpack_process(
 
     if oci.rootless:
         command.append("--rootless")
-
     for uid in oci.uid_map:
         command.append(f"--uid-map={uid}")
 
     for gid in oci.gid_map:
         command.append(f"--gid-map={gid}")
 
-    print(command)
     return Process(
         tuple(command),
         description="Unpacking OCI bundle",
