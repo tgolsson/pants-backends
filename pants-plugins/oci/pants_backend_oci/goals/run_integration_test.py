@@ -42,8 +42,10 @@ def test_run_oci_container() -> None:
                 "--backend-packages=pants_backend_oci",
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
-                "--oci-uid-map=['0:1001:1', '1:100000:65536']",
-                "--oci-gid-map=['0:122:1', '1:100000:65536']",
+                "--oci-uid-map='0:1001:1'",
+                "--oci-uid-map='1:100000:65536'",
+                "--oci-gid-map='0:122:1'",
+                "--oci-gid-map='1:100000:65536']'",
                 "run",
                 f"{tmpdir}/oci:oci",
             ]
