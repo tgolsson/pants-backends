@@ -5,10 +5,10 @@
 import tensorflow
 
 
-def run():
+def _run():
     print("Tensorflow version:", tensorflow.__version__)
 
 
 if __name__ == "__main__":
-    print("foobar!!")
-    run()
+    print("This is main!")
+    _run()

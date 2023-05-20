@@ -26,6 +26,7 @@ from pants.util.strutil import softwrap
 
 from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import ImageBase, ImageRepository, ImageTag
+from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -127,28 +128,26 @@ async def build_python_image(
 
         input_digest = await Get(Digest, MergeDigests([umoci.digest, digest, layer.digest]))
 
-        image_with_layer = await Get(
+        image = await Get(
             ProcessResult,
-            Process(
-                (umoci.exe, *layer.layer_command),
-                input_digest=input_digest,
-                description=f"Package OCI Image Bundle: {layer.address}",
-                output_directories=("build/",),
-            ),
+            FusedProcess(
+                (
+                    Process(
+                        (umoci.exe, *layer.layer_command),
+                        input_digest=input_digest,
+                        description=f"Package OCI Image Bundle: {layer.address}",
+                        output_directories=("build/",),
+                    ),
+                    Process(
+                        (umoci.exe, *layer.config_command),
+                        input_digest=input_digest,
+                        description=f"Configure OCI Image Bundle: {layer.address}",
+                        output_directories=("build/",),
+                    ),
+                )
+            )
         )
-
-        digest = image_with_layer.output_digest
-        input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
-        image_with_config = await Get(
-            ProcessResult,
-            Process(
-                (umoci.exe, *layer.config_command),
-                input_digest=input_digest,
-                description=f"Configure OCI Image Bundle: {layer.address}",
-                output_directories=("build/",),
-            ),
-        )
-        digest = image_with_config.output_digest
+        digest = image.output_digest
     input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
     image_with_layer = await Get(
         ProcessResult,
