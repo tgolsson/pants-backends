@@ -19,11 +19,6 @@ global_report = true
 args = ["-vv", "--no-header"]
 
 [oci]
-# rootless = false
-# uid_map = ['0:0:4294967295']
-# gid_map = ['0:0:4294967295']
-
-rootless = true
 uid_map = ["0:1001:1", "1:100000:65536"]
 gid_map = ["0:122:1", "1:100000:65536"]
 
