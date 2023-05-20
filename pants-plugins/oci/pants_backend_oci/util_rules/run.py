@@ -185,7 +185,7 @@ async def run_in_container(
         packed_image_process,
         Process(
             (bash.path, "{chroot}/run.sh", f"{request.command}"),
-            description=f"Running container build command {request.command}",
+            description="Running container build command",
             input_digest=input_digest,
             immutable_input_digests=immutable_input_digests,
             env=env,
