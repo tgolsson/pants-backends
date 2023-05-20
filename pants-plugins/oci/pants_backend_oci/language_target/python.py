@@ -145,7 +145,7 @@ async def build_python_image(
                         output_directories=("build/",),
                     ),
                 )
-            )
+            ),
         )
         digest = image.output_digest
     input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
