@@ -53,7 +53,7 @@ def test_run_oci_container() -> None:
                 "run",
                 f"{tmpdir}/oci:oci",
             ],
-            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*]"},
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*']"},
         )
 
     result.assert_success()
@@ -115,7 +115,7 @@ def test_run_oci_container_file() -> None:
                 "run",
                 f"{tmpdir}/oci:oci",
             ],
-            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*]"},
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*']"},
         )
 
     result.assert_success()
@@ -176,7 +176,7 @@ def test_run_oci_container_files() -> None:
                 "run",
                 f"{tmpdir}/oci:oci",
             ],
-            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*]"},
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*']"},
         )
 
     result.assert_success()
