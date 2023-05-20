@@ -8,7 +8,7 @@ from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
 from pants.version import PANTS_SEMVER, Version
 
-from pants_backend_oci.subsystem import UmociTool
+from pants_backend_oci.subsystem import OciSubsystem
 
 RULES = ()
 
@@ -24,7 +24,7 @@ if PANTS_SEMVER >= Version("2.17.0.dev0"):
 
     @rule
     async def example_synthetic_targets(
-        request: SyntheticEmptyImageRequest, oci: UmociTool
+        request: SyntheticEmptyImageRequest, oci: OciSubsystem
     ) -> SyntheticAddressMaps:
         return SyntheticAddressMaps.for_targets_request(
             request,
@@ -59,7 +59,7 @@ elif PANTS_SEMVER >= Version("2.15.0.dev0"):
 
     @rule
     async def example_synthetic_targets(
-        request: SyntheticEmptyImageRequest, oci: UmociTool
+        request: SyntheticEmptyImageRequest, oci: OciSubsystem
     ) -> SyntheticAddressMaps:
         return SyntheticAddressMaps.for_targets_request(
             request,

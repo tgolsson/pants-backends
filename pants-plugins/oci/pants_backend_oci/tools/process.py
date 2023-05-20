@@ -20,16 +20,22 @@ class FusedProcess:
 @rule
 async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
     common_output_directories = list(set(sum([list(p.output_directories) for p in request.processes], [])))
+    immutable_input_digests = {}
+    for p in request.processes:
+        immutable_input_digests.update(p.immutable_input_digests)
 
     common_output_files = list(set(sum([list(p.output_files) for p in request.processes], [])))
-
     common_digest_input = list(set([p.input_digest for p in request.processes if p.input_digest]))
-
     common_description = " | ".join(p.description for p in request.processes)
 
     common_digest = await Get(Digest, MergeDigests(common_digest_input))
 
+    env = {}
+    for p in request.processes:
+        env.update(p.env)
+
     script = """
+    set -euo pipefail
     export ROOT_DIR="$(pwd)"
     export SANDBOX_DIR="{chroot}"
     cd $SANDBOX_DIR
@@ -43,6 +49,8 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
         input_digest=common_digest,
         output_files=common_output_files,
         output_directories=common_output_directories,
+        immutable_input_digests=immutable_input_digests,
+        env=env,
     )
 
 

@@ -11,10 +11,8 @@ from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import (
     SEARCH_PATHS,
-    BinaryPath,
-    BinaryPathRequest,
-    BinaryPaths,
-    BinaryPathTest,
+    BinaryShims,
+    BinaryShimsRequest,
     MkdirBinary,
     MvBinary,
 )
@@ -24,6 +22,7 @@ from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
+from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import RuncTool
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
@@ -50,30 +49,6 @@ class RunImageBundleProcessRequest:
     target: Target
 
 
-class JqBinary(BinaryPath):
-    pass
-
-
-@dataclass(frozen=True)
-class JqBinaryRequest:
-    pass
-
-
-@rule
-async def find_jq_wrapper(_: JqBinaryRequest, jq_binary: JqBinary) -> JqBinary:
-    return jq_binary
-
-
-@rule(desc="Finding the `jq` binary")
-async def find_jq() -> JqBinary:
-    request = BinaryPathRequest(
-        binary_name="jq", search_path=SEARCH_PATHS, test=BinaryPathTest(args=["--version"])
-    )
-    paths = await Get(BinaryPaths, BinaryPathRequest, request)
-    first_path = paths.first_path_or_raise(request, rationale="work with `json` data")
-    return JqBinary(first_path.path, first_path.fingerprint)
-
-
 @rule
 async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
@@ -91,11 +66,29 @@ async def prepare_run_image_bundle(
     bundle_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
     image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
 
-    tool, image, rundir, jq = await MultiGet(
+    # TODO[TSolberg]: This should be handled in the utility rule later.
+    tools = ["newuidmap", "newgidmap", "jq", "cat", "echo", "sh"]
+    kwargs = dict(
+        rationale="runc",
+        search_path=SEARCH_PATHS,
+    )
+    if PANTS_SEMVER < Version("2.16.0.dev0"):
+        kwargs["output_directory"] = "bins"
+
+    binary_shims = BinaryShimsRequest.for_binaries(
+        *tools,
+        **kwargs,
+    )
+
+    tool, image, rundir, shims = await MultiGet(
         download_runc_tool,
         image,
         Get(Digest, CreateDigest([Directory("runspace")])),
-        Get(JqBinary, JqBinaryRequest()),
+        Get(
+            BinaryShims,
+            BinaryShimsRequest,
+            binary_shims,
+        ),
     )
 
     if image.exit_code != 0:
@@ -109,10 +102,36 @@ async def prepare_run_image_bundle(
             f"""
         ROOT=`pwd`
         for arg in "$@"; do
-            echo "$arg" | {jq.path} -R --argjson config "$(cat $ROOT/unpacked_image/config.json)" '
+            echo "$arg" | jq -R --argjson config "$(cat $ROOT/unpacked_image/config.json)" '
                     .  as $arg  | $config | .process.args += [$arg]
                 ' > "$ROOT/unpacked_image/config.json"
-        done"""
+        done
+        cat $ROOT/unpacked_image/config.json | jq '
+                    .process.terminal = false |
+                    [
+                        "CAP_AUDIT_WRITE",
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FOWNER",
+                        "CAP_FSETID",
+                        "CAP_KILL",
+                        "CAP_MKNOD",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_NET_RAW",
+                        "CAP_SETFCAP",
+                        "CAP_SETGID",
+                        "CAP_SETPCAP",
+                        "CAP_SETUID",
+                        "CAP_SYS_CHROOT"
+                    ] as $caps |
+                    .process.capabilities.effective = $caps |
+                    .process.capabilities.inheritable = $caps |
+                    .process.capabilities.permitted = $caps |
+                    .process.capabilities.bounding = $caps |
+                    .process.capabilities.ambient = $caps
+                ' > "$ROOT/unpacked_image/config.json.tmp"
+            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+            """
         )
     ]
 
@@ -120,7 +139,7 @@ async def prepare_run_image_bundle(
         components.append(
             dedent(
                 f"""
-                {jq.path} '
+                jq '
                     .process.terminal = false
                 ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
                 {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
@@ -131,7 +150,7 @@ async def prepare_run_image_bundle(
     components.append(
         dedent(
             f"""
-            `pwd`/{tool.exe} --root runspace run -b unpacked_image pants.runc.{name}
+            `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc.{name}
             exit
             """
         )
@@ -139,7 +158,16 @@ async def prepare_run_image_bundle(
     script_digest = await Get(
         Digest, CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
     )
-    input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
+
+    if PANTS_SEMVER >= Version("2.16.0.dev0"):
+        immutable_input_digests = shims.immutable_input_digests
+        env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
+        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
+
+    else:
+        env = {"PATH": "{chroot}/bins", "XDG_RUNTIME_DIR": "{chroot}/tmp"}
+        immutable_input_digests = None
+        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest, shims.digest)))
 
     return await Get(
         Process,
@@ -147,9 +175,11 @@ async def prepare_run_image_bundle(
             (
                 packed_image_process,
                 Process(
-                    ("sh", "{chroot}/run.sh", "$*"),
+                    ("/usr/bin/sh", "{chroot}/run.sh", "$*"),
                     description=f"Running {request.target}",
                     input_digest=input_digest,
+                    immutable_input_digests=immutable_input_digests,
+                    env=env,
                 ),
             )
         ),
@@ -168,6 +198,7 @@ async def run_oci_command_target(request: RunImageBundleCommand) -> RunRequest:
         digest=process.input_digest,
         args=process.argv,
         extra_env=process.env,
+        immutable_input_digests=process.immutable_input_digests,
     )
 
 

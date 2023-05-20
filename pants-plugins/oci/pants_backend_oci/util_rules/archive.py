@@ -31,6 +31,54 @@ class CreateDeterministicTar:
     output_filename: str
 
 
+@dataclass(frozen=True)
+class CreateDeterministicDirectoryTar:
+    """A request to create a deterministic tar.
+    All files in the input snapshot will be included in the resulting archive.
+    """
+
+    directory: str
+    output_filename: str
+
+
+@rule
+async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Process:
+    tar_binary = await Get(TarBinary, TarBinaryRequest())
+    argv = [
+        tar_binary.path,
+        "--sort=name",
+        "--mtime='1970-01-01 00:00Z'",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+        "-cf",
+        request.output_filename,
+        "-C",
+        request.directory,
+        ".",
+    ]
+
+    # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
+    env = {"PATH": os.pathsep.join(SEARCH_PATHS)}
+
+    # `tar` requires that the output filename's parent directory exists,so if the caller
+    # wants the output in a directory we explicitly create it here.
+    # We have to guard this path as the Rust code will crash if we give it empty paths.
+    output_dir = os.path.dirname(request.output_filename)
+    input_digest = None
+    if output_dir != "":
+        input_digest = await Get(Digest, CreateDigest([Directory(output_dir)]))
+
+    return Process(
+        argv=argv,
+        env=env,
+        input_digest=input_digest,
+        description=f"Create {request.output_filename}",
+        level=LogLevel.DEBUG,
+        output_files=(request.output_filename,),
+    )
+
+
 @rule(desc="Creating an archive file", level=LogLevel.DEBUG)
 async def create_archive(request: CreateDeterministicTar) -> Digest:
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.

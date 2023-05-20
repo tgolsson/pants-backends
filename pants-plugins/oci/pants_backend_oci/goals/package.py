@@ -3,7 +3,12 @@
 
 from dataclasses import dataclass
 
-from pants.core.goals.package import BuiltPackage, BuiltPackageArtifact, PackageFieldSet
+from pants.core.goals.package import (
+    BuiltPackage,
+    BuiltPackageArtifact,
+    OutputPathField,
+    PackageFieldSet,
+)
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
@@ -31,6 +36,8 @@ class ImageFieldSet(PackageFieldSet):
     repository: ImageRepository
     tag: ImageTag
     digest: ImageDigest
+
+    output_path: OutputPathField
 
 
 @dataclass(frozen=True)
@@ -117,7 +124,7 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
     )
 
     artifact = BuiltPackageArtifact(
-        relpath=f"{name}.{suffix}",
+        relpath=field_set.output_path.value_or_default(file_ending="tar"),
         extra_log_lines=(f"Packaged image: {image.output.image_sha}",),
     )
 

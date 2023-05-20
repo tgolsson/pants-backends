@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.fs import Digest, MergeDigests
+from pants.engine.fs import CreateDigest, Digest, Directory, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import Get, collect_rules, rule
 
-from pants_backend_oci.subsystem import UmociTool
+from pants_backend_oci.subsystem import OciSubsystem, UmociTool
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 
 
@@ -16,22 +16,58 @@ class UnpackedImageBundleRequest:
 
 
 @dataclass(frozen=True)
+class RepackedImageBundleRequest:
+    pass
+
+
+@dataclass(frozen=True)
 class UnpackedImageBundle:
     digest: Digest
 
 
 @rule
 async def make_unpack_process(
-    request: UnpackedImageBundleRequest, tool: UmociTool, platform: Platform
+    request: UnpackedImageBundleRequest, tool: UmociTool, platform: Platform, oci: OciSubsystem
+) -> Process:
+    umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    output_dir = await Get(Digest, CreateDigest([Directory("unpacked_image")]))
+    input_digest = await Get(Digest, MergeDigests([request.bundle, umoci.digest, output_dir]))
+
+    command = [
+        f"{{chroot}}/{umoci.exe}",
+        f"--log={tool.log}",
+        "unpack",
+        "--image",
+        "build:build",
+        "unpacked_image",
+    ]
+
+    if oci.rootless:
+        command.append("--rootless")
+    for uid in oci.uid_map:
+        command.append(f"--uid-map={uid}")
+
+    for gid in oci.gid_map:
+        command.append(f"--gid-map={gid}")
+
+    return Process(
+        tuple(command),
+        description="Unpacking OCI bundle",
+        input_digest=input_digest,
+        #        output_directories=("unpacked_image",),
+    )
+
+
+@rule
+async def make_repack_process(
+    request: RepackedImageBundleRequest, tool: UmociTool, platform: Platform
 ) -> Process:
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
 
-    input_digest = await Get(Digest, MergeDigests([request.bundle, umoci.digest]))
-
     command = (
         f"{{chroot}}/{umoci.exe}",
-        "unpack",
-        "--rootless",
+        f"--log={tool.log}",
+        "repack",
         "--image",
         "build:build",
         "unpacked_image",
@@ -39,9 +75,8 @@ async def make_unpack_process(
 
     return Process(
         command,
-        description="Unpacking OCI bundle",
-        input_digest=input_digest,
-        output_directories=("unpacked_image",),
+        description="Repacking OCI bundle",
+        output_directories=("build/",),
     )
 
 

@@ -9,6 +9,7 @@ from pants.engine.target import (
     ScalarField,
     SpecialCasedDependencies,
     StringField,
+    StringSequenceField,
 )
 from pants.util.strutil import softwrap
 
@@ -104,3 +105,53 @@ class ImageEmptyMarker(ScalarField):
     @classmethod
     def compute_value(cls, raw_value: Optional[NoneType], address: Address) -> Optional[NoneType]:
         return super().compute_value(raw_value, address=address)
+
+
+class ImageBuildOutputs(StringSequenceField):
+    alias = "outputs"
+
+    help = softwrap(
+        """
+        Globs to capture as outputs from the build step.
+        """
+    )
+
+
+class ImageEnvironment(StringSequenceField):
+    alias = "env"
+
+    help = softwrap(
+        """
+        Environment variables to set.
+        """
+    )
+
+
+class ImageBuildCommand(StringField):
+    alias = "commands"
+
+    help = softwrap(
+        """
+        Globs to capture as outputs from the build step.
+        """
+    )
+
+
+class ImageEntrypoint(StringField):
+    alias = "entrypoint"
+
+    help = softwrap(
+        """
+        The entrypoint to use
+        """
+    )
+
+
+class ImageArgs(StringSequenceField):
+    alias = "args"
+
+    help = softwrap(
+        """
+        Globs to capture as outputs from the build step.
+        """
+    )

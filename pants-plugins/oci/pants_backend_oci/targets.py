@@ -1,3 +1,4 @@
+from pants.core.goals.package import OutputPathField
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
@@ -11,10 +12,15 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    ImageArgs,
     ImageBase,
+    ImageBuildCommand,
+    ImageBuildOutputs,
     ImageDependencies,
     ImageDigest,
     ImageEmptyMarker,
+    ImageEntrypoint,
+    ImageEnvironment,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -98,6 +104,11 @@ class ImageBuild(Target):
         ImageBase,
         ImageDependencies,
         ImageRunTty,
+        ImageEnvironment,
+        ImageEntrypoint,
+        ImageArgs,
+        OutputPathField,
+        ImageBuildCommand,
     )
     help = "An imported OCI image."
 
@@ -111,8 +122,22 @@ class ImageEmpty(Target):
     help = "An imported OCI image."
 
 
+class ImageBuildStep(Target):
+    alias = "oci_build_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageBase,
+        ImageDependencies,
+        ImageBuildOutputs,
+        ImageBuildCommand,
+        ImageEnvironment,
+        OutputPathField,
+    )
+    help = "An imported OCI image."
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild, ImageEmpty]
+    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty]
 
 
 def rules():
