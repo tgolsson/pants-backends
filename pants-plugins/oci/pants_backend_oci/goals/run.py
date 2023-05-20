@@ -106,91 +106,30 @@ async def prepare_run_image_bundle(
                     .  as $arg  | $config | .process.args += [$arg]
                 ' > "$ROOT/unpacked_image/config.json"
         done
-
         cat $ROOT/unpacked_image/config.json | jq '
-                    .process.capabilities.bounding += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
+                    .process.terminal = false |
+                    [
+                        "CAP_AUDIT_WRITE",
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FOWNER",
+                        "CAP_FSETID",
+                        "CAP_KILL",
+                        "CAP_MKNOD",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_NET_RAW",
+                        "CAP_SETFCAP",
+                        "CAP_SETGID",
+                        "CAP_SETPCAP",
+                        "CAP_SETUID",
+                        "CAP_SYS_CHROOT"
+                    ] as $caps |
+                    .process.capabilities.effective = $caps |
+                    .process.capabilities.inheritable = $caps |
+                    .process.capabilities.permitted = $caps |
+                    .process.capabilities.bounding = $caps |
+                    .process.capabilities.ambient = $caps
                 ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            cat $ROOT/unpacked_image/config.json | jq '
-                    .process.capabilities.effective += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            cat $ROOT/unpacked_image/config.json | jq '
-                    .process.capabilities.inheritable += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            cat $ROOT/unpacked_image/config.json | jq '
-                    .process.capabilities.permitted += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-
-            cat $ROOT/unpacked_image/config.json | jq '
-                    .process.capabilities.ambient += [
-                         "CAP_CHOWN",
-                         "CAP_DAC_OVERRIDE",
-                         "CAP_FSETID",
-                         "CAP_FOWNER",
-                         "CAP_MKNOD",
-                         "CAP_NET_RAW",
-                         "CAP_SETGID",
-                         "CAP_SETUID",
-                         "CAP_SETFCAP",
-                         "CAP_SETPCAP",
-                         "CAP_SYS_CHROOT"
-                    ]
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
             """
         )
