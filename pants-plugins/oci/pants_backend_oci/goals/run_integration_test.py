@@ -97,7 +97,6 @@ def test_run_oci_container_file() -> None:
         ),
     }
 
-
     uid = os.getuid()
     gid = os.getgid()
 
