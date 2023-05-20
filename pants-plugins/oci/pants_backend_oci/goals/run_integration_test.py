@@ -52,7 +52,8 @@ def test_run_oci_container() -> None:
                 "--oci-gid-map=1:100000:65536",
                 "run",
                 f"{tmpdir}/oci:oci",
-            ]
+            ],
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*]"},
         )
 
     result.assert_success()
@@ -113,7 +114,8 @@ def test_run_oci_container_file() -> None:
                 "--oci-gid-map=1:100000:65536",
                 "run",
                 f"{tmpdir}/oci:oci",
-            ]
+            ],
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*]"},
         )
 
     result.assert_success()
@@ -173,7 +175,8 @@ def test_run_oci_container_files() -> None:
                 "--oci-gid-map=1:100000:65536",
                 "run",
                 f"{tmpdir}/oci:oci",
-            ]
+            ],
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*]"},
         )
 
     result.assert_success()
