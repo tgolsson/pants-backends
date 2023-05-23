@@ -39,6 +39,8 @@ class ImageLayer:
     layer_command: tuple[str]
     config_command: tuple[str]
 
+    compressed: bool = True
+
 
 @rule
 async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:

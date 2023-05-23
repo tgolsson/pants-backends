@@ -4,6 +4,7 @@ Various tools for creating processes.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 
 from pants.core.util_rules.system_binaries import BashBinary
@@ -35,16 +36,16 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
         env.update(p.env)
 
     script = """
-    set -euo pipefail
+    set -euxo pipefail
     export ROOT_DIR="$(pwd)"
     export SANDBOX_DIR="{chroot}"
     cd $SANDBOX_DIR
     """ + "\n".join(
-        " ".join(p.argv) for p in request.processes
+        " ".join(v if "# nosplit" in v else shlex.quote(v) for v in p.argv) for p in request.processes
     )
 
     return Process(
-        (bash.path, "-c", script, "$@"),
+        argv=(bash.path, "-c", script, "$@"),
         description=f"Fused run of: {common_description}",
         input_digest=common_digest,
         output_files=common_output_files,

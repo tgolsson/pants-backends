@@ -40,6 +40,8 @@ class CreateDeterministicDirectoryTar:
     directory: str
     output_filename: str
 
+    gzip: bool = True
+
 
 @rule
 async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Process:
@@ -57,6 +59,9 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Pro
         request.directory,
         ".",
     ]
+
+    if request.gzip:
+        argv.insert(1, "--gzip")
 
     # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
     env = {"PATH": os.pathsep.join(SEARCH_PATHS)}

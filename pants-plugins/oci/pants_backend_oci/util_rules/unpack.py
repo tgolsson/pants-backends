@@ -72,7 +72,6 @@ async def make_repack_process(
         "build:build",
         "unpacked_image",
     )
-
     return Process(
         command,
         description="Repacking OCI bundle",
