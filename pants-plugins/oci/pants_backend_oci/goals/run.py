@@ -25,7 +25,7 @@ from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.version import PANTS_SEMVER, Version
 
-from pants_backend_oci.subsystem import RuncTool
+from pants_backend_oci.subsystem import OciSubsystem, RuncTool
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.configure import SetCmdProcessRequest
@@ -57,6 +57,7 @@ class RunImageBundleProcessRequest:
 async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
     tool: RuncTool,
+    oci: OciSubsystem,
     mkdir_binary: MkdirBinary,
     mv: MvBinary,
     platform: Platform,
@@ -155,7 +156,7 @@ async def prepare_run_image_bundle(
     components.append(
         dedent(
             f"""
-            `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc.{name}{'' if request.interactive else ' 0<&-'}
+            `pwd`/{tool.exe} --root runspace --rootless {'true' if oci.rootless else 'false'} run -b unpacked_image pants.runc.{name}{'' if request.interactive else ' 0<&-'}
             """
         )
     )
