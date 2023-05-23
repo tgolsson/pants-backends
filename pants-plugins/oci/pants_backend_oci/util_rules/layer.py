@@ -87,10 +87,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     other_artifacts = []
     layer_artifacts = []
 
+    is_compressed = False
     for target in embedded_pkgs:
         if len(target.artifacts) > 1 or not isinstance(target.artifacts[0], BuiltLayerArtifact):
             other_artifacts.append(target)
-
+            if target.artifacts[0].relpath.endswith(".tar.gz"):
+                is_compressed = True
         else:
             layer_artifacts.append(target)
 
@@ -177,6 +179,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
             "--image",
             "build:build",
         ),
+        compressed=is_compressed,
     )
 
 
