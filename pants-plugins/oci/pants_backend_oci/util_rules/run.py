@@ -105,6 +105,25 @@ async def run_in_container(
 
     command = request.command.replace('"', '\\"')
 
+    if not oci.rootless:
+        rootness_patches = '| del(.linux.namespaces[] | select(.type == "network" or .type == "user"))'
+
+    else:
+        rootness_patches = """| .mounts += [ {
+                              "destination": "/sys",
+                              "type": "bind",
+                              "source": "/sys",
+                              "options": [
+                                "rprivate",
+                                "nosuid",
+                                "noexec",
+                                "nodev",
+                                "ro",
+                                "rbind"
+                              ]
+                            }
+                       ]"""
+
     script = dedent(
         f"""
         set -euxo pipefail
@@ -143,29 +162,25 @@ async def run_in_container(
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
             {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .linux.uidMappings = [{uid_mappings}] |
-                    .linux.gidMappings = [{gid_mappings}] |
-                    .mounts[0].options = [
-                             "nosuid",
-                             "noexec",
-                             "nodev"
-                       ]
+                       .linux.uidMappings = [{uid_mappings}] |
+                       .linux.gidMappings = [{gid_mappings}] |
+                       .mounts += [ {{
+                           "destination": "/etc/resolv.conf",
+                            "type": "bind",
+                            "source": "/etc/resolv.conf",
+                            "options": [
+                              "ro",
+                              "rbind",
+                              "rprivate",
+                              "nosuid",
+                              "noexec",
+                              "nodev"
+                            ]
+                          }}]
+                       | .mounts[0].options = [ "nosuid", "noexec", "nodev" ]
                        | .process.user.uid = 0
                        | .process.user.gid = 0
-                       | .mounts += [ {{
-                              "destination": "/sys",
-                              "type": "bind",
-                              "source": "/sys",
-                              "options": [
-                                "rprivate",
-                                "nosuid",
-                                "noexec",
-                                "nodev",
-                                "ro",
-                                "rbind"
-                              ]
-                            }}
-                       ]
+                       {rootness_patches}
             ' > "$ROOT/unpacked_image/config.json.tmp"
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
         `pwd`/{tool.exe} --debug --root runspace --rootless {'true' if oci.rootless else 'false'} run -b unpacked_image pants.runc 0<&-
