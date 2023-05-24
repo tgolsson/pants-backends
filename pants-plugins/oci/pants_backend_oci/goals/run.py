@@ -153,10 +153,13 @@ async def prepare_run_image_bundle(
         )
     )
 
+    rootless = "true" if oci.rootless else "false"
+    suffix = "" if request.interactive else " 0<&-"
+    container = f"pants.runc.{name}"
     components.append(
         dedent(
             f"""
-            `pwd`/{tool.exe} --root runspace --rootless {'true' if oci.rootless else 'false'} run -b unpacked_image pants.runc.{name}{'' if request.interactive else ' 0<&-'}
+            `pwd`/{tool.exe} --root runspace --rootless {rootless} run -b unpacked_image {container}{suffix}
             """
         )
     )
