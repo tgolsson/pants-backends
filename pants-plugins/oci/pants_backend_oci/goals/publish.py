@@ -16,19 +16,12 @@ from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import InteractiveProcess, Process
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import SkopeoTool
 from pants_backend_oci.target_types import ImageRepository, ImageTag
-from pants_backend_oci.util_rules.image_bundle import (
-    FallibleImageBundle,
-    FallibleImageBundleRequest,
-    FallibleImageBundleRequestWrap,
-    ImageBundleRequest,
-)
 
 if PANTS_SEMVER >= Version("2.15.0.dev0"):
     from pants.engine.env_vars import EnvironmentVars as Environment
@@ -37,6 +30,7 @@ else:
     from pants.engine.environment import Environment, EnvironmentRequest
 
 
+@dataclass(frozen=True)
 class PublishImageRequest(PublishRequest):
     pass
 
@@ -68,6 +62,8 @@ class OciPublishProcessRequest:
     tag: str
     description: str
 
+    directory: str
+
 
 @rule(desc="Convert OCI Image to Archive", level=LogLevel.DEBUG)
 async def publish_oci_process(
@@ -79,7 +75,6 @@ async def publish_oci_process(
         skopeo.get_request(platform),
     )
     sandbox_input = await Get(Digest, MergeDigests([skopeo.digest, request.input_digest]))
-
     relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
     return Process(
         input_digest=sandbox_input,
@@ -89,7 +84,7 @@ async def publish_oci_process(
             # policy into this... Maybe dependency injector?
             "--insecure-policy",
             "copy",
-            "oci:build",
+            f"oci:{request.directory}",
             f"docker://{request.repository}:{request.tag}",
         ),
         description=f"{request.repository}:{request.tag}",
@@ -100,33 +95,27 @@ async def publish_oci_process(
 
 @rule(desc="Publish OCI Image")
 async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(request.field_set.address, description_of_origin="package_oci_image"),
-    )
-    target = wrapped_target.target
-    image_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
-    image = await Get(FallibleImageBundle, FallibleImageBundleRequest, image_request.request)
-    image_digest = image.output.digest
-
     field_set = request.field_set
+    package = request.packages[0]
+    metadata = package.artifacts[0]
 
     process = await Get(
         Process,
         OciPublishProcessRequest(
-            input_digest=image_digest,
+            input_digest=package.digest,
             repository=field_set.repository.value,
             tag=field_set.tag.value,
             description=(
                 f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}"
             ),
+            directory=metadata.relpath,
         ),
     )
 
     return PublishProcesses(
         (
             PublishPackages(
-                names=(f"{image.output.image_sha}",),
+                names=(f"{metadata.sha}",),
                 process=InteractiveProcess.from_process(process),
                 description=process.description,
                 data=PublishOutputData({"repository": process.description}),

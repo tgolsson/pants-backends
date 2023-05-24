@@ -28,6 +28,7 @@ class ImageBundlePullFieldSet(FieldSet):
     anonymous: ImageRepositoryAnonymous
 
 
+@dataclass(frozen=True)
 class ImageBundlePullRequest(FallibleImageBundleRequest):
     target: Target
 
