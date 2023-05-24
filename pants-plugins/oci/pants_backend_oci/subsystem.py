@@ -9,7 +9,7 @@ from pants.version import PANTS_SEMVER, Version
 
 class OciSubsystem(Subsystem):
     options_scope = "oci"
-    help = "The OCI image target."
+    help = "Generic options for the OCI subsystem."
 
     command_shell = StrListOption(
         default=["/bin/sh", "-c"],
@@ -46,14 +46,9 @@ class OciSubsystem(Subsystem):
         )
 
 
-class Oci(ExternalTool):
-    options_scope = "umoci"
-    help = "Wrapper for kustomize."
-
-
 class UmociTool(ExternalTool):
     options_scope = "umoci"
-    help = "Wrapper for kustomize."
+    help = "Umoci is used for manipulating OCI images."
 
     default_version = "v0.4.7"
     default_known_versions = [
@@ -83,7 +78,7 @@ class UmociTool(ExternalTool):
 
 class SkopeoTool(ExternalTool):
     options_scope = "skopeo"
-    help = "Wrapper for kustomize."
+    help = "Tool for moving containers."
 
     default_version = "v1.9.3"
     default_known_versions = [
