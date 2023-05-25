@@ -2,6 +2,7 @@
 
 """
 
+import datetime
 import os
 from dataclasses import dataclass
 
@@ -130,7 +131,6 @@ async def build_python_image(
                     pex = ep
 
         input_digest = await Get(Digest, MergeDigests([umoci.digest, digest, layer.digest]))
-
         layer_processes = (
             Process(
                 (umoci.exe, *layer.layer_command[:-1], layer.layer_command[-1].rstrip(".gz")),
@@ -163,6 +163,7 @@ async def build_python_image(
         digest = image.output_digest
 
     input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
+    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
 
     if pex is not None:
         image_with_layer = await Get(
@@ -177,6 +178,7 @@ async def build_python_image(
                     "python",
                     "--config.entrypoint",
                     pex,
+                    f"--history.created={timestamp}",
                 ),
                 input_digest=input_digest,
                 description=f"Package OCI Image Bundle: {layer.address}",

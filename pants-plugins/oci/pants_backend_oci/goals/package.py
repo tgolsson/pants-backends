@@ -19,7 +19,7 @@ from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import SkopeoTool
-from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageTag
+from pants_backend_oci.target_types import ImageBuildOutputs, ImageDigest, ImageRepository, ImageTag
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -38,6 +38,14 @@ class ImageFieldSet(PackageFieldSet):
     output_path: OutputPathField
 
     digest: ImageDigest
+
+
+@dataclass(frozen=True)
+class ArtifactFieldSet(PackageFieldSet):
+    required_fields = (ImageBuildOutputs,)
+
+    outputs: ImageBuildOutputs
+    output_path: OutputPathField
 
 
 @dataclass(frozen=True)

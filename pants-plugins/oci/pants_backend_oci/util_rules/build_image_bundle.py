@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import os
 from dataclasses import dataclass
 
@@ -83,16 +84,11 @@ async def build_oci_bundle_package(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
     )
 
-    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    build_request, umoci = await MultiGet(
+        Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)),
+        Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform)),
+    )
 
-    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
-
-    if maybe_built_base.output is None:
-        return dataclasses.replace(maybe_built_base, dependency_failed=True)
-
-    umoci = await Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
-    base = maybe_built_base.output
-    output_digest = base.digest
     if request.target.dependencies:
         root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))
 
@@ -100,52 +96,69 @@ async def build_oci_bundle_package(
         for dependency in root_dependencies:
             layers.append(Get(ImageLayer, ImageLayerRequest(dependency)))
 
-        if layers:
-            layers = await MultiGet(*layers)
+        maybe_built_base, *layers = await MultiGet(
+            Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request),
+            *layers,
+        )
 
-            for layer in layers:
-                input_digest = await Get(Digest, MergeDigests([umoci.digest, output_digest, layer.digest]))
+        if maybe_built_base.output is None:
+            return dataclasses.replace(maybe_built_base, dependency_failed=True)
 
+        base = maybe_built_base.output
+        output_digest = base.digest
+
+        for layer in layers:
+            input_digest = await Get(Digest, MergeDigests([umoci.digest, output_digest, layer.digest]))
+
+            layer_processes = (
+                Process(
+                    (umoci.exe, *layer.layer_command[:-1], layer.layer_command[-1].rstrip(".gz")),
+                    input_digest=input_digest,
+                    description=f"Package OCI Image Bundle: {layer.address}",
+                ),
+                Process(
+                    (umoci.exe, *layer.config_command),
+                    description=f"Configure OCI Image Bundle: {layer.address}",
+                    output_directories=("build/",),
+                ),
+            )
+            if layer.compressed:
                 layer_processes = (
                     Process(
-                        (umoci.exe, *layer.layer_command[:-1], layer.layer_command[-1].rstrip(".gz")),
-                        input_digest=input_digest,
-                        description=f"Package OCI Image Bundle: {layer.address}",
-                    ),
-                    Process(
-                        (umoci.exe, *layer.config_command),
-                        description=f"Configure OCI Image Bundle: {layer.address}",
-                        output_directories=("build/",),
-                    ),
-                )
-                if layer.compressed:
-                    layer_processes = (
-                        Process(
-                            argv=gunzip.extract_archive_argv(
-                                layer.layer_command[-1], os.path.dirname(layer.layer_command[-1])
-                            ),
-                            description=f"Uncompress OCI Image Bundle: {layer.address}",
+                        argv=gunzip.extract_archive_argv(
+                            layer.layer_command[-1], os.path.dirname(layer.layer_command[-1])
                         ),
-                        *layer_processes,
-                    )
-                image = await Get(
-                    FallibleProcessResult,
-                    FusedProcess(
-                        layer_processes,
+                        description=f"Uncompress OCI Image Bundle: {layer.address}",
                     ),
+                    *layer_processes,
+                )
+            image = await Get(
+                FallibleProcessResult,
+                FusedProcess(
+                    layer_processes,
+                ),
+            )
+
+            if image.exit_code != 0:
+                return FallibleImageBundle(
+                    None,
+                    image.exit_code,
+                    stdout=image.stdout.decode("utf-8"),
+                    stderr=image.stderr.decode("utf-8"),
                 )
 
-                if image.exit_code != 0:
-                    return FallibleImageBundle(
-                        None,
-                        image.exit_code,
-                        stdout=image.stdout.decode("utf-8"),
-                        stderr=image.stderr.decode("utf-8"),
-                    )
+            output_digest = image.output_digest
 
-                output_digest = image.output_digest
+    else:
+        maybe_built_base, layers = await MultiGet(
+            Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request) * layers,
+        )
 
-            output_digest = output_digest
+        if maybe_built_base.output is None:
+            return dataclasses.replace(maybe_built_base, dependency_failed=True)
+
+        base = maybe_built_base.output
+        output_digest = base.digest
 
     if request.target.commands.value:
         bundle = ImageBundle(output_digest, "", True)
@@ -156,7 +169,10 @@ async def build_oci_bundle_package(
 
         output_digest = modified_image.output_digest
 
-    config = []
+    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
+    config = [
+        f"--history.created={timestamp}",
+    ]
     if request.target.environment.value:
         for value in request.target.environment.value:
             config.extend(

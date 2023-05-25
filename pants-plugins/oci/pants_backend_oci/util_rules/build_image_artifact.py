@@ -27,6 +27,7 @@ from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import RuncTool, UmociTool
 from pants_backend_oci.target_types import (
+    ImageArtifactExclusions,
     ImageBase,
     ImageBuildCommand,
     ImageBuildOutputs,
@@ -58,6 +59,8 @@ class ImageArtifactBuildFieldSet(PackageFieldSet):
     environment: ImageEnvironment
 
     output_path: OutputPathField
+
+    exclude: ImageArtifactExclusions
 
 
 class ImageArtifactBuildRequest(FallibleImageBundleRequest):
@@ -182,6 +185,7 @@ async def build_image_artifact(
             bundle,
             tuple(),
             request.target.outputs.value,
+            exclude_patterns=tuple(request.target.exclude.value),
         ),
     )
 

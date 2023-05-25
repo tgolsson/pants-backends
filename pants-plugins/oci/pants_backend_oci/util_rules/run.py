@@ -178,7 +178,19 @@ async def run_in_container(
                               "noexec",
                               "nodev"
                             ]
-                          }}]
+                          }},
+                          {{
+                            "destination": "/run",
+                            "type": "tmpfs",
+                            "source": "tmpfs",
+                            "options": [
+                              "noexec",
+                              "nosuid",
+                              "nodev",
+                              "rprivate"
+                            ]
+                          }}
+                       ]
                        | .mounts[0].options = [ "nosuid", "noexec", "nodev" ]
                        | .process.user.uid = 0
                        | .process.user.gid = 0
@@ -216,7 +228,7 @@ async def run_in_container(
     ]
 
     if request.repack:
-        steps.append(await Get(Process, RepackedImageBundleRequest()))
+        steps.append(await Get(Process, RepackedImageBundleRequest(request.command)))
 
     res = await Get(
         ProcessResult,

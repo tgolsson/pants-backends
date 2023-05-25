@@ -1,3 +1,4 @@
+import datetime
 from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
@@ -17,7 +18,7 @@ class UnpackedImageBundleRequest:
 
 @dataclass(frozen=True)
 class RepackedImageBundleRequest:
-    pass
+    command: str
 
 
 @dataclass(frozen=True)
@@ -65,10 +66,16 @@ async def make_repack_process(
 ) -> Process:
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
 
+    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
+
     command = (
         f"{{chroot}}/{umoci.exe}",
         f"--log={tool.log}",
         "repack",
+        "--history.author=pants_backend_oci",
+        f"--history.created_by='repack of {request.command}'",
+        f"--history.comment='{request.command}'",
+        f"--history.created={timestamp}",
         "--image",
         "build:build",
         "unpacked_image",

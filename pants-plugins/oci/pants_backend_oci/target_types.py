@@ -155,3 +155,13 @@ class ImageArgs(StringSequenceField):
         Globs to capture as outputs from the build step.
         """
     )
+
+
+class ImageArtifactExclusions(StringSequenceField):
+    alias = "exclude"
+
+    help = softwrap(
+        """
+        A list of globs to exclude from the artifact.
+        """
+    )
