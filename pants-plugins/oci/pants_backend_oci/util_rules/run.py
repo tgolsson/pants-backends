@@ -185,7 +185,7 @@ async def run_in_container(
                        {rootness_patches}
             ' > "$ROOT/unpacked_image/config.json.tmp"
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-        `pwd`/{tool.exe} --debug --root runspace --rootless {rootless} run -b unpacked_image pants.runc 0<&-
+        `pwd`/{tool.exe} --debug --root runspace --rootless {rootless} run -b unpacked_image pants.runc.{id(request)} 0<&-
         cp $ROOT/unpacked_image/config.json.bak $ROOT/unpacked_image/config.json
     """
     )
