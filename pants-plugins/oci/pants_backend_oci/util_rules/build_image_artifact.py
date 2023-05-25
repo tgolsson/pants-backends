@@ -185,7 +185,7 @@ async def build_image_artifact(
             bundle,
             tuple(),
             request.target.outputs.value,
-            exclude_patterns=tuple(request.target.exclude.value),
+            exclude_patterns=tuple(request.target.exclude.value or ()),
         ),
     )
 
