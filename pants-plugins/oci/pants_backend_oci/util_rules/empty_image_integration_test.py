@@ -51,7 +51,9 @@ def test_package_empty_with_file() -> None:
 
         result.assert_success()
 
-        output_path = (os.path.dirname(os.path.abspath(tmpdir)) + f"/dist/{tmpdir}.oci/oci.tar.d",)
+        root = os.path.dirname(os.path.abspath(tmpdir))
+        print(os.listdir(f"{root}/dist"))
+        output_path = root + f"/dist/{tmpdir}.oci/oci.d"
 
         with open(f"{output_path}/index.json", "r") as f:
             json_data = json.load(f)
@@ -70,12 +72,11 @@ def test_package_empty_with_file() -> None:
         layer_digest = json_data["layers"][-1]["digest"][7:]
 
         # We assume that all layers are tar+gzip, so we need to read tar-from-tar
-        with open(f"{output_path}/blobs/sha256/{layer_digest}", "r") as f:
-            layer_data = tarfile.open(fileobj=f)
 
-        # We added a single file above, so should only see that here
-        assert layer_data.getnames() == [f"{tmpdir}/oci/file.txt"]
+        with tarfile.open(f"{output_path}/blobs/sha256/{layer_digest}", mode="r") as layer_data:
+            # We added a single file above, so should only see that here
+            assert layer_data.getnames() == [f"{tmpdir}/oci/file.txt"]
 
-        # For sanity let's double-check that the contents are the same.
-        file_contents = layer_data.extractfile(f"{tmpdir}/oci/file.txt").read().decode("utf-8")
-        assert file_contents == "hello 🎆"
+            # For sanity let's double-check that the contents are the same.
+            file_contents = layer_data.extractfile(f"{tmpdir}/oci/file.txt").read().decode("utf-8")
+            assert file_contents == "hello 🎆"
