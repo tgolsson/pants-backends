@@ -3,6 +3,7 @@ from pants_backend_oci.util_rules import (
     binaries,
     build_image_artifact,
     build_image_bundle,
+    configure,
     copy,
     empty_image_bundle,
     image_bundle,
@@ -30,4 +31,5 @@ def rules():
         *binaries.rules(),
         *build_image_artifact.rules(),
         *run.rules(),
+        *configure.rules(),
     ]

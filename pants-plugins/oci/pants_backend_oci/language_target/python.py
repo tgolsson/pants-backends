@@ -2,9 +2,12 @@
 
 """
 
+import datetime
+import os
 from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.system_binaries import GunzipBinary
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
@@ -85,6 +88,7 @@ async def build_python_image(
     request: BuildPythonImageRequest,
     umoci: UmociTool,
     platform: Platform,
+    gunzip: GunzipBinary,
 ) -> FallibleImageBundle:
     umoci_request = Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
     base = await Get(
@@ -127,46 +131,62 @@ async def build_python_image(
                     pex = ep
 
         input_digest = await Get(Digest, MergeDigests([umoci.digest, digest, layer.digest]))
-
+        layer_processes = (
+            Process(
+                (umoci.exe, *layer.layer_command[:-1], layer.layer_command[-1].rstrip(".gz")),
+                input_digest=input_digest,
+                description=f"Package OCI Image Bundle: {layer.address}",
+            ),
+            Process(
+                (umoci.exe, *layer.config_command),
+                description=f"Configure OCI Image Bundle: {layer.address}",
+                output_directories=("build/",),
+            ),
+        )
+        if layer.compressed:
+            layer_processes = (
+                Process(
+                    argv=gunzip.extract_archive_argv(
+                        layer.layer_command[-1], os.path.dirname(layer.layer_command[-1])
+                    ),
+                    description=f"Uncompress OCI Image Bundle: {layer.address}",
+                ),
+                *layer_processes,
+            )
         image = await Get(
             ProcessResult,
             FusedProcess(
-                (
-                    Process(
-                        (umoci.exe, *layer.layer_command),
-                        input_digest=input_digest,
-                        description=f"Package OCI Image Bundle: {layer.address}",
-                        output_directories=("build/",),
-                    ),
-                    Process(
-                        (umoci.exe, *layer.config_command),
-                        input_digest=input_digest,
-                        description=f"Configure OCI Image Bundle: {layer.address}",
-                        output_directories=("build/",),
-                    ),
-                )
+                layer_processes,
             ),
         )
+
         digest = image.output_digest
+
     input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
-    image_with_layer = await Get(
-        ProcessResult,
-        Process(
-            (
-                umoci.exe,
-                "config",
-                "--image",
-                "build:build",
-                "--config.entrypoint",
-                "python",
-                "--config.entrypoint",
-                pex,
+    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
+
+    if pex is not None:
+        image_with_layer = await Get(
+            ProcessResult,
+            Process(
+                (
+                    umoci.exe,
+                    "config",
+                    "--image",
+                    "build:build",
+                    "--config.entrypoint",
+                    "python",
+                    "--config.entrypoint",
+                    pex,
+                    f"--history.created={timestamp}",
+                ),
+                input_digest=input_digest,
+                description=f"Package OCI Image Bundle: {layer.address}",
+                output_directories=("build/",),
             ),
-            input_digest=input_digest,
-            description=f"Package OCI Image Bundle: {layer.address}",
-            output_directories=("build/",),
-        ),
-    )
+        )
+    else:
+        image_with_layer = image
 
     image_digest = await Get(OciSha, OciShaRequest(image_with_layer.output_digest))
     output = ImageBundle(

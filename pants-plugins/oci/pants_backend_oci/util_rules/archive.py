@@ -40,6 +40,9 @@ class CreateDeterministicDirectoryTar:
     directory: str
     output_filename: str
 
+    gzip: bool = True
+    exclude_patterns: tuple[str, ...] = tuple()
+
 
 @rule
 async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Process:
@@ -47,19 +50,23 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Pro
     argv = [
         tar_binary.path,
         "--sort=name",
-        "--mtime='1970-01-01 00:00Z'",
+        "--mtime=1970-01-01 00:00Z",
         "--owner=0",
         "--group=0",
         "--numeric-owner",
-        "-cf",
-        request.output_filename,
-        "-C",
-        request.directory,
-        ".",
+        "--pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime",
     ]
 
+    if request.gzip:
+        argv.append("--gzip")
+
+    for pattern in request.exclude_patterns:
+        argv.extend(["--exclude", pattern])
+
+    argv.extend(["-cf", request.output_filename, "-C", request.directory, "."])
+
     # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
-    env = {"PATH": os.pathsep.join(SEARCH_PATHS)}
+    env = {"PATH": os.pathsep.join(SEARCH_PATHS), "GZIP": "-n"}
 
     # `tar` requires that the output filename's parent directory exists,so if the caller
     # wants the output in a directory we explicitly create it here.

@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
+from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionRule
@@ -28,6 +28,7 @@ class ImageBundlePullFieldSet(FieldSet):
     anonymous: ImageRepositoryAnonymous
 
 
+@dataclass(frozen=True)
 class ImageBundlePullRequest(FallibleImageBundleRequest):
     target: Target
 
@@ -64,15 +65,23 @@ async def pull_oci_image(
 
     desc = f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}"
 
-    result = await Get(
-        ProcessResult,
-        Process(
-            argv=tuple(args),
-            input_digest=skopeo.digest,
-            description=desc,
-            output_directories=("build",),
-        ),
+    p = Process(
+        argv=tuple(args),
+        input_digest=skopeo.digest,
+        description=desc,
+        output_directories=("build",),
     )
+
+    result = await Get(
+        FallibleProcessResult,
+        Process,
+        p,
+    )
+
+    if result.exit_code != 0:
+        return FallibleImageBundle(
+            exit_code=result.exit_code, stderr=result.stderr.decode(), stdout=result.stdout.decode()
+        )
 
     return FallibleImageBundle(
         ImageBundle(result.output_digest, f"sha256:{request.target.digest.value}", is_local=False)

@@ -103,13 +103,38 @@ async def run_in_container(
         ]
     )
 
+    command = request.command.replace('"', '\\"')
+
+    if not oci.rootless:
+        rootness_patches = '| del(.linux.namespaces[] | select(.type == "network" or .type == "user"))'
+
+    else:
+        rootness_patches = """| .mounts += [ {
+                              "destination": "/sys",
+                              "type": "bind",
+                              "source": "/sys",
+                              "options": [
+                                "rprivate",
+                                "nosuid",
+                                "noexec",
+                                "nodev",
+                                "ro",
+                                "rbind"
+                              ]
+                            }
+                       ]"""
+
+    rootless = "true" if oci.rootless else "false"
+    namespace = f"pants.runc.{id(request)}"
+
     script = dedent(
         f"""
+        set -euxo pipefail
         ROOT=`pwd`
-        set -euxo
+
         cp $ROOT/unpacked_image/config.json $ROOT/unpacked_image/config.json.bak
         {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .process.args = [{", ".join(shell_command)}, "{request.command}"]
+                    .process.args = [{", ".join(shell_command)}, "{command}" ]
                 ' > "$ROOT/unpacked_image/config.json.tmp"
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
@@ -140,32 +165,40 @@ async def run_in_container(
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
 
             {cat.path} $ROOT/unpacked_image/config.json | {jq.path} '
-                    .linux.uidMappings = [{uid_mappings}] |
-                    .linux.gidMappings = [{gid_mappings}] |
-                    .mounts[0].options = [
-                             "nosuid",
-                             "noexec",
-                             "nodev"
+                       .linux.uidMappings = [{uid_mappings}] |
+                       .linux.gidMappings = [{gid_mappings}] |
+                       .mounts += [ {{
+                           "destination": "/etc/resolv.conf",
+                            "type": "bind",
+                            "source": "/etc/resolv.conf",
+                            "options": [
+                              "ro",
+                              "rbind",
+                              "rprivate",
+                              "nosuid",
+                              "noexec",
+                              "nodev"
+                            ]
+                          }},
+                          {{
+                            "destination": "/run",
+                            "type": "tmpfs",
+                            "source": "tmpfs",
+                            "options": [
+                              "noexec",
+                              "nosuid",
+                              "nodev",
+                              "rprivate"
+                            ]
+                          }}
                        ]
+                       | .mounts[0].options = [ "nosuid", "noexec", "nodev" ]
                        | .process.user.uid = 0
                        | .process.user.gid = 0
-                       | .mounts += [ {{
-                              "destination": "/sys",
-                              "type": "bind",
-                              "source": "/sys",
-                              "options": [
-                                "rprivate",
-                                "nosuid",
-                                "noexec",
-                                "nodev",
-                                "ro",
-                                "rbind"
-                              ]
-                            }}
-                       ]
+                       {rootness_patches}
             ' > "$ROOT/unpacked_image/config.json.tmp"
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-        `pwd`/{tool.exe} --debug --root runspace --rootless true run -b unpacked_image pants.runc
+        `pwd`/{tool.exe} --debug --root runspace --rootless {rootless} run -b unpacked_image {namespace} 0<&-
         cp $ROOT/unpacked_image/config.json.bak $ROOT/unpacked_image/config.json
     """
     )
@@ -184,7 +217,10 @@ async def run_in_container(
     steps = [
         packed_image_process,
         Process(
-            (bash.path, "{chroot}/run.sh", f"{request.command}"),
+            (
+                bash.path,
+                "{chroot}/run.sh",
+            ),
             description="Running container build command",
             input_digest=input_digest,
             immutable_input_digests=immutable_input_digests,
@@ -193,12 +229,13 @@ async def run_in_container(
     ]
 
     if request.repack:
-        steps.append(await Get(Process, RepackedImageBundleRequest()))
+        steps.append(await Get(Process, RepackedImageBundleRequest(request.command)))
 
-    return await Get(
+    res = await Get(
         ProcessResult,
         FusedProcess(tuple(steps)),
     )
+    return res
 
 
 def rules():

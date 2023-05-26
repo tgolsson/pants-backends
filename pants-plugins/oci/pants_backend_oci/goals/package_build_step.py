@@ -51,7 +51,7 @@ async def package_oci_layer(field_set: ImageLayerPackageFieldSet) -> BuiltPackag
     )
 
     artifact = BuiltLayerArtifact(
-        relpath=field_set.output_path.value_or_default(file_ending="tar"),
+        relpath=field_set.output_path.value_or_default(file_ending="tar.gz"),
         extra_log_lines=(f"Built artifacts: {output.output_digest}",),
     )
 

@@ -39,6 +39,8 @@ class ImageLayer:
     layer_command: tuple[str]
     config_command: tuple[str]
 
+    compressed: bool = True
+
 
 @rule
 async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
@@ -85,12 +87,15 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     other_artifacts = []
     layer_artifacts = []
 
+    is_compressed = False
     for target in embedded_pkgs:
         if len(target.artifacts) > 1 or not isinstance(target.artifacts[0], BuiltLayerArtifact):
             other_artifacts.append(target)
 
         else:
             layer_artifacts.append(target)
+            if target.artifacts[0].relpath.endswith(".tar.gz"):
+                is_compressed = True
 
     embedded_pkgs_digest = [built_package.digest for built_package in other_artifacts]
 
@@ -144,6 +149,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         "BUILT_BY=pants.oci",
         "--author=pants_backend_oci",
         f"--created={timestamp}",
+        "--no-history",
     ]
 
     if embedded_pkgs:
@@ -175,6 +181,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
             "--image",
             "build:build",
         ),
+        compressed=is_compressed,
     )
 
 

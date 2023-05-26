@@ -23,6 +23,8 @@ class CopyFromRequest:
     output_files: tuple[str]
     output_directories: tuple[str]
 
+    exclude_patterns: tuple[str, ...] = tuple()
+
 
 @rule
 async def copy_from_container(
@@ -54,7 +56,15 @@ async def copy_from_container(
 
     unpack, tar, workspace_digest = await MultiGet(
         Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
-        Get(Process, CreateDeterministicDirectoryTar("out", request.tar_name)),
+        Get(
+            Process,
+            CreateDeterministicDirectoryTar(
+                "out",
+                request.tar_name,
+                gzip=request.tar_name.endswith(".gz"),
+                exclude_patterns=request.exclude_patterns,
+            ),
+        ),
         Get(
             Digest,
             CreateDigest(
@@ -77,10 +87,12 @@ async def copy_from_container(
         tar,
     ]
 
-    return await Get(
+    res = await Get(
         ProcessResult,
         FusedProcess(tuple(steps)),
     )
+
+    return res
 
 
 def rules():

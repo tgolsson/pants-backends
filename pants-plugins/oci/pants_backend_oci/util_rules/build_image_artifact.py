@@ -27,6 +27,7 @@ from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import RuncTool, UmociTool
 from pants_backend_oci.target_types import (
+    ImageArtifactExclusions,
     ImageBase,
     ImageBuildCommand,
     ImageBuildOutputs,
@@ -58,6 +59,8 @@ class ImageArtifactBuildFieldSet(PackageFieldSet):
     environment: ImageEnvironment
 
     output_path: OutputPathField
+
+    exclude: ImageArtifactExclusions
 
 
 class ImageArtifactBuildRequest(FallibleImageBundleRequest):
@@ -120,7 +123,7 @@ async def build_image_artifact(
                 Process(
                     (umoci.exe, *layer.layer_command),
                     input_digest=input_digest,
-                    description=f"Package OCI Image Bundle: {layer.address}",
+                    description=f"Package OCI Layer Artifact: {layer.address}",
                     output_directories=("build/",),
                 ),
             )
@@ -132,7 +135,7 @@ async def build_image_artifact(
                 Process(
                     (umoci.exe, *layer.config_command),
                     input_digest=input_digest,
-                    description=f"Configure OCI Image Bundle: {layer.address}",
+                    description=f"Configure OCI Layer Artifact: {layer.address}",
                     output_directories=("build/",),
                 ),
             )
@@ -174,15 +177,18 @@ async def build_image_artifact(
         ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
     )
     bundle = ImageBundle(modified_image.output_digest, "", True)
+
     artifacts = await Get(
         ProcessResult,
         CopyFromRequest(
-            request.target.output_path.value_or_default(file_ending="tar"),
+            request.target.output_path.value_or_default(file_ending="tar.gz"),
             bundle,
             tuple(),
             request.target.outputs.value,
+            exclude_patterns=tuple(request.target.exclude.value or ()),
         ),
     )
+
     return artifacts
 
 

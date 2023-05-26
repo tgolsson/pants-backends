@@ -13,6 +13,7 @@ from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
     ImageArgs,
+    ImageArtifactExclusions,
     ImageBase,
     ImageBuildCommand,
     ImageBuildOutputs,
@@ -131,6 +132,7 @@ class ImageBuildStep(Target):
         ImageBuildOutputs,
         ImageBuildCommand,
         ImageEnvironment,
+        ImageArtifactExclusions,
         OutputPathField,
     )
     help = "An imported OCI image."

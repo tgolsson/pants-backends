@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from textwrap import dedent
 
+from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import (
@@ -24,9 +25,10 @@ from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.version import PANTS_SEMVER, Version
 
-from pants_backend_oci.subsystem import RuncTool
+from pants_backend_oci.subsystem import OciSubsystem, RuncTool
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
 from pants_backend_oci.tools.process import FusedProcess
+from pants_backend_oci.util_rules.configure import SetCmdProcessRequest
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -48,11 +50,14 @@ class RunImageBundleCommand(RunFieldSet):
 class RunImageBundleProcessRequest:
     target: Target
 
+    interactive: bool = False
+
 
 @rule
 async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
     tool: RuncTool,
+    oci: OciSubsystem,
     mkdir_binary: MkdirBinary,
     mv: MvBinary,
     platform: Platform,
@@ -94,18 +99,16 @@ async def prepare_run_image_bundle(
     if image.exit_code != 0:
         raise ValueError(image.stderr)
 
-    packed_image_process = await Get(Process, UnpackedImageBundleRequest(image.output.digest))
+    packed_image_process, set_cmd_process = await MultiGet(
+        Get(Process, UnpackedImageBundleRequest(image.output.digest)),
+        Get(Process, SetCmdProcessRequest()),
+    )
 
     name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
     components = [
         dedent(
             f"""
         ROOT=`pwd`
-        for arg in "$@"; do
-            echo "$arg" | jq -R --argjson config "$(cat $ROOT/unpacked_image/config.json)" '
-                    .  as $arg  | $config | .process.args += [$arg]
-                ' > "$ROOT/unpacked_image/config.json"
-        done
         cat $ROOT/unpacked_image/config.json | jq '
                     .process.terminal = false |
                     [
@@ -135,23 +138,28 @@ async def prepare_run_image_bundle(
         )
     ]
 
-    if not request.target.get(ImageRunTty).value:
-        components.append(
-            dedent(
-                f"""
-                jq '
-                    .process.terminal = false
-                ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
-                {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-                """
-            )
-        )
+    terminal = request.target.get(ImageRunTty).value
+    if request.interactive:
+        terminal = True
 
     components.append(
         dedent(
             f"""
-            `pwd`/{tool.exe} --root runspace --rootless true run -b unpacked_image pants.runc.{name}
-            exit
+                jq '
+                    .process.terminal = {'true' if terminal else "false"}
+                ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
+                {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
+                """
+        )
+    )
+
+    rootless = "true" if oci.rootless else "false"
+    suffix = "" if request.interactive else " 0<&-"
+    container = f"pants.runc.{name}"
+    components.append(
+        dedent(
+            f"""
+            `pwd`/{tool.exe} --root runspace --rootless {rootless} run -b unpacked_image {container}{suffix}
             """
         )
     )
@@ -173,6 +181,7 @@ async def prepare_run_image_bundle(
         Process,
         FusedProcess(
             (
+                set_cmd_process,
                 packed_image_process,
                 Process(
                     ("/usr/bin/sh", "{chroot}/run.sh", "$*"),
@@ -202,6 +211,21 @@ async def run_oci_command_target(request: RunImageBundleCommand) -> RunRequest:
     )
 
 
+class OciRepl(ReplImplementation):
+    name = "oci"
+
+
+@rule
+async def run_oci_command_repl(request: OciRepl) -> ReplRequest:
+    process = await Get(Process, RunImageBundleProcessRequest(request.targets[0], interactive=True))
+    return ReplRequest(
+        digest=process.input_digest,
+        args=process.argv,
+        extra_env=process.env,
+        immutable_input_digests=process.immutable_input_digests,
+    )
+
+
 @rule
 async def run_debug_oci_command_target(
     field_set: RunImageBundleCommand,
@@ -210,4 +234,8 @@ async def run_debug_oci_command_target(
 
 
 def rules():
-    return [*collect_rules(), UnionRule(RunFieldSet, RunImageBundleCommand)]
+    return [
+        *collect_rules(),
+        UnionRule(RunFieldSet, RunImageBundleCommand),
+        UnionRule(ReplImplementation, OciRepl),
+    ]
