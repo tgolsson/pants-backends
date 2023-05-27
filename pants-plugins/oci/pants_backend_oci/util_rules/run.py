@@ -125,7 +125,7 @@ async def run_in_container(
                        ]"""
 
     rootless = "true" if oci.rootless else "false"
-    namespace = f"pants.runc.{id(request)}"
+    namespace = f"pants.runc.{request.bundle.digest.fingerprint}"
 
     script = dedent(
         f"""
