@@ -5,6 +5,8 @@ from pants.engine.platform import Platform
 from pants.option.option_types import BoolOption, StrListOption, StrOption
 from pants.option.subsystem import Subsystem
 
+from pants_backend_oci.subsystems import test
+
 
 class OciSubsystem(Subsystem):
     options_scope = "oci"
@@ -136,4 +138,5 @@ def rules():
         *RuncTool.rules(),
         *UmociTool.rules(),
         *OciSubsystem.rules(),
+        *test.OciTestSubsystem.rules(),
     ]

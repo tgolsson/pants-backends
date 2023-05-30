@@ -47,6 +47,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     # Get all dependencies for the root target.
     root_dependencies = [request.target]
 
+    print("before", flush=True)
     # Get all file sources from the root dependencies. That includes any non-file sources that can
     # be "codegen"ed into a file source.
     sources_request = Get(
@@ -57,6 +58,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
             enable_codegen=True,
         ),
     )
+    print("after", flush=True)
 
     embedded_pkgs_per_target_request = Get(
         FieldSetsPerTarget,

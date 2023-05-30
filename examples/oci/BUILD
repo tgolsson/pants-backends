@@ -38,3 +38,9 @@ oci_image_build(
     ],
     tag="latest",
 )
+
+oci_structure_test(
+    name="structure_test",
+    base=[":empty"],
+    expected_digest="aaaaa",
+)
