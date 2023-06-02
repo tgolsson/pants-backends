@@ -30,10 +30,11 @@ Changelog = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/
 includes = [
     "pants_backend_oci",
 ]
+excludes = ["**/BUILD"]
 
 [build-system]
-requires = ["pdm-pep517>=1.0.0"]
-build-backend = "pdm.pep517.api"
+requires = ["pdm-backend>=1.0.0"]
+build-backend = "pdm.backend"
 
 [tool.isort]
 profile = "black"
