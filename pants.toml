@@ -28,6 +28,13 @@ backend_packages = [
   "pants_backend_secrets",
 ]
 
+pants_ignore = [
+    ".*/",
+    "/dist/",
+    "__pycache__",
+    "**/pdm_build.py",
+]
+
 [source]
 root_patterns = [
   '/',
@@ -53,7 +60,6 @@ pants-215 = "pants-plugins/215.lock"
 pants-216 = "pants-plugins/216.lock"
 pants-217 = "pants-plugins/217.lock"
 example-1 = "locks/example-1.lock"
-
 
 [python.resolves_to_interpreter_constraints]
 pants-plugins = [">=3.7,<3.10"]
