@@ -41,6 +41,6 @@ oci_image_build(
 
 oci_structure_test(
     name="structure_test",
-    base=[":empty"],
-    expected_digest="aaaaa",
+    base=[empty_base],
+    expected_digest="e0039d9a394788147eb854e5efe5429723352c288faa47de3bb1abbd53a7f7bb",
 )

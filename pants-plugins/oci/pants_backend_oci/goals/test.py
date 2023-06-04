@@ -4,12 +4,13 @@ from typing import Any
 from pants.core.goals.test import (
     TestDebugAdapterRequest,
     TestDebugRequest,
-    TestExtraEnv,
     TestFieldSet,
     TestRequest,
     TestResult,
     TestSubsystem,
 )
+from pants.engine.addresses import Addresses, UnparsedAddressInputs
+from pants.engine.fs import EMPTY_FILE_DIGEST
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
@@ -31,6 +32,7 @@ class StructureTestFieldSet(TestFieldSet):
         ExpectedImageDigest,
         ImageBase,
     )
+
     digest: ExpectedImageDigest
     base: ImageBase
 
@@ -48,38 +50,57 @@ async def run_oci_structure_test(
     oci_test_subsystem: OciTestSubsystem,
 ) -> TestResult:
     field_set = batch.single_element
+
+    base = await Get(
+        Addresses,
+        UnparsedAddressInputs,
+        field_set.base.to_unparsed_address_inputs(),
+    )
+
     wrapped_target = await Get(
         WrappedTarget,
-        WrappedTargetRequest(field_set.base, description_of_origin="package_oci_image"),
+        WrappedTargetRequest(base[0], description_of_origin="<OCI Structure Test>"),
     )
+
     target = wrapped_target.target
     bundle_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
-    image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
+    image = await Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
 
     if image.exit_code != 0:
         return TestResult(
             exit_code=image.exit_code,
             stdout=image.stdout,
             stderr=image.stderr,
+            stdout_digest=EMPTY_FILE_DIGEST,
+            stderr_digest=EMPTY_FILE_DIGEST,
             addresses=(field_set.address,),
+            output_setting=test_subsystem.output,
+            result_metadata=None,
         )
 
     output = image.output
-    digest = output.digest
-    if digest != field_set.digest:
+    digest = output.image_sha.lstrip("sha256:")
+    if digest != field_set.digest.value:
         return TestResult(
             exit_code=1,
-            stdout=f"Expected digest {field_set.digest} but got {digest}",
+            stdout=f"Expected digest {field_set.digest.value} but got {digest}",
             stderr="",
+            stdout_digest=EMPTY_FILE_DIGEST,
+            stderr_digest=EMPTY_FILE_DIGEST,
             addresses=(field_set.address,),
+            output_setting=test_subsystem.output,
+            result_metadata=None,
         )
 
     return TestResult(
         exit_code=0,
         stdout="",
         stderr="",
+        stdout_digest=EMPTY_FILE_DIGEST,
+        stderr_digest=EMPTY_FILE_DIGEST,
         addresses=(field_set.address,),
         output_setting=test_subsystem.output,
+        result_metadata=None,
     )
 
 
