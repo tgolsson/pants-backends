@@ -37,6 +37,9 @@ from pants_backend_oci.util_rules.image_bundle import (
 )
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
+if PANTS_SEMVER > Version("2.16.0a0"):
+    from pants.core.goals.run import RunInSandboxBehavior
+
 
 @dataclass(frozen=True)
 class RunImageBundleCommand(RunFieldSet):
@@ -44,6 +47,8 @@ class RunImageBundleCommand(RunFieldSet):
 
     repository: ImageRepository
     run_tty: ImageRunTty
+    if PANTS_SEMVER >= Version("2.16.0a0"):
+        run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
 
 
 @dataclass(frozen=True)
@@ -77,7 +82,7 @@ async def prepare_run_image_bundle(
         rationale="runc",
         search_path=SEARCH_PATHS,
     )
-    if PANTS_SEMVER < Version("2.16.0.dev0"):
+    if PANTS_SEMVER < Version("2.16.0a0"):
         kwargs["output_directory"] = "bins"
 
     binary_shims = BinaryShimsRequest.for_binaries(
@@ -167,7 +172,7 @@ async def prepare_run_image_bundle(
         Digest, CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
     )
 
-    if PANTS_SEMVER >= Version("2.16.0.dev0"):
+    if PANTS_SEMVER >= Version("2.16.0a0"):
         immutable_input_digests = shims.immutable_input_digests
         env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
         input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
@@ -226,16 +231,24 @@ async def run_oci_command_repl(request: OciRepl) -> ReplRequest:
     )
 
 
-@rule
-async def run_debug_oci_command_target(
-    field_set: RunImageBundleCommand,
-) -> RunDebugAdapterRequest:
-    raise NotImplementedError("Cannot run kubernetes commands in debug mode.")
+if PANTS_SEMVER < Version("2.16.0a0"):
+
+    @rule
+    async def run_debug_oci_command_target(
+        field_set: RunImageBundleCommand,
+    ) -> RunDebugAdapterRequest:
+        raise NotImplementedError("Cannot run OCI commands in debug mode.")
 
 
 def rules():
-    return [
+    rules = [
         *collect_rules(),
-        UnionRule(RunFieldSet, RunImageBundleCommand),
         UnionRule(ReplImplementation, OciRepl),
     ]
+
+    if PANTS_SEMVER >= Version("2.16.0a0"):
+        rules.extend(RunImageBundleCommand.rules())
+    else:
+        rules.append(UnionRule(RunFieldSet, RunImageBundleCommand))
+
+    return rules
