@@ -57,7 +57,9 @@ async def compute_command_line(
     request: KubernetesCommandLineProcessRequest, tool: KubernetesTool, platform: Platform
 ) -> Process:
     kubernetes_command = request.target
-    download_kubernetes_get = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    download_kubernetes_get = Get(
+        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
+    )
 
     deps = await Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]))
     (sources, tool) = await MultiGet(
@@ -104,7 +106,9 @@ async def prepare_kubernetes_command_process(
     tool: KubernetesTool,
     platform: Platform,
 ) -> Process:
-    download_kubernetes_get = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    download_kubernetes_get = Get(
+        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
+    )
 
     kubernetes_command: KubernetesTarget = request.target
     deps = await Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]))
@@ -155,7 +159,7 @@ async def run_kubernetes_command_target(request: RunKubernetesCommand) -> RunReq
     )
 
 
-if PANTS_SEMVER < Version("2.16.0"):
+if PANTS_SEMVER < Version("2.16.0.dev0"):
 
     @rule
     async def run_kubernetes_command_target_debug(
@@ -193,7 +197,7 @@ async def run_kubernetes_target_bundle_command_target(
     )
 
 
-if PANTS_SEMVER < Version("2.16.0"):
+if PANTS_SEMVER < Version("2.16.0.dev0"):
 
     @rule
     async def run_kubernetes_target_bundle_command_debug(
