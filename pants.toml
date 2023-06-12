@@ -26,6 +26,8 @@ backend_packages = [
   "pants_backend_oci",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
+
+  "pants.backend.shell",
 ]
 
 pants_ignore = [
