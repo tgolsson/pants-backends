@@ -46,20 +46,16 @@ class KubernetesTemplateDependency(Dependencies):
 
 class KubernetesClusterField(StringField):
     alias = "cluster"
-    help = softwrap(
-        """
+    help = softwrap("""
         The target cluster/context to run on. If not provided; the command cannot be ran.
-        """
-    )
+        """)
 
 
 class KubernetesKindField(StringField):
     alias = "kind"
-    help = softwrap(
-        """
+    help = softwrap("""
         A descriptor of the kinds included.
-        """
-    )
+        """)
 
 
 class KubernetesTarget(Target):

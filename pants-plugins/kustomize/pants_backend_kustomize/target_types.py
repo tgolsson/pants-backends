@@ -27,12 +27,10 @@ class KustomizeSourceField(SingleSourceField):
     expected_file_extensions = (".yaml", ".yml")
     uses_source_roots = False
 
-    help = softwrap(
-        """
+    help = softwrap("""
         A source file included in a kustomize run. Most likely this'll be other .yaml or .yml files,
         but any other resource that can be put into Kubernetes is valid.
-        """
-    )
+        """)
 
 
 class KustomizeSourcesField(MultipleSourcesField):
@@ -41,11 +39,9 @@ class KustomizeSourcesField(MultipleSourcesField):
     alias = "sources"
     uses_source_roots = False
 
-    help = softwrap(
-        """
+    help = softwrap("""
         A group of files used in a kustomize target.
-        """
-    )
+        """)
 
 
 class KustomizeTarget(Target):
@@ -55,8 +51,7 @@ class KustomizeTarget(Target):
         KustomizeDependenciesField,
         KustomizeSourcesField,
     )
-    help = softwrap(
-        """A target for converting a kustomization.yaml and dependencies into a YAML document for
+    help = softwrap("""A target for converting a kustomization.yaml and dependencies into a YAML document for
         use with kubectl.
 
         Example BUILD file:
@@ -67,8 +62,7 @@ class KustomizeTarget(Target):
                 dependencies=[],
                 sources=["namespace.yaml", "deployment.yaml", "service.yaml"],
             )
-        """
-    )
+        """)
 
 
 def targets():

@@ -2,7 +2,6 @@ from pants.core.util_rules import external_tool
 from pants.engine import process
 from pants.engine.addresses import Address
 from pants.testutil.rule_runner import QueryRule, RuleRunner
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci import synthetic_targets
 from pants_backend_oci.targets import ImageEmpty

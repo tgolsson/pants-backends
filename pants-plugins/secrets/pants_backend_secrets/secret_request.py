@@ -9,7 +9,6 @@ from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_secrets.exception import FailedDecryptException
 
@@ -64,9 +63,7 @@ class SecretsResponse:
     value: SecretValue
 
     def __post_init__(self):
-        assert isinstance(
-            self.value, SecretValue
-        ), f"value must be SecretValue but was {type(self.value)}"
+        assert isinstance(self.value, SecretValue), f"value must be SecretValue but was {type(self.value)}"
 
     def cacheable(self) -> bool:
         return False

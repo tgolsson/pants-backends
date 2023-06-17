@@ -4,7 +4,6 @@ from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
 from pants.option.option_types import BoolOption, StrListOption, StrOption
 from pants.option.subsystem import Subsystem
-from pants.version import PANTS_SEMVER, Version
 
 
 class OciSubsystem(Subsystem):

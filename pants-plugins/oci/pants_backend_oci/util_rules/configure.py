@@ -21,8 +21,7 @@ async def set_args(
 ) -> Process:
     umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
 
-    command = [
-        rf"""
+    command = [rf"""
         # nosplit
         if [ $# -gt 0 ]; then
             {{chroot}}/{umoci.exe} --log={tool.log} config --clear config.cmd --image build:build
@@ -34,8 +33,7 @@ async def set_args(
             done
             {{chroot}}/{umoci.exe} --log={tool.log} config "${{args[@]}}" --image build:build
         fi
-        """
-    ]
+        """]
 
     return Process(
         tuple(command),

@@ -28,6 +28,8 @@ backend_packages = [
   "pants_backend_secrets",
 
   "pants.backend.shell",
+
+  "pants.backend.experimental.python.lint.ruff",
 ]
 
 pants_ignore = [
@@ -62,11 +64,35 @@ pants-216 = "pants-plugins/216.lock"
 pants-217 = "pants-plugins/217.lock"
 example-1 = "locks/example-1.lock"
 
+
+pytest = "locks/tools/pytest.lock"
+isort = "locks/tools/isort.lock"
+ipython = "locks/tools/ipython.lock"
+black = "locks/tools/black.lock"
+
+
 [python.resolves_to_interpreter_constraints]
 pants-plugins = [">=3.7,<3.10"]
 pants-215 = [">=3.7,<3.10"]
 pants-216 = [">=3.7,<3.10"]
 pants-217 = [">=3.7,<3.10"]
 
+black = [">=3.9,<3.10"]
+
+[black]
+install_from_resolve = "black"
+interpreter_constraints = ["==3.9.*"]
+
+[ipython]
+install_from_resolve = "ipython"
+
 [isort]
+install_from_resolve = "isort"
+args = '--resolve-all-configs'
+interpreter_constraints = ["==3.9.*"]
 config = "['pyproject.toml']"
+
+[pytest]
+args = ["--no-header"]
+execution_slot_var = "TEST_EXECUTION_SLOT"
+install_from_resolve = "pytest"

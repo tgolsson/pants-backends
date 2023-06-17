@@ -20,7 +20,6 @@ from pants.engine.process import InteractiveProcess, Process
 from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import SkopeoTool
 from pants_backend_oci.target_types import ImageRepository, ImageTag

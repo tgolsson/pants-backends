@@ -110,9 +110,7 @@ async def prepare_run_image_bundle(
     )
 
     name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
-    components = [
-        dedent(
-            f"""
+    components = [dedent(f"""
         ROOT=`pwd`
         cat $ROOT/unpacked_image/config.json | jq '
                     .process.terminal = false |
@@ -139,35 +137,25 @@ async def prepare_run_image_bundle(
                     .process.capabilities.ambient = $caps
                 ' > "$ROOT/unpacked_image/config.json.tmp"
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-            """
-        )
-    ]
+            """)]
 
     terminal = request.target.get(ImageRunTty).value
     if request.interactive:
         terminal = True
 
-    components.append(
-        dedent(
-            f"""
+    components.append(dedent(f"""
                 jq '
                     .process.terminal = {'true' if terminal else "false"}
                 ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
                 {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-                """
-        )
-    )
+                """))
 
     rootless = "true" if oci.rootless else "false"
     suffix = "" if request.interactive else " 0<&-"
     container = f"pants.runc.{name}"
-    components.append(
-        dedent(
-            f"""
+    components.append(dedent(f"""
             `pwd`/{tool.exe} --root runspace --rootless {rootless} run -b unpacked_image {container}{suffix}
-            """
-        )
-    )
+            """))
     script_digest = await Get(
         Digest, CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
     )

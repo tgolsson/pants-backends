@@ -34,25 +34,15 @@ async def copy_from_container(
     cp: CpBinary,
     mkdir: MkdirBinary,
 ) -> ProcessResult:
-    copy_list = [
-        dedent(
-            f"""
+    copy_list = [dedent(f"""
         {mkdir.path} -p out/{os.path.dirname(os.path.dirname(path))}
         {cp.path} -r unpacked_image/rootfs/{path} out/{path}
-        """
-        )
-        for path in request.output_directories
-    ]
+        """) for path in request.output_directories]
 
-    copy_list.extend(
-        dedent(
-            f"""
+    copy_list.extend(dedent(f"""
         {mkdir.path} -p out/{os.path.dirname(path)}
         {cp.path} unpacked_image/rootfs/{path} out/
-        """
-        )
-        for path in request.output_files
-    )
+        """) for path in request.output_files)
 
     unpack, tar, workspace_digest = await MultiGet(
         Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),

@@ -8,3 +8,6 @@ default_section = "THIRDPARTY"
 [tool.black]
 line-length = 110
 preview = true
+
+[tool.ruff]
+line-length = 110

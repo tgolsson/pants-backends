@@ -50,9 +50,7 @@ async def get_environment_key(
     return FallibleSecretsResponse(
         exit_code=0,
         response=SecretsResponse(
-            SecretValue(
-                relevant_env[request.target.key.value], request.target.address, "EnvironmentVars"
-            ),
+            SecretValue(relevant_env[request.target.key.value], request.target.address, "EnvironmentVars"),
         ),
     )
 
@@ -71,9 +69,7 @@ class DecryptEnvironmentFieldSet(DecryptFieldSet):
 
 @rule
 async def decrypt_environment(request: DecryptEnvironmentVarsRequest) -> DecryptResponse:
-    response = await Get(
-        FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set)
-    )
+    response = await Get(FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set))
 
     if response.exit_code != 0:
         raise MissingSecret(f"failed retrieving environment secret: {response.stdout}")
