@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.engine.engine_aware import EngineAwareReturnType
+from pants.engine.environment import EnvironmentName
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
@@ -40,24 +41,12 @@ class SecretValue:
         return f"<{msg}>"
 
 
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.environment import EnvironmentName
+@union(in_scope_types=[EnvironmentName])
+@dataclass(frozen=True)
+class FallibleSecretsRequest:
+    target: Target
 
-    @union(in_scope_types=[EnvironmentName])
-    @dataclass(frozen=True)
-    class FallibleSecretsRequest:
-        target: Target
-
-        field_set_type: ClassVar[FieldSet]
-
-else:
-
-    @union
-    @dataclass(frozen=True)
-    class FallibleSecretsRequest:
-        target: Target
-
-        field_set_type: ClassVar[FieldSet]
+    field_set_type: ClassVar[FieldSet]
 
 
 @dataclass(frozen=True)
@@ -75,7 +64,9 @@ class SecretsResponse:
     value: SecretValue
 
     def __post_init__(self):
-        assert isinstance(self.value, SecretValue), f"value must be SecretValue but was {type(self.value)}"
+        assert isinstance(
+            self.value, SecretValue
+        ), f"value must be SecretValue but was {type(self.value)}"
 
     def cacheable(self) -> bool:
         return False

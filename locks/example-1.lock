@@ -345,18 +345,18 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "ea165e014c7cbd496558796b627c271aa8c18b4cba79dc1cc962b24c5efdfb85",
-              "url": "https://files.pythonhosted.org/packages/ec/9d/54ef08992423e0f569b516fd3bc01a2b3793bc66e11650c407e627794f42/google_auth-2.19.1-py2.py3-none-any.whl"
+              "hash": "23b7b0950fcda519bfb6692bf0d5289d2ea49fc143717cc7188458ec620e63fa",
+              "url": "https://files.pythonhosted.org/packages/9a/1a/5866a7c6e16abc1df395e6d2b9808984d0905c747d75f5e20f1a052421d1/google_auth-2.20.0-py2.py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "a9cfa88b3e16196845e64a3658eb953992129d13ac7337b064c6546f77c17183",
-              "url": "https://files.pythonhosted.org/packages/77/52/4e59fb37fd1f6fe4609f91d4792640b50294172616ff5bf3108eafa17f9a/google-auth-2.19.1.tar.gz"
+              "hash": "030af34138909ccde0fbce611afc178f1d65d32fbff281f25738b1fe1c6f3eaa",
+              "url": "https://files.pythonhosted.org/packages/4b/e0/d2c96098280f17eb626d4da0b7e553b8e5648d57514c8cefec851c16920c/google-auth-2.20.0.tar.gz"
             }
           ],
           "project_name": "google-auth",
           "requires_dists": [
-            "aiohttp<4.0.0dev,>=3.6.2; extra == \"aiohttp\"",
+            "aiohttp<4.0.0.dev0,>=3.6.2; extra == \"aiohttp\"",
             "cachetools<6.0,>=2.0.0",
             "cryptography==36.0.2; extra == \"enterprise_cert\"",
             "cryptography>=38.0.3; extra == \"pyopenssl\"",
@@ -364,14 +364,14 @@
             "pyopenssl==22.0.0; extra == \"enterprise_cert\"",
             "pyopenssl>=20.0.0; extra == \"pyopenssl\"",
             "pyu2f>=0.1.5; extra == \"reauth\"",
-            "requests<3.0.0dev,>=2.20.0; extra == \"aiohttp\"",
-            "requests<3.0.0dev,>=2.20.0; extra == \"requests\"",
+            "requests<3.0.0.dev0,>=2.20.0; extra == \"aiohttp\"",
+            "requests<3.0.0.dev0,>=2.20.0; extra == \"requests\"",
             "rsa<5,>=3.1.4",
             "six>=1.9.0",
             "urllib3<2.0"
           ],
           "requires_python": ">=3.6",
-          "version": "2.19.1"
+          "version": "2.20.0"
         },
         {
           "artifacts": [
@@ -1744,7 +1744,7 @@
     }
   ],
   "path_mappings": {},
-  "pex_version": "2.1.111",
+  "pex_version": "2.1.134",
   "pip_version": "20.3.4-patched",
   "prefer_older_binary": false,
   "requirements": [

@@ -1,5 +1,5 @@
 [GLOBAL]
-pants_version = "2.15.0"
+pants_version = "2.16.0"
 build_file_prelude_globs = ["examples/macros.py"]
 
 pythonpath = [
@@ -57,7 +57,6 @@ default_resolve = "pants-plugins"
 
 [python.resolves]
 pants-plugins = "pants-plugins/pants.lock"
-pants-214 = "pants-plugins/214.lock"
 pants-215 = "pants-plugins/215.lock"
 pants-216 = "pants-plugins/216.lock"
 pants-217 = "pants-plugins/217.lock"
@@ -65,7 +64,6 @@ example-1 = "locks/example-1.lock"
 
 [python.resolves_to_interpreter_constraints]
 pants-plugins = [">=3.7,<3.10"]
-pants-214 = [">=3.7,<3.10"]
 pants-215 = [">=3.7,<3.10"]
 pants-216 = [">=3.7,<3.10"]
 pants-217 = [">=3.7,<3.10"]

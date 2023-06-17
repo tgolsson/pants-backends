@@ -126,7 +126,7 @@ oci_python_image(
 
 ### `oci_image_empty`
 
-An empty base image with no contents at all. It is suggested to declare this in the root and use `//:empty` to reference it. **Note that from 2.15 this is automatically created by the plugin using a synthetic target.**
+An empty base image with no contents at all. This is declared as `//:empty` automatically, but you can use this to create new targets.
 
 ``` python
 oci_image_empty(

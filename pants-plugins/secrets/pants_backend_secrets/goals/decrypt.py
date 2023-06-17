@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import ClassVar, Generic, Type, TypeVar
 
 from pants.engine.console import Console
+from pants.engine.environment import EnvironmentName
 from pants.engine.goal import Goal, GoalSubsystem, Outputting
 from pants.engine.rules import Get, MultiGet, collect_rules, goal_rule
 from pants.engine.target import (
@@ -33,27 +34,17 @@ class DecryptSubsystem(Outputting, GoalSubsystem):
 
 class Decrypt(Goal):
     subsystem_cls = DecryptSubsystem
-    if PANTS_SEMVER >= Version("2.15.0.dev0"):
-        environment_behavior = Goal.EnvironmentBehavior.LOCAL_ONLY
+
+    environment_behavior = Goal.EnvironmentBehavior.LOCAL_ONLY
 
 
 _F = TypeVar("_F", bound=FieldSet)
 
 
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.environment import EnvironmentName
-
-    @union(in_scope_types=[EnvironmentName])
-    @dataclass(frozen=True)
-    class DecryptRequest(Generic[_F]):
-        field_set: _F
-
-else:
-
-    @union
-    @dataclass(frozen=True)
-    class DecryptRequest(Generic[_F]):
-        field_set: _F
+@union(in_scope_types=[EnvironmentName])
+@dataclass(frozen=True)
+class DecryptRequest(Generic[_F]):
+    field_set: _F
 
 
 @dataclass(frozen=True)

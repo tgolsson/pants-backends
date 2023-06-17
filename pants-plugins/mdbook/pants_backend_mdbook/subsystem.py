@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.version import PANTS_SEMVER, Version
 
 _mdbook_platform_mapping = {
     "linux_x86_64": "x86_64-unknown-linux-gnu",
@@ -32,17 +31,7 @@ class MdBookTool(ExternalTool):
         return "./mdbook"
 
 
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-
-    def rules():
-        return [
-            *MdBookTool.rules(),
-        ]
-
-else:
-    from pants.engine.rules import SubsystemRule
-
-    def rules():
-        return [
-            SubsystemRule(MdBookTool),
-        ]
+def rules():
+    return [
+        *MdBookTool.rules(),
+    ]

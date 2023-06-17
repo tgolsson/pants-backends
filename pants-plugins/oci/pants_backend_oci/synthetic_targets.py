@@ -3,6 +3,7 @@
 """
 from dataclasses import dataclass
 
+from pants.engine.internals.synthetic_targets import SyntheticAddressMaps, SyntheticTargetsRequest
 from pants.engine.internals.target_adaptor import TargetAdaptor
 from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
@@ -10,17 +11,13 @@ from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import OciSubsystem
 
-RULES = ()
+
+@dataclass(frozen=True)
+class SyntheticEmptyImageRequest(SyntheticTargetsRequest):
+    path: str = SyntheticTargetsRequest.SINGLE_REQUEST_FOR_ALL_TARGETS
+
 
 if PANTS_SEMVER >= Version("2.17.0.dev0"):
-    from pants.engine.internals.synthetic_targets import (
-        SyntheticAddressMaps,
-        SyntheticTargetsRequest,
-    )
-
-    @dataclass(frozen=True)
-    class SyntheticEmptyImageRequest(SyntheticTargetsRequest):
-        path: str = SyntheticTargetsRequest.SINGLE_REQUEST_FOR_ALL_TARGETS
 
     @rule
     async def example_synthetic_targets(
@@ -42,20 +39,7 @@ if PANTS_SEMVER >= Version("2.17.0.dev0"):
             ],
         )
 
-    RULES = (
-        *collect_rules(),
-        UnionRule(SyntheticTargetsRequest, SyntheticEmptyImageRequest),
-    )
-
-elif PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.internals.synthetic_targets import (
-        SyntheticAddressMaps,
-        SyntheticTargetsRequest,
-    )
-
-    @dataclass(frozen=True)
-    class SyntheticEmptyImageRequest(SyntheticTargetsRequest):
-        path: str = SyntheticTargetsRequest.SINGLE_REQUEST_FOR_ALL_TARGETS
+else:
 
     @rule
     async def example_synthetic_targets(
@@ -76,11 +60,9 @@ elif PANTS_SEMVER >= Version("2.15.0.dev0"):
             ],
         )
 
-    RULES = (
-        *collect_rules(),
-        UnionRule(SyntheticTargetsRequest, SyntheticEmptyImageRequest),
-    )
-
 
 def rules():
-    return RULES
+    return [
+        *collect_rules(),
+        UnionRule(SyntheticTargetsRequest, SyntheticEmptyImageRequest),
+    ]

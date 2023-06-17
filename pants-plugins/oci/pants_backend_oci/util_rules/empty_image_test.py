@@ -31,8 +31,6 @@ def test_empty_image_has_fixed_sha() -> None:
     )
 
     files = {"BUILD": ""}
-    if PANTS_SEMVER < Version("2.15.0.dev0"):
-        files["BUILD"] = 'oci_image_empty(name="empty")'
 
     rule_runner.write_files(files)
     target = rule_runner.get_target(Address("", target_name="empty"))

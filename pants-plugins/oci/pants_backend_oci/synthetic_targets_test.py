@@ -1,17 +1,10 @@
-import pytest
 from pants.build_graph.address import ResolveError
 from pants.core.util_rules import external_tool
 from pants.engine.addresses import Address
 from pants.testutil.rule_runner import RuleRunner, engine_error
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci import synthetic_targets
 from pants_backend_oci.targets import ImageEmpty
-
-pytestmark = pytest.mark.skipif(
-    PANTS_SEMVER < Version("2.15.0.dev0"),
-    reason="no synthetic targets in 2.14",
-)
 
 
 def test_synthetic_target_exists() -> None:

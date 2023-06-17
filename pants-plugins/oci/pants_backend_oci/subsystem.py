@@ -38,12 +38,11 @@ class OciSubsystem(Subsystem):
         help="The GID map to use.",
     )
 
-    if PANTS_SEMVER >= Version("2.15.0.dev0"):
-        empty_image_target = StrOption(
-            default="empty",
-            advanced=False,
-            help="The name of the synthetic target for an empty base image.",
-        )
+    empty_image_target = StrOption(
+        default="empty",
+        advanced=False,
+        help="The name of the synthetic target for an empty base image.",
+    )
 
 
 class UmociTool(ExternalTool):
@@ -132,23 +131,10 @@ class RuncTool(ExternalTool):
         return f"./runc.{plat_str}"
 
 
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-
-    def rules():
-        return [
-            *SkopeoTool.rules(),
-            *RuncTool.rules(),
-            *UmociTool.rules(),
-            *OciSubsystem.rules(),
-        ]
-
-else:
-    from pants.engine.rules import SubsystemRule
-
-    def rules():
-        return [
-            SubsystemRule(SkopeoTool),
-            SubsystemRule(RuncTool),
-            SubsystemRule(UmociTool),
-            SubsystemRule(OciSubsystem),
-        ]
+def rules():
+    return [
+        *SkopeoTool.rules(),
+        *RuncTool.rules(),
+        *UmociTool.rules(),
+        *OciSubsystem.rules(),
+    ]
