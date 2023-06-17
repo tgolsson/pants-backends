@@ -28,8 +28,7 @@ backend_packages = [
   "pants_backend_secrets",
 
   "pants.backend.shell",
-
-  "pants.backend.experimental.python.lint.ruff",
+  "pants.backend.experimental.python.lint.ruff"
 ]
 
 pants_ignore = [

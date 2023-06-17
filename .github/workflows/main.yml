@@ -45,7 +45,7 @@ jobs:
         ./get-pants.sh
         sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
         sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
-        /home/runner/bin/pants test ::
+        /home/runner/bin/pants --backend-packages='-["pants.backend.experimental.python.lint.ruff"]' test ::
 
   package:
     runs-on: ubuntu-20.04
@@ -82,7 +82,7 @@ jobs:
         docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
         docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map
 
-        /home/runner/bin/pants package ::
+        /home/runner/bin/pants --backend-packages='-["pants.backend.experimental.python.lint.ruff"]' package ::
 
   check-and-lint:
     runs-on: ubuntu-20.04
