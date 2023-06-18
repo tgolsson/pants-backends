@@ -20,14 +20,17 @@ This is a backend implementing support for building OCI images in pants; running
 
 ## Targets
 
-There's three targets currently implemented:
+There's six targets currently implemented, of which five are generic:
 
 * `oci_pull_image`
 * `oci_pull_images`
 * `oci_image_build`
 * `oci_image_empty`
+* `oci_build_layer`
 
-There are also plans to support targets optimized for various languages. There's currently one special target for Python, which will preferentially set the entrypoint to Pex files, `oci_python_image`.
+And one with some special language semantics:
+
+* `oci_python_image` - this is the same as `oci_image_build`, but will prefer to set the entrypoint to `.pex` files.
 
 ### `oci_pull_image`
 
@@ -139,3 +142,28 @@ oci_image_empty(
 | `name`        | The target name                                                                | Same as any other target, which is the directory name |
 | `decsription` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |
+
+### `oci_build_layer`
+
+Run an image command, and capture the configured output into a layer artifact, that can be injected into other images. This matches the `COPY --from` workflows.
+
+oci_build_layer(
+    name="layer"
+	base=[":rust-1-70"],
+    packages=[":files"],
+    env=['RUSTC_OPTS=...'],
+	command=['cd /my-package && cargo build --release'],
+	outputs=['/my-package/target/release/my-package'],
+)
+```
+
+| Argument      | Meaning                                                                        | Default value                                          |
+|---------------|--------------------------------------------------------------------------------|--------------------------------------------------------|
+| `name`        | The target name                                                                | Same as any other target, which is the directory name  |
+| `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                   |
+| `env`         | Environment variables to set. Does not support interpolation.                  | `[]`                                                   |
+| `outputs`     | Paths to capture into the built layer.                                         | `[]`                                                   |
+| `exclude`     | Globs to not include in the output.                                            | `[]`                                                   |
+| `decsription` | A description of the target                                                    |                                                        |
+| `output_path` | The output path during `pants package`                                         | A variant generated from the target name and directory |
+| `tags`        | List of tags                                                                   | `[]`                                                   |

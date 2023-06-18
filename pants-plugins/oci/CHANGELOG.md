@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.4.0 - 2023-06-18
+
+- Improved support for very large layers > 2GB. A lot of layers will now be compressed in
+  transit. This adds some overhead later when injecting them into image, but fixes some crashes
+  inside Pants.
+
+- **Improved support for multi-stage builds** (`COPY --from`)
+
+  There is now support for building artifacts in one container and copying them into a new
+  container. To do this, use `oci_build_layer`, and configure the output files and directories. The
+  files and data will be inserted verbatim into the downstream container.
 
 - **Adds support for empty base images** (`FROM scratch`)
 
@@ -13,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   container. This can be useful to produce containers with statically linked binaries that require
   no runtime environment at all.
 
-  Note that for Pants 2.14 you'll need to manually declare the base image: `oci_image_empty(name="empty")`.
 
   - To change the target name, set `[oci].empty_image_target` in `pants.toml`.
 
