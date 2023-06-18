@@ -1,13 +1,13 @@
 [project]
 name = "pants_backend_kustomize"
 description = "A Kustomize plugin for the Pants build system"
-version = "0.1.2"
+version = "0.2.0"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
 
 dependencies = [
-    "pants_backend_k8s~=0.1.1"
+    "pants_backend_k8s>=0.2"
 ]
 
 readme = "README.md"
