@@ -15,6 +15,7 @@ from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
+from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystems.test import OciTestSubsystem
 from pants_backend_oci.targets import ExpectedImageDigest, ImageBase
@@ -104,23 +105,23 @@ async def run_oci_structure_test(
     )
 
 
-@rule
-async def setup_example_debug_test(
-    batch: StructureTestRequest.Batch[StructureTestFieldSet, Any],
-) -> TestDebugRequest:
-    raise NotImplementedError()
+if not PANTS_SEMVER >= Version("2.16.0dev0"):
 
+    @rule
+    async def setup_example_debug_test(
+        batch: StructureTestRequest.Batch[StructureTestFieldSet, Any],
+    ) -> TestDebugRequest:
+        raise NotImplementedError()
 
-@rule
-async def setup_example_debug_adapter_test(
-    batch: StructureTestRequest.Batch[StructureTestFieldSet, Any],
-) -> TestDebugAdapterRequest:
-    raise NotImplementedError()
+    @rule
+    async def setup_example_debug_adapter_test(
+        batch: StructureTestRequest.Batch[StructureTestFieldSet, Any],
+    ) -> TestDebugAdapterRequest:
+        raise NotImplementedError()
 
 
 def rules():
     return [
-        # Add to any other existing rules here:
         UnionRule(TestFieldSet, StructureTestFieldSet),
         *StructureTestRequest.rules(),
         *collect_rules(),
