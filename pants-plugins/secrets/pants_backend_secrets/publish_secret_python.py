@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 
 from pants.backend.python.goals.publish import (
-    PublishPythonPackageFieldSet,
     PublishPythonPackageRequest,
-    PythonRepositoriesField,
+    SkipTwineUploadField,
     twine_upload_args,
 )
 from pants.backend.python.subsystems.twine import TwineSubsystem
@@ -60,9 +59,10 @@ class PublishPythonWithSecretPackageRequest(PublishPythonPackageRequest):
 @dataclass(frozen=True)
 class PublishPythonWithSecretPackageFieldSet(PublishFieldSet):
     publish_request_type = PublishPythonWithSecretPackageRequest
-    required_fields = PublishPythonPackageFieldSet.required_fields + (PublishSecretsField,)
+    required_fields = (PublishSecretsField,)
 
-    secrets: PublishSecretsField
+    repositories: PublishSecretsField
+    skip_twine: SkipTwineUploadField
 
     def get_output_data(self) -> PublishOutputData:
         return PublishOutputData(
@@ -88,7 +88,6 @@ class PythonDistributionWithSecret(Target):
         SDistConfigSettingsField,
         BuildBackendEnvVarsField,
         LongDescriptionPathField,
-        PythonRepositoriesField,
         PublishSecretsField,
     )
     help = softwrap(f"""
@@ -145,14 +144,15 @@ async def twine_upload_with_secret(
     pex_proc_requests = []
     secret_requests = []
 
-    for repo in request.field_set.repositories.value:
-        secret = request.field_set.secrets.value[repo]
+    repositories = []
+    for repo, secret in request.field_set.repositories.value.items():
+        repositories.append(repo)
         secret_address = await Get(
             Addresses,
             UnparsedAddressInputs(
                 [secret],
                 owning_address=request.field_set.address,
-                description_of_origin=f"the `{secret}` from the target {request.field_set.secrets}",
+                description_of_origin=f"the `{secret}` from the target {request.field_set.repositories}",
             ),
         )
         wrapped_target = await Get(
@@ -171,7 +171,7 @@ async def twine_upload_with_secret(
 
     fallible_secrets = await MultiGet(*secret_requests)
     secrets = []
-    for repo, maybe_secret in zip(request.field_set.repositories.value, fallible_secrets):
+    for repo, maybe_secret in zip(repositories, fallible_secrets):
         if maybe_secret.exit_code != 0:
             raise FailedDecryptException(
                 f"Failed decrypting secret for repo: {repo}",
@@ -182,7 +182,7 @@ async def twine_upload_with_secret(
         assert maybe_secret.response is not None, "cannot be None if exit_code is 0"
         secrets.append(maybe_secret.response.value)
 
-    for repo, secret in zip(request.field_set.repositories.value, secrets):
+    for repo, secret in zip(repositories, secrets):
         pex_proc_requests.append(
             VenvPexProcess(
                 twine_pex,

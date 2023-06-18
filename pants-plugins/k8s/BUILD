@@ -15,6 +15,5 @@ python_distribution_with_secret(
     ),
     long_description_path="pants-plugins/k8s/README.md",
     wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
-    repositories=["@pypi"],
     repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )
