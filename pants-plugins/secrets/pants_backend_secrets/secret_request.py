@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.engine.engine_aware import EngineAwareReturnType
+from pants.engine.environment import EnvironmentName
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_secrets.exception import FailedDecryptException
 
@@ -40,24 +40,12 @@ class SecretValue:
         return f"<{msg}>"
 
 
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.environment import EnvironmentName
+@union(in_scope_types=[EnvironmentName])
+@dataclass(frozen=True)
+class FallibleSecretsRequest:
+    target: Target
 
-    @union(in_scope_types=[EnvironmentName])
-    @dataclass(frozen=True)
-    class FallibleSecretsRequest:
-        target: Target
-
-        field_set_type: ClassVar[FieldSet]
-
-else:
-
-    @union
-    @dataclass(frozen=True)
-    class FallibleSecretsRequest:
-        target: Target
-
-        field_set_type: ClassVar[FieldSet]
+    field_set_type: ClassVar[FieldSet]
 
 
 @dataclass(frozen=True)

@@ -91,12 +91,10 @@ class PythonDistributionWithSecret(Target):
         PythonRepositoriesField,
         PublishSecretsField,
     )
-    help = softwrap(
-        f"""
+    help = softwrap(f"""
         A publishable Python setuptools distribution (e.g. an sdist or wheel).
         See {doc_url('python-distributions')}.
-        """
-    )
+        """)
 
 
 @rule

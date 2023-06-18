@@ -28,11 +28,9 @@ from pants_backend_k8s.target_types import (
 
 class KubernetesTargetGenerator(TargetGenerator):
     alias = "k8s_object"
-    help = softwrap(
-        """
+    help = softwrap("""
         Generate `kubernetes` targets with all specific commands.
-        """
-    )
+        """)
     generated_target_cls = KubernetesTarget
     core_fields = (
         *COMMON_TARGET_FIELDS,
@@ -84,11 +82,9 @@ class KubernetesTargetBundleCommandProcessRequest:
 
 class KubernetesTargetBundleGenerator(TargetGenerator):
     alias = "k8s_objects"
-    help = softwrap(
-        """
+    help = softwrap("""
         Generate `kubernetes` targets with all specific commands.
-        """
-    )
+        """)
     generated_target_cls = ShellCommandRunTarget
     core_fields = (
         *COMMON_TARGET_FIELDS,

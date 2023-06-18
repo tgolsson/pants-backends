@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
+from pants.engine.env_vars import EnvironmentVars as EnvironmentVars
+from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentVarsRequest
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_secrets.exception import MissingSecret
 from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
@@ -14,12 +15,6 @@ from pants_backend_secrets.secret_request import (
     SecretValue,
 )
 from pants_backend_secrets.targets import EnvironmentSecretKey
-
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.env_vars import EnvironmentVars as Environment
-    from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
-else:
-    from pants.engine.environment import Environment, EnvironmentRequest
 
 
 @dataclass(frozen=True)
@@ -43,7 +38,7 @@ class FallibleEnvironmentSecretsRequest(FallibleSecretsRequest):
 async def get_environment_key(
     request: FallibleEnvironmentSecretsRequest,
 ) -> FallibleSecretsResponse:
-    relevant_env = await Get(Environment, EnvironmentRequest([request.target.key.value]))
+    relevant_env = await Get(EnvironmentVars, EnvironmentVarsRequest([request.target.key.value]))
 
     if request.target.key.value not in relevant_env:
         return FallibleSecretsResponse(
@@ -55,29 +50,29 @@ async def get_environment_key(
     return FallibleSecretsResponse(
         exit_code=0,
         response=SecretsResponse(
-            SecretValue(relevant_env[request.target.key.value], request.target.address, "Environment"),
+            SecretValue(relevant_env[request.target.key.value], request.target.address, "EnvironmentVars"),
         ),
     )
 
 
-class DecryptEnvironmentRequest(DecryptRequest):
+class DecryptEnvironmentVarsRequest(DecryptRequest):
     pass
 
 
 @dataclass(frozen=True)
 class DecryptEnvironmentFieldSet(DecryptFieldSet):
-    decrypt_request_type = DecryptEnvironmentRequest
+    decrypt_request_type = DecryptEnvironmentVarsRequest
     required_fields = (EnvironmentSecretKey,)
 
     key: EnvironmentSecretKey
 
 
 @rule
-async def decrypt_environment(request: DecryptEnvironmentRequest) -> DecryptResponse:
+async def decrypt_environment(request: DecryptEnvironmentVarsRequest) -> DecryptResponse:
     response = await Get(FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set))
 
     if response.exit_code != 0:
-        raise MissingSecret(f"failed retreiving environment secret: {response.stdout}")
+        raise MissingSecret(f"failed retrieving environment secret: {response.stdout}")
 
     return DecryptResponse(response.response.value)
 

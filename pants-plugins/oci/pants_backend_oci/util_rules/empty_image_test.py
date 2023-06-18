@@ -2,7 +2,6 @@ from pants.core.util_rules import external_tool
 from pants.engine import process
 from pants.engine.addresses import Address
 from pants.testutil.rule_runner import QueryRule, RuleRunner
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci import synthetic_targets
 from pants_backend_oci.targets import ImageEmpty
@@ -31,8 +30,6 @@ def test_empty_image_has_fixed_sha() -> None:
     )
 
     files = {"BUILD": ""}
-    if PANTS_SEMVER < Version("2.15.0.dev0"):
-        files["BUILD"] = 'oci_image_empty(name="empty")'
 
     rule_runner.write_files(files)
     target = rule_runner.get_target(Address("", target_name="empty"))

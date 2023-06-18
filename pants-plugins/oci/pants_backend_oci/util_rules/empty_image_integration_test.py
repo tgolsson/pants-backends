@@ -6,7 +6,6 @@ import tarfile
 from textwrap import dedent
 
 from pants.testutil.pants_integration_test import run_pants, setup_tmpdir
-from pants.version import PANTS_SEMVER, Version
 
 
 def test_package_empty_with_file() -> None:
@@ -27,17 +26,6 @@ def test_package_empty_with_file() -> None:
                 """,
         ),
     }
-
-    if PANTS_SEMVER < Version("2.15.0.dev0"):
-        build_file = build_inputs["oci/BUILD"]
-        build_file = build_file.replace("//:empty", ":empty")
-        build_file += dedent(
-            """\n\
-            oci_image_empty(name="empty")
-            """
-        )
-
-        build_inputs["oci/BUILD"] = build_file
 
     with setup_tmpdir(build_inputs) as tmpdir:
         result = run_pants(

@@ -7,12 +7,12 @@ from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
+from pants.engine.env_vars import EnvironmentVars, EnvironmentVarsRequest
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process, ProcessCacheScope
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import (
@@ -31,12 +31,6 @@ from pants_backend_secrets.secret_request import (
     SecretsResponse,
     SecretValue,
 )
-
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.env_vars import EnvironmentVars as Environment
-    from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
-else:
-    from pants.engine.environment import Environment, EnvironmentRequest
 
 
 @dataclass(frozen=True)
@@ -116,15 +110,15 @@ async def get_bitwarden_key(
     )
 
     env_request = ["HOME"]
-    extra_env = Environment()
+    extra_env = EnvironmentVars()
     if wrapped_target.target[BitWardenSessionSecret].value is not None:
         bw_session_secret = await Get(SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target))
-        extra_env = Environment(**{"BW_SESSION": bw_session_secret.value.value})
+        extra_env = EnvironmentVars(**{"BW_SESSION": bw_session_secret.value.value})
     else:
         env_request.append("BW_SESSION")
 
-    relevant_env = await Get(Environment, EnvironmentRequest(env_request))
-    command_env = Environment(**relevant_env, **extra_env)
+    relevant_env = await Get(EnvironmentVars, EnvironmentVarsRequest(env_request))
+    command_env = EnvironmentVars(**relevant_env, **extra_env)
 
     if request.target.field.value:
         command = [

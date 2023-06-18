@@ -32,11 +32,9 @@ from pants_backend_oci.target_types import (
 # Only used here
 class _ImageVariants(DictStringToStringField):
     alias = "variants"
-    help = softwrap(
-        """
+    help = softwrap("""
         The digests to use and names to export as.
-        """
-    )
+        """)
 
 
 class PullImage(Target):
@@ -52,11 +50,9 @@ class PullImage(Target):
 
 class PullImagesGenerator(TargetGenerator):
     alias = "oci_pull_images"
-    help = softwrap(
-        """
+    help = softwrap("""
         The list of base images to import.
-        """
-    )
+        """)
     generated_target_cls = PullImage
     core_fields = (
         *COMMON_TARGET_FIELDS,

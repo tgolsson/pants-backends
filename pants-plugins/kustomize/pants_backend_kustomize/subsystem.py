@@ -22,8 +22,6 @@ class KustomizeTool(ExternalTool):
             "macos_x86_64": "darwin_amd64",
             "linux_arm64": "linux_arm64",
             "linux_x86_64": "linux_amd64",
-            "linux_arm64": "linux_arm64",
-            "linux_x86_64": "linux_amd64",
         }
         plat_str = platform_mapping[plat.value]
         base = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize"

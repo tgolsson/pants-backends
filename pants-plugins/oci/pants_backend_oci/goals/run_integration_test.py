@@ -9,8 +9,7 @@ from pants.testutil.pants_integration_test import run_pants, setup_tmpdir
 def test_run_oci_container() -> None:
     build_inputs = {
         "BUILD_ROOT": "",
-        "oci/BUILD": dedent(
-            """\
+        "oci/BUILD": dedent("""\
                 python_sources(name="examples")
 
                 oci_pull_images(
@@ -28,13 +27,10 @@ def test_run_oci_container() -> None:
                         ":example",
                     ],
                 )
-                """
-        ),
-        "oci/example.py": dedent(
-            """\
+                """),
+        "oci/example.py": dedent("""\
             print("Hello world!")
-            """
-        ),
+            """),
     }
 
     uid = os.getuid()
@@ -63,8 +59,7 @@ def test_run_oci_container() -> None:
 def test_run_oci_container_file() -> None:
     build_inputs = {
         "BUILD_ROOT": "",
-        "oci/BUILD": dedent(
-            """\
+        "oci/BUILD": dedent("""\
                 python_sources(name="examples")
 
                 oci_pull_images(
@@ -85,17 +80,14 @@ def test_run_oci_container_file() -> None:
                         ":files",
                     ],
                 )
-                """
-        ),
+                """),
         "oci/file.txt": "Hello from a file!\n",
         "oci/resource.txt": "Hello from a file!\n",
-        "oci/example.py": dedent(
-            """\
+        "oci/example.py": dedent("""\
 
             with open('/{tmpdir}/oci/file.txt', 'r') as f_:
                 print(f_.read())
-            """
-        ),
+            """),
     }
 
     uid = os.getuid()
@@ -125,8 +117,7 @@ def test_run_oci_container_file() -> None:
 def test_run_oci_container_files() -> None:
     build_inputs = {
         "BUILD_ROOT": "",
-        "oci/BUILD": dedent(
-            """\
+        "oci/BUILD": dedent("""\
                 python_sources(name="examples")
 
                 oci_pull_images(
@@ -147,17 +138,14 @@ def test_run_oci_container_files() -> None:
                         ":files",
                     ],
                 )
-                """
-        ),
+                """),
         "oci/file.txt": "Hello from a file!\n",
         "oci/resource.txt": "Hello from a file!\n",
-        "oci/example.py": dedent(
-            """\
+        "oci/example.py": dedent("""\
 
             with open('/{tmpdir}/oci/file.txt', 'r') as f_:
                 print(f_.read())
-            """
-        ),
+            """),
     }
 
     uid = os.getuid()

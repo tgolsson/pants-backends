@@ -8,11 +8,11 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.engine.addresses import Address
+from pants.engine.environment import EnvironmentName
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionMembership, union
 from pants.util.strutil import bullet_list
-from pants.version import PANTS_SEMVER, Version
 
 
 @dataclass(frozen=True)
@@ -22,26 +22,13 @@ class KustomizeInjectRequestQuery:
     target: Target
 
 
-if PANTS_SEMVER >= Version("2.15.0.dev0"):
-    from pants.engine.environment import EnvironmentName
+@union(in_scope_types=[EnvironmentName])
+@dataclass(frozen=True)
+class KustomizeInjectRequest:
+    """Base class for requests to generate data for Kustomize injection."""
 
-    @union(in_scope_types=[EnvironmentName])
-    @dataclass(frozen=True)
-    class KustomizeInjectRequest:
-        """Base class for requests to generate data for Kustomize injection."""
-
-        target: Target
-        field_set_type: ClassVar[type[FieldSet]]
-
-else:
-
-    @union
-    @dataclass(frozen=True)
-    class KustomizeInjectRequest:
-        """Base class for requests to generate data for Kustomize injection."""
-
-        target: Target
-        field_set_type: ClassVar[type[FieldSet]]
+    target: Target
+    field_set_type: ClassVar[type[FieldSet]]
 
 
 @dataclass(frozen=True)
