@@ -7,6 +7,7 @@ from pants.engine.target import (
     BoolField,
     Dependencies,
     ScalarField,
+    SourcesField,
     SpecialCasedDependencies,
     StringField,
     StringSequenceField,
@@ -172,5 +173,15 @@ class ExpectedImageDigest(StringField):
     help = softwrap(
         """
         The expected digest (sha256) of the image.
+        """
+    )
+
+
+# FIXME: This is a dummy field required for test targets in 2.15.0. Remove when 2.17.0 is released.
+class DummySource(SourcesField):
+    alias = "_dummy_source"
+    help = softwrap(
+        """
+        The dummy source to use.
         """
     )

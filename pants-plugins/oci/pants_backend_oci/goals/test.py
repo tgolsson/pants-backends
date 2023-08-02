@@ -12,13 +12,13 @@ from pants.core.goals.test import (
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import EMPTY_FILE_DIGEST
 from pants.engine.rules import Get, collect_rules, rule
-from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
+from pants.engine.target import WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystems.test import OciTestSubsystem
-from pants_backend_oci.targets import ExpectedImageDigest, ImageBase
+from pants_backend_oci.targets import DummySource, ExpectedImageDigest, ImageBase
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -29,10 +29,17 @@ from pants_backend_oci.util_rules.image_bundle import (
 
 @dataclass(frozen=True)
 class StructureTestFieldSet(TestFieldSet):
-    required_fields = (
-        ExpectedImageDigest,
-        ImageBase,
-    )
+    if PANTS_SEMVER >= Version("2.16.0dev0"):
+        required_fields = (
+            ExpectedImageDigest,
+            ImageBase,
+        )
+    else:
+        required_fields = (
+            ExpectedImageDigest,
+            ImageBase,
+            DummySource,
+        )
 
     digest: ExpectedImageDigest
     base: ImageBase
