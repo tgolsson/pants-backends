@@ -54,6 +54,8 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Pro
         "--owner=0",
         "--group=0",
         "--numeric-owner",
+        "--no-same-owner",
+        "--no-same-permissions",
         "--pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime",
     ]
 
@@ -110,6 +112,8 @@ async def create_archive(request: CreateDeterministicTar) -> Digest:
         "--mtime=1970-01-01 00:00Z",
         "--owner=0",
         "--group=0",
+        "--no-same-owner",
+        "--no-same-permissions",
         "--numeric-owner",
     ]
 
