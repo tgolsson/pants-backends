@@ -14,8 +14,8 @@ elif PANTS_SEMVER > Version("2.16.0dev0"):
 
 SIMPLE_EXPECTED_DIGEST = {
     "215": "e90e0558571ea8aebe5546e951fef0a5319063e3c8e8006a1bf894cc14e845b",
-    "216": "918e005db3ee24c6cc3b085f8546c04a353ace77e6d372069c85480ac4a39135",
-    "217": "bcb2ec2e770439e7f46bced23cb77bbd54cd8946a18fc7ba9108d703506d155",
+    "216": "cb0e4a9d23544283b90cfbaf976d7384a6397216973cb9b0a6c79538409ffa1b",
+    "217": "1b2bbbd6a2cd86d45ed94daa6403fa418d48967383d8f688ec41406d25781b2",
 }[VERSION]
 
 
@@ -32,7 +32,7 @@ def test_test_oci_container() -> None:
                     variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
                 )
 
-                pex_binary(name="example", entry_point="example.py", shebang="#!/usr/bin/python")
+                pex_binary(name="example", entry_point="example.py", shebang="#!/usr/bin/python", layout="packed")
 
                 oci_image_build(
                     name="oci",
@@ -69,6 +69,7 @@ def test_test_oci_container() -> None:
                 "--oci-uid-map=1:100000:65536",
                 f"--oci-gid-map=['0:{gid}:1']",
                 "--oci-gid-map=1:100000:65536",
+                "--no-local-cache",
                 "--keep-sandboxes=always",
                 "test",
                 "oci:oci-test",
@@ -81,8 +82,8 @@ def test_test_oci_container() -> None:
 
 FILE_EXPECTED_DIGEST = {
     "215": "405fb07fc971eb02248e0488226cc7ada6282dfd6392ec52fbe2a9915815dfc",
-    "216": "82abf78018f3360c45fae1edb0c7ecb1fd57b9daf87f65d61904d8594123a8a",
-    "217": "f42ef761779b7f9bab3ae787d54a8c31f0a9446aa3e7bd6f622ddc0bdfd407a5",
+    "216": "03733c67e62860782d5bd7312f1fd2c0edab2b2ad64b5cc16f0eeb92e09c4eac",
+    "217": "3a9f9b854c3d676f00167102b8eb6f8929ea3240cf8fe36bed3d1a73ace9d21c",
 }[VERSION]
 
 
@@ -101,7 +102,7 @@ def test_test_oci_container_file() -> None:
 
                 file(name="files", source="file.txt")
 
-                pex_binary(name="example", entry_point="example.py", shebang="#!/usr/bin/python")
+                pex_binary(name="example", entry_point="example.py", shebang="#!/usr/bin/python", layout="packed")
 
                 oci_image_build(
                     name="oci",
@@ -131,7 +132,7 @@ def test_test_oci_container_file() -> None:
     uid = os.getuid()
     gid = os.getgid()
 
-    with setup_tmpdir(build_inputs) as tmpdir:
+    with setup_tmpdir(build_inputs):
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
@@ -142,6 +143,7 @@ def test_test_oci_container_file() -> None:
                 "--oci-uid-map=1:100000:65536",
                 f"--oci-gid-map=['0:{gid}:1']",
                 "--oci-gid-map=1:100000:65536",
+                "--no-local-cache",
                 "test",
                 "oci:oci-test",
             ],
