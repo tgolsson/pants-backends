@@ -12,6 +12,8 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    DummySource,
+    ExpectedImageDigest,
     ImageArgs,
     ImageArtifactExclusions,
     ImageBase,
@@ -32,9 +34,11 @@ from pants_backend_oci.target_types import (
 # Only used here
 class _ImageVariants(DictStringToStringField):
     alias = "variants"
-    help = softwrap("""
+    help = softwrap(
+        """
         The digests to use and names to export as.
-        """)
+        """
+    )
 
 
 class PullImage(Target):
@@ -50,9 +54,11 @@ class PullImage(Target):
 
 class PullImagesGenerator(TargetGenerator):
     alias = "oci_pull_images"
-    help = softwrap("""
+    help = softwrap(
+        """
         The list of base images to import.
-        """)
+        """
+    )
     generated_target_cls = PullImage
     core_fields = (
         *COMMON_TARGET_FIELDS,
@@ -134,8 +140,29 @@ class ImageBuildStep(Target):
     help = "An imported OCI image."
 
 
+class ImageStructureTest(Target):
+    alias = "oci_structure_test"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageBase,
+        ExpectedImageDigest,
+        DummySource,
+    )
+    help = (
+        "Tests that validate the structure of an image, such as checking for the presence of a file, file"
+        " contents, image digests, etc."
+    )
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty]
+    return [
+        PullImage,
+        PullImagesGenerator,
+        ImageBuild,
+        ImageBuildStep,
+        ImageEmpty,
+        ImageStructureTest,
+    ]
 
 
 def rules():
