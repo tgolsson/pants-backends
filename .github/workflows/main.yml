@@ -85,6 +85,7 @@ jobs:
     - name: Package all targets
       run: |
         ./get-pants.sh
+        id
         sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
         sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
         docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
