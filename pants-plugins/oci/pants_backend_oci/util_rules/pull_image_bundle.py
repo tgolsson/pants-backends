@@ -80,7 +80,7 @@ async def pull_oci_image(
 
     if result.exit_code != 0:
         return FallibleImageBundle(
-            exit_code=result.exit_code, stderr=result.stderr.decode(), stdout=result.stdout.decode()
+            None, exit_code=result.exit_code, stderr=result.stderr.decode(), stdout=result.stdout.decode()
         )
 
     return FallibleImageBundle(
