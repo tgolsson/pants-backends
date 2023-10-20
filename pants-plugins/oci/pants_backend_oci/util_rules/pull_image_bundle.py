@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.engine.env_vars import EnvironmentVars as Environment
+from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import Get, collect_rules, rule
@@ -53,8 +55,12 @@ async def pull_oci_image(
         "copy",
     ]
 
-    if request.target.anonymous:
+    relevant_env = Environment()
+    if request.target.anonymous.value:
         args.append("--src-no-creds")
+
+    else:
+        relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
 
     args.extend(
         [
@@ -70,6 +76,7 @@ async def pull_oci_image(
         input_digest=skopeo.digest,
         description=desc,
         output_directories=("build",),
+        env=relevant_env,
     )
 
     result = await Get(
