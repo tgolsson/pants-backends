@@ -12,7 +12,7 @@ import logging
 import os
 from dataclasses import dataclass
 
-from pants.core.util_rules.system_binaries import SEARCH_PATHS, TarBinary, TarBinaryRequest
+from pants.core.util_rules.system_binaries import SEARCH_PATHS, TarBinary
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
@@ -45,8 +45,7 @@ class CreateDeterministicDirectoryTar:
 
 
 @rule
-async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Process:
-    tar_binary = await Get(TarBinary, TarBinaryRequest())
+async def tar_directory_process(request: CreateDeterministicDirectoryTar, tar_binary: TarBinary) -> Process:
     argv = [
         tar_binary.path,
         "--sort=name",
@@ -87,7 +86,7 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar) -> Pro
 
 
 @rule(desc="Creating an archive file", level=LogLevel.DEBUG)
-async def create_archive(request: CreateDeterministicTar) -> Digest:
+async def create_archive(request: CreateDeterministicTar, tar_binary: TarBinary) -> Digest:
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.
     # passing a list of filenames into the utilities fixes this.
     FILE_LIST_FILENAME = "__pants_archive_filelist__"
@@ -96,7 +95,6 @@ async def create_archive(request: CreateDeterministicTar) -> Digest:
     files_digests = [file_list_file_digest, request.snapshot.digest]
     input_digests = []
 
-    tar_binary = await Get(TarBinary, TarBinaryRequest())
     argv = list(
         tar_binary.create_archive_argv(
             request.output_filename,

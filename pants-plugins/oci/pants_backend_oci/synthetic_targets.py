@@ -1,6 +1,7 @@
 """
 
 """
+
 from dataclasses import dataclass
 
 from pants.engine.internals.synthetic_targets import SyntheticAddressMaps, SyntheticTargetsRequest
