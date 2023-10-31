@@ -889,7 +889,7 @@
   ],
   "path_mappings": {},
   "pex_version": "2.1.137",
-  "pip_version": "23.1",
+  "pip_version": "23.0.1",
   "prefer_older_binary": false,
   "requirements": [
     "pantsbuild.pants.testutil<2.18.0,>=2.17.0a0",
