@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from textwrap import dedent
 
 from pants.core.goals.repl import ReplImplementation, ReplRequest
-from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
+from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import (
     SEARCH_PATHS,
@@ -23,7 +23,6 @@ from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionRule
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import OciSubsystem, RuncTool
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
@@ -37,18 +36,14 @@ from pants_backend_oci.util_rules.image_bundle import (
 )
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
-if PANTS_SEMVER > Version("2.16.0dev0"):
-    from pants.core.goals.run import RunInSandboxBehavior
-
 
 @dataclass(frozen=True)
 class RunImageBundleCommand(RunFieldSet):
     required_fields = (ImageRepository,)
+    run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
 
     repository: ImageRepository
     run_tty: ImageRunTty
-    if PANTS_SEMVER >= Version("2.16.0dev0"):
-        run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
 
 
 @dataclass(frozen=True)
@@ -82,8 +77,6 @@ async def prepare_run_image_bundle(
         rationale="runc",
         search_path=SEARCH_PATHS,
     )
-    if PANTS_SEMVER < Version("2.16.0dev0"):
-        kwargs["output_directory"] = "bins"
 
     binary_shims = BinaryShimsRequest.for_binaries(
         *tools,
@@ -160,15 +153,9 @@ async def prepare_run_image_bundle(
         Digest, CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
     )
 
-    if PANTS_SEMVER >= Version("2.16.0dev0"):
-        immutable_input_digests = shims.immutable_input_digests
-        env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
-        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
-
-    else:
-        env = {"PATH": "{chroot}/bins", "XDG_RUNTIME_DIR": "{chroot}/tmp"}
-        immutable_input_digests = None
-        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest, shims.digest)))
+    immutable_input_digests = shims.immutable_input_digests
+    env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
+    input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
 
     return await Get(
         Process,
@@ -219,24 +206,11 @@ async def run_oci_command_repl(request: OciRepl) -> ReplRequest:
     )
 
 
-if PANTS_SEMVER < Version("2.16.0dev0"):
-
-    @rule
-    async def run_debug_oci_command_target(
-        field_set: RunImageBundleCommand,
-    ) -> RunDebugAdapterRequest:
-        raise NotImplementedError("Cannot run OCI commands in debug mode.")
-
-
 def rules():
     rules = [
         *collect_rules(),
+        *RunImageBundleCommand.rules(),
         UnionRule(ReplImplementation, OciRepl),
     ]
-
-    if PANTS_SEMVER >= Version("2.16.0dev0"):
-        rules.extend(RunImageBundleCommand.rules())
-    else:
-        rules.append(UnionRule(RunFieldSet, RunImageBundleCommand))
 
     return rules

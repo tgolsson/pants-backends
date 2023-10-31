@@ -1,6 +1,7 @@
 """
 
 """
+
 from pants_backend_mdbook.util_rules import build, prepare
 
 

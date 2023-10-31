@@ -2,7 +2,6 @@
 
 """
 
-
 from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool

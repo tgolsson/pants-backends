@@ -2,7 +2,6 @@
 
 """
 
-
 from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, PackageFieldSet

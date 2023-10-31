@@ -18,7 +18,6 @@ from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeD
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import OciSubsystem, RuncTool, UmociTool
 from pants_backend_oci.tools.process import FusedProcess
@@ -56,8 +55,6 @@ async def run_in_container(
         rationale="runc",
         search_path=SEARCH_PATHS,
     )
-    if PANTS_SEMVER < Version("2.16.0.dev0"):
-        kwargs["output_directory"] = "bins"
 
     binary_shims = BinaryShimsRequest.for_binaries(
         *tools,
@@ -192,15 +189,9 @@ async def run_in_container(
     """)
     script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
 
-    if PANTS_SEMVER >= Version("2.16.0.dev0"):
-        immutable_input_digests = shims.immutable_input_digests
-        env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
-        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
-
-    else:
-        env = {"PATH": "{chroot}/bins", "XDG_RUNTIME_DIR": "{chroot}/tmp"}
-        immutable_input_digests = None
-        input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest, shims.digest)))
+    immutable_input_digests = shims.immutable_input_digests
+    env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
+    input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
 
     steps = [
         packed_image_process,

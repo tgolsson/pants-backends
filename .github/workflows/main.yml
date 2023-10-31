@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        pants-version: ["2.15.0", "2.16.0", "2.17.0rc1"]
+        pants-version: ["2.16.0", "2.17.0", "2.18.0rc3"]
 
     env:
        PANTS_BACKEND_PACKAGES: '-["pants.backend.experimental.python.lint.ruff"]'
@@ -56,7 +56,7 @@ jobs:
 
     strategy:
       matrix:
-        pants-version: ["2.15.0", "2.16.0", "2.17.0rc1"]
+        pants-version: ["2.16.0", "2.17.0", "2.18.0rc3"]
 
     env:
        PANTS_BACKEND_PACKAGES: '-["pants.backend.experimental.python.lint.ruff"]'
@@ -111,7 +111,7 @@ jobs:
     - name: Run linters on all targets
       run: |
         ./get-pants.sh
-        /home/runner/bin/pants update-build-files --check lint check ::
+        /home/runner/bin/pants update-build-files --check lint ::
 
   validate-tailor:
     runs-on: ubuntu-20.04

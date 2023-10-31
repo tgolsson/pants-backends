@@ -1,4 +1,7 @@
-python_sources(resolve="example-1")
+python_sources(
+    resolve="example-1",
+    interpreter_constraints=[">=3.8,<3.10"],
+)
 
 python_requirements(
     name="reqs",

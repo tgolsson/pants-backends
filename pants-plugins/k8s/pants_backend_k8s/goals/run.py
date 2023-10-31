@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.goals.run import RunDebugAdapterRequest, RunFieldSet, RunRequest
+from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.fs import EMPTY_DIGEST, Digest, MergeDigests
@@ -17,8 +17,6 @@ from pants.engine.target import (
     WrappedTarget,
     WrappedTargetRequest,
 )
-from pants.engine.unions import UnionRule
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_k8s.subsystem import KubernetesTool
 from pants_backend_k8s.target_types import (
@@ -30,9 +28,6 @@ from pants_backend_k8s.target_types import (
     KubernetesTargetBundleDependencies,
     KubernetesTemplateDependency,
 )
-
-if PANTS_SEMVER > Version("2.16.0.dev0"):
-    from pants.core.goals.run import RunInSandboxBehavior
 
 
 @dataclass(frozen=True)
@@ -47,9 +42,7 @@ class KubernetesCommandLineProcessRequest:
 
 class RunKubernetesCommand(RunFieldSet):
     required_fields = (KubernetesClusterField,)
-
-    if PANTS_SEMVER >= Version("2.16.0.dev0"):
-        run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
+    run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
 
 
 @rule
@@ -155,15 +148,6 @@ async def run_kubernetes_command_target(request: RunKubernetesCommand) -> RunReq
     )
 
 
-if PANTS_SEMVER < Version("2.16.0.dev0"):
-
-    @rule
-    async def run_kubernetes_command_target_debug(
-        field_set: RunKubernetesCommand,
-    ) -> RunDebugAdapterRequest:
-        raise NotImplementedError("Cannot run kubernetes commands in debug mode.")
-
-
 @dataclass(frozen=True)
 class KubernetesTargetBundleCommandProcessRequest:
     target: Target
@@ -171,9 +155,7 @@ class KubernetesTargetBundleCommandProcessRequest:
 
 class RunKubernetesTargetBundleCommand(RunFieldSet):
     required_fields = (KubernetesTargetBundleDependencies,)
-
-    if PANTS_SEMVER >= Version("2.16.0.dev0"):
-        run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
+    run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
 
 
 @rule
@@ -193,24 +175,11 @@ async def run_kubernetes_target_bundle_command_target(
     )
 
 
-if PANTS_SEMVER < Version("2.16.0.dev0"):
-
-    @rule
-    async def run_kubernetes_target_bundle_command_debug(
-        field_set: RunKubernetesTargetBundleCommand,
-    ) -> RunDebugAdapterRequest:
-        raise NotImplementedError("Cannot run kubernetes commands in debug mode.")
-
-
 def rules():
     rules = [
         *collect_rules(),
+        *RunKubernetesCommand.rules(),
+        *RunKubernetesTargetBundleCommand.rules(),
     ]
 
-    if PANTS_SEMVER >= Version("2.16.0.dev0"):
-        rules.extend(RunKubernetesCommand.rules())
-        rules.extend(RunKubernetesTargetBundleCommand.rules())
-    else:
-        rules.append(UnionRule(RunFieldSet, RunKubernetesCommand))
-        rules.append(UnionRule(RunFieldSet, RunKubernetesTargetBundleCommand))
     return rules

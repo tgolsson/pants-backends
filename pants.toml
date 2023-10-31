@@ -1,5 +1,5 @@
 [GLOBAL]
-pants_version = "2.16.0"
+pants_version = "2.17.0"
 build_file_prelude_globs = ["examples/macros.py"]
 
 pythonpath = [
@@ -52,15 +52,16 @@ repo_id = "e32e6905-7a7d-405f-82b1-86d2723b0c4d"
 
 [python]
 tailor_pex_binary_targets = true
-interpreter_constraints = [">=3.7,<3.10"]
+interpreter_constraints = ["==3.9.*"]
 enable_resolves = true
 default_resolve = "pants-plugins"
+pip_version = "23.0.1"
 
 [python.resolves]
 pants-plugins = "pants-plugins/pants.lock"
-pants-215 = "pants-plugins/215.lock"
-pants-216 = "pants-plugins/216.lock"
-pants-217 = "pants-plugins/217.lock"
+pants-previous = "pants-plugins/previous.lock"
+pants-current = "pants-plugins/current.lock"
+pants-next = "pants-plugins/next.lock"
 example-1 = "locks/example-1.lock"
 
 
@@ -71,12 +72,16 @@ black = "locks/tools/black.lock"
 
 
 [python.resolves_to_interpreter_constraints]
-pants-plugins = [">=3.7,<3.10"]
-pants-215 = [">=3.7,<3.10"]
-pants-216 = [">=3.7,<3.10"]
-pants-217 = [">=3.7,<3.10"]
+pants-plugins = ["==3.9.*"]
+pants-previous = ["==3.9.*"]
+pants-current = ["==3.9.*"]
+pants-next = ["==3.9.*"]
 
 black = [">=3.9,<3.10"]
+example-1 = [">=3.8,<3.10"]
+
+[python-infer]
+use_rust_parser = true
 
 [black]
 install_from_resolve = "black"
