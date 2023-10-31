@@ -55,6 +55,7 @@ tailor_pex_binary_targets = true
 interpreter_constraints = ["==3.9.*"]
 enable_resolves = true
 default_resolve = "pants-plugins"
+pip_version = "23.1"
 
 [python.resolves]
 pants-plugins = "pants-plugins/pants.lock"

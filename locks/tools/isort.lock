@@ -6,7 +6,7 @@
 // {
 //   "version": 3,
 //   "valid_for_interpreter_constraints": [
-//     "CPython<3.10,>=3.7"
+//     "CPython==3.9.*"
 //   ],
 //   "generated_with_requirements": [
 //     "isort[colors,pyproject]<6.0,>=5.9.3"
@@ -49,26 +49,26 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "ba1d72fb2595a01c7895a5128f9585a5cc4b6d395f1c8d514989b9a7eb2a8746",
-              "url": "https://files.pythonhosted.org/packages/5f/f6/c55db45970fbd14de6ab72082f1b8a143c3a69aa031c1e0dd4b9ecc8d496/isort-5.11.5-py3-none-any.whl"
+              "hash": "f84c2818376e66cf843d497486ea8fed8700b340f308f076c6fb1229dff318b6",
+              "url": "https://files.pythonhosted.org/packages/0a/63/4036ae70eea279c63e2304b91ee0ac182f467f24f86394ecfe726092340b/isort-5.12.0-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "6be1f76a507cb2ecf16c7cf14a37e41609ca082330be4e3436a18ef74add55db",
-              "url": "https://files.pythonhosted.org/packages/67/63/18cc5c2f9084d3f91ce704f2b5c8e17bedd777244e7732c21a31992b0a78/isort-5.11.5.tar.gz"
+              "hash": "8bef7dde241278824a6d83f44a544709b065191b95b6e50894bdc722fcba0504",
+              "url": "https://files.pythonhosted.org/packages/a9/c4/dc00e42c158fc4dda2afebe57d2e948805c06d5169007f1724f0683010a9/isort-5.12.0.tar.gz"
             }
           ],
           "project_name": "isort",
           "requires_dists": [
-            "colorama<0.5.0,>=0.4.3; extra == \"colors\"",
+            "colorama>=0.4.3; extra == \"colors\"",
             "pip-api; extra == \"requirements-deprecated-finder\"",
             "pip-shims>=0.5.2; extra == \"pipfile-deprecated-finder\"",
             "pipreqs; extra == \"pipfile-deprecated-finder\" or extra == \"requirements-deprecated-finder\"",
             "requirementslib; extra == \"pipfile-deprecated-finder\"",
             "setuptools; extra == \"plugins\""
           ],
-          "requires_python": ">=3.7.0",
-          "version": "5.11.5"
+          "requires_python": ">=3.8.0",
+          "version": "5.12.0"
         }
       ],
       "platform_tag": null
@@ -76,13 +76,13 @@
   ],
   "path_mappings": {},
   "pex_version": "2.1.137",
-  "pip_version": "23.1.2",
+  "pip_version": "23.1",
   "prefer_older_binary": false,
   "requirements": [
     "isort[colors,pyproject]<6.0,>=5.9.3"
   ],
   "requires_python": [
-    "<3.10,>=3.7"
+    "==3.9.*"
   ],
   "resolver_version": "pip-2020-resolver",
   "style": "universal",
