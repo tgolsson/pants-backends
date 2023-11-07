@@ -11,8 +11,10 @@ jobs:
       run: |
         from os import environ, sched_getaffinity
 
-        num_cpus = len(sched_getaffinity(0))
+        affinity = sched_getaffinity(0)
+        num_cpus = len(affinity)
         output_file = environ["GITHUB_OUTPUT"]
         with open(output_file, "a", encoding="utf-8") as output_stream:
             output_stream.write(f"count={num_cpus}\n")
+        print("number of cores", affinity, num_cpus)
       shell: python
