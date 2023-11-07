@@ -17,4 +17,5 @@ jobs:
         with open(output_file, "a", encoding="utf-8") as output_stream:
             output_stream.write(f"count={num_cpus}\n")
         print("number of cores", affinity, num_cpus)
+        print(os.cpu_count())
       shell: python
