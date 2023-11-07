@@ -1,3 +1,7 @@
+
+on:
+  pull_request:
+
 steps:
   - name: Get the number of CPUs that the current process has access to.
     id: cpus
