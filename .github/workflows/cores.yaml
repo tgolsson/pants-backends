@@ -3,9 +3,11 @@ on:
   pull_request:
 jobs:
   check_cores:
+    runs-on: ["ubuntu-latest"]
     steps:
     - name: Get the number of CPUs that the current process has access to.
       id: cpus
+
       run: |
         from os import environ, sched_getaffinity
 
