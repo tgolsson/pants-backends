@@ -12,13 +12,39 @@ import logging
 import os
 from dataclasses import dataclass
 
-from pants.core.util_rules.system_binaries import SEARCH_PATHS, TarBinary
+from pants.core.util_rules.system_binaries import TarBinary
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
+from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
+from pants.version import PANTS_SEMVER, Version
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TarEnvironment:
+    env: FrozenDict[str, str]
+
+
+if PANTS_SEMVER >= Version("2.19.0.dev0"):
+    from pants.core.util_rules.system_binaries import SystemBinariesSubsystem
+
+    @rule
+    def tar_environment(
+        system_binaries_subsystem: SystemBinariesSubsystem.EnvironmentAware,
+    ) -> TarEnvironment:
+        env = {"PATH": os.pathsep.join(system_binaries_subsystem.system_binary_paths), "GZIP": "-n"}
+        return TarEnvironment(env=FrozenDict(env))
+
+else:
+    from pants.core.util_rules.system_binaries import SEARCH_PATHS
+
+    @rule
+    def tar_environment() -> TarEnvironment:
+        env = {"PATH": os.pathsep.join(SEARCH_PATHS), "GZIP": "-n"}
+        return TarEnvironment(env=FrozenDict(env))
 
 
 @dataclass(frozen=True)
@@ -45,7 +71,9 @@ class CreateDeterministicDirectoryTar:
 
 
 @rule
-async def tar_directory_process(request: CreateDeterministicDirectoryTar, tar_binary: TarBinary) -> Process:
+async def tar_directory_process(
+    request: CreateDeterministicDirectoryTar, tar_binary: TarBinary, env: TarEnvironment
+) -> Process:
     argv = [
         tar_binary.path,
         "--sort=name",
@@ -65,7 +93,7 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar, tar_bi
     argv.extend(["-cf", request.output_filename, "-C", request.directory, "."])
 
     # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
-    env = {"PATH": os.pathsep.join(SEARCH_PATHS), "GZIP": "-n"}
+    env = {**env.env}
 
     # `tar` requires that the output filename's parent directory exists,so if the caller
     # wants the output in a directory we explicitly create it here.
@@ -86,7 +114,9 @@ async def tar_directory_process(request: CreateDeterministicDirectoryTar, tar_bi
 
 
 @rule(desc="Creating an archive file", level=LogLevel.DEBUG)
-async def create_archive(request: CreateDeterministicTar, tar_binary: TarBinary) -> Digest:
+async def create_archive(
+    request: CreateDeterministicTar, tar_binary: TarBinary, env: TarEnvironment
+) -> Digest:
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.
     # passing a list of filenames into the utilities fixes this.
     FILE_LIST_FILENAME = "__pants_archive_filelist__"
@@ -112,7 +142,7 @@ async def create_archive(request: CreateDeterministicTar, tar_binary: TarBinary)
     ]
 
     # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
-    env = {"PATH": os.pathsep.join(SEARCH_PATHS)}
+    env = {**env.env}
 
     # `tar` requires that the output filename's parent directory exists,so if the caller
     # wants the output in a directory we explicitly create it here.

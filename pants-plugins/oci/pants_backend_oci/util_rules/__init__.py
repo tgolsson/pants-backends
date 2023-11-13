@@ -12,6 +12,7 @@ from pants_backend_oci.util_rules import (
     oci_sha,
     pull_image_bundle,
     run,
+    tools,
     unpack,
 )
 
@@ -32,4 +33,5 @@ def rules():
         *build_image_artifact.rules(),
         *run.rules(),
         *configure.rules(),
+        *tools.rules(),
     ]

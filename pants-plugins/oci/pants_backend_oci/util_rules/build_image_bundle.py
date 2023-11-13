@@ -5,6 +5,7 @@ import datetime
 import os
 from dataclasses import dataclass
 
+from pants.core.util_rules.adhoc_binaries import GunzipBinary
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.fs import Digest, MergeDigests
@@ -22,7 +23,6 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import (
@@ -44,11 +44,6 @@ from pants_backend_oci.util_rules.image_bundle import (
 from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
 from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 from pants_backend_oci.util_rules.run import RunContainerRequest
-
-if PANTS_SEMVER >= Version("2.17.0.dev0"):
-    from pants.core.util_rules.adhoc_binaries import GunzipBinary
-else:
-    from pants.core.util_rules.system_binaries import GunzipBinary
 
 
 @dataclass(frozen=True)

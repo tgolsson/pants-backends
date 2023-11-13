@@ -5,10 +5,8 @@ from textwrap import dedent
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import (
-    SEARCH_PATHS,
     BashBinary,
     BinaryShims,
-    BinaryShimsRequest,
     CatBinary,
     CpBinary,
     MkdirBinary,
@@ -23,6 +21,7 @@ from pants_backend_oci.subsystem import OciSubsystem, RuncTool, UmociTool
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
+from pants_backend_oci.util_rules.tools import RuncToolsRequest
 from pants_backend_oci.util_rules.unpack import (
     RepackedImageBundleRequest,
     UnpackedImageBundleRequest,
@@ -50,45 +49,44 @@ async def run_in_container(
     mkdir: MkdirBinary,
     mv: MvBinary,
 ) -> ProcessResult:
-    tools = ["newuidmap", "newgidmap", "jq", "cp", "ls"]
-    kwargs = dict(
-        rationale="runc",
-        search_path=SEARCH_PATHS,
-    )
-
-    binary_shims = BinaryShimsRequest.for_binaries(
-        *tools,
-        **kwargs,
-    )
     tool, rundir, jq, shims, packed_image_process = await MultiGet(
         Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)),
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(JqBinary, JqBinaryRequest()),
         Get(
             BinaryShims,
-            BinaryShimsRequest,
-            binary_shims,
+            RuncToolsRequest(),
         ),
         Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
     )
 
     shell_command = [f'"{c}"' for c in oci.command_shell]
 
-    uid_mappings = ",\n".join([f"""
+    uid_mappings = ",\n".join(
+        [
+            f"""
         {{
             "containerID": {container_id},
             "hostID": {host_id},
             "size": {size}
         }}
-        """ for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)])
+        """
+            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)
+        ]
+    )
 
-    gid_mappings = ",\n".join([f"""
+    gid_mappings = ",\n".join(
+        [
+            f"""
         {{
             "containerID": {container_id},
             "hostID": {host_id},
             "size": {size}
         }}
-        """ for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)])
+        """
+            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)
+        ]
+    )
 
     command = request.command.replace('"', '\\"')
 
@@ -114,7 +112,8 @@ async def run_in_container(
     rootless = "true" if oci.rootless else "false"
     namespace = f"pants.runc.{request.bundle.digest.fingerprint}"
 
-    script = dedent(f"""
+    script = dedent(
+        f"""
         set -euxo pipefail
         ROOT=`pwd`
 
@@ -186,7 +185,8 @@ async def run_in_container(
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
         `pwd`/{tool.exe} --debug --root runspace --rootless {rootless} run -b unpacked_image {namespace} 0<&-
         cp $ROOT/unpacked_image/config.json.bak $ROOT/unpacked_image/config.json
-    """)
+    """
+    )
     script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
 
     immutable_input_digests = shims.immutable_input_digests

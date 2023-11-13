@@ -10,13 +10,7 @@ from textwrap import dedent
 from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import (
-    SEARCH_PATHS,
-    BinaryShims,
-    BinaryShimsRequest,
-    MkdirBinary,
-    MvBinary,
-)
+from pants.core.util_rules.system_binaries import BinaryShims, MkdirBinary, MvBinary
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
@@ -34,6 +28,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequestWrap,
     ImageBundleRequest,
 )
+from pants_backend_oci.util_rules.tools import RuncToolsRequest
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
 
@@ -71,26 +66,13 @@ async def prepare_run_image_bundle(
     bundle_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
     image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
 
-    # TODO[TSolberg]: This should be handled in the utility rule later.
-    tools = ["newuidmap", "newgidmap", "jq", "cat", "echo", "sh"]
-    kwargs = dict(
-        rationale="runc",
-        search_path=SEARCH_PATHS,
-    )
-
-    binary_shims = BinaryShimsRequest.for_binaries(
-        *tools,
-        **kwargs,
-    )
-
     tool, image, rundir, shims = await MultiGet(
         download_runc_tool,
         image,
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(
             BinaryShims,
-            BinaryShimsRequest,
-            binary_shims,
+            RuncToolsRequest(),
         ),
     )
 
@@ -103,7 +85,9 @@ async def prepare_run_image_bundle(
     )
 
     name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
-    components = [dedent(f"""
+    components = [
+        dedent(
+            f"""
         ROOT=`pwd`
         cat $ROOT/unpacked_image/config.json | jq '
                     .process.terminal = false |
@@ -130,25 +114,35 @@ async def prepare_run_image_bundle(
                     .process.capabilities.ambient = $caps
                 ' > "$ROOT/unpacked_image/config.json.tmp"
             {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-            """)]
+            """
+        )
+    ]
 
     terminal = request.target.get(ImageRunTty).value
     if request.interactive:
         terminal = True
 
-    components.append(dedent(f"""
+    components.append(
+        dedent(
+            f"""
                 jq '
                     .process.terminal = {'true' if terminal else "false"}
                 ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
                 {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-                """))
+                """
+        )
+    )
 
     rootless = "true" if oci.rootless else "false"
     suffix = "" if request.interactive else " 0<&-"
     container = f"pants.runc.{name}"
-    components.append(dedent(f"""
+    components.append(
+        dedent(
+            f"""
             `pwd`/{tool.exe} --root runspace --rootless {rootless} run -b unpacked_image {container}{suffix}
-            """))
+            """
+        )
+    )
     script_digest = await Get(
         Digest, CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
     )
