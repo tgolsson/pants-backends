@@ -65,12 +65,10 @@ class PublishPythonWithSecretPackageFieldSet(PublishFieldSet):
     skip_twine: SkipTwineUploadField
 
     def get_output_data(self) -> PublishOutputData:
-        return PublishOutputData(
-            {
-                "publisher": "twine",
-                **super().get_output_data(),
-            }
-        )
+        return PublishOutputData({
+            "publisher": "twine",
+            **super().get_output_data(),
+        })
 
 
 class PythonDistributionWithSecret(Target):
@@ -119,14 +117,12 @@ async def twine_upload_with_secret(
         skip = f"(no `{request.field_set.repositories.alias}` specified for {request.field_set.address})"
 
     if skip:
-        return PublishProcesses(
-            [
-                PublishPackages(
-                    names=dists,
-                    description=skip,
-                ),
-            ]
-        )
+        return PublishProcesses([
+            PublishPackages(
+                names=dists,
+                description=skip,
+            ),
+        ])
 
     twine_pex, packages_digest, config_files = await MultiGet(
         Get(VenvPex, PexRequest, twine_subsystem.to_pex_request()),

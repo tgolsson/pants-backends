@@ -10,13 +10,7 @@ from textwrap import dedent
 from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import (
-    SEARCH_PATHS,
-    BinaryShims,
-    BinaryShimsRequest,
-    MkdirBinary,
-    MvBinary,
-)
+from pants.core.util_rules.system_binaries import BinaryShims, MkdirBinary, MvBinary
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
@@ -34,6 +28,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequestWrap,
     ImageBundleRequest,
 )
+from pants_backend_oci.util_rules.tools import RuncToolsRequest
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest
 
 
@@ -71,26 +66,13 @@ async def prepare_run_image_bundle(
     bundle_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
     image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
 
-    # TODO[TSolberg]: This should be handled in the utility rule later.
-    tools = ["newuidmap", "newgidmap", "jq", "cat", "echo", "sh"]
-    kwargs = dict(
-        rationale="runc",
-        search_path=SEARCH_PATHS,
-    )
-
-    binary_shims = BinaryShimsRequest.for_binaries(
-        *tools,
-        **kwargs,
-    )
-
     tool, image, rundir, shims = await MultiGet(
         download_runc_tool,
         image,
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(
             BinaryShims,
-            BinaryShimsRequest,
-            binary_shims,
+            RuncToolsRequest(),
         ),
     )
 

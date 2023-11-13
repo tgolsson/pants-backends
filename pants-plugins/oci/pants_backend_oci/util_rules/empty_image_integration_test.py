@@ -28,14 +28,12 @@ def test_package_empty_with_file() -> None:
     }
 
     with setup_tmpdir(build_inputs) as tmpdir:
-        result = run_pants(
-            [
-                "--backend-packages=pants_backend_oci",
-                "--backend-packages=pants.backend.python",
-                "package",
-                f"{tmpdir}/oci:oci",
-            ]
-        )
+        result = run_pants([
+            "--backend-packages=pants_backend_oci",
+            "--backend-packages=pants.backend.python",
+            "package",
+            f"{tmpdir}/oci:oci",
+        ])
 
         result.assert_success()
 

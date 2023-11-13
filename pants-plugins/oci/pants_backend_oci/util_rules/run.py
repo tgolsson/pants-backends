@@ -5,10 +5,8 @@ from textwrap import dedent
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.system_binaries import (
-    SEARCH_PATHS,
     BashBinary,
     BinaryShims,
-    BinaryShimsRequest,
     CatBinary,
     CpBinary,
     MkdirBinary,
@@ -23,6 +21,7 @@ from pants_backend_oci.subsystem import OciSubsystem, RuncTool, UmociTool
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
+from pants_backend_oci.util_rules.tools import RuncToolsRequest
 from pants_backend_oci.util_rules.unpack import (
     RepackedImageBundleRequest,
     UnpackedImageBundleRequest,
@@ -50,24 +49,13 @@ async def run_in_container(
     mkdir: MkdirBinary,
     mv: MvBinary,
 ) -> ProcessResult:
-    tools = ["newuidmap", "newgidmap", "jq", "cp", "ls"]
-    kwargs = dict(
-        rationale="runc",
-        search_path=SEARCH_PATHS,
-    )
-
-    binary_shims = BinaryShimsRequest.for_binaries(
-        *tools,
-        **kwargs,
-    )
     tool, rundir, jq, shims, packed_image_process = await MultiGet(
         Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)),
         Get(Digest, CreateDigest([Directory("runspace")])),
         Get(JqBinary, JqBinaryRequest()),
         Get(
             BinaryShims,
-            BinaryShimsRequest,
-            binary_shims,
+            RuncToolsRequest(),
         ),
         Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
     )

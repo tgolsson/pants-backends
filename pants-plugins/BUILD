@@ -1,9 +1,9 @@
 pants_requirements(name="pants", resolve="pants-plugins")
 
 name_to_constraint = {
-    "pants-previous": ">=2.16.0a0,<2.17.0",
-    "pants-current": ">=2.17.0a0,<2.18.0",
-    "pants-next": "==2.18.0a0",
+    "pants-previous": ">=2.17.0a0,<2.18.0",
+    "pants-current": ">=2.18.0a0,<2.19.0",
+    "pants-next": "==2.19.0a0",
 }
 
 for name, constraint in name_to_constraint.items():
@@ -20,11 +20,9 @@ for name, constraint in name_to_constraint.items():
 
 all_targets = ("pants-plugins", *tuple(name_to_constraint.keys()))
 
-__defaults__(
-    {
-        python_sources: dict(resolve=parametrize(*all_targets)),
-        python_tests: dict(
-            resolve=parametrize(*all_targets[1:]),
-        ),
-    }
-)
+__defaults__({
+    python_sources: dict(resolve=parametrize(*all_targets)),
+    python_tests: dict(
+        resolve=parametrize(*all_targets[1:]),
+    ),
+})

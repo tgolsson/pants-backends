@@ -9,20 +9,14 @@ on:
 permissions:
   contents: read
 
-env:
-  PANTS_PANTSD: False
-
 jobs:
   test:
     runs-on: ubuntu-20.04
 
     strategy:
       matrix:
-        pants-version: ["2.16.0", "2.17.0", "2.18.0rc3"]
+        pants-version: ["2.17.0", "2.18.0", "2.19.0a0"]
 
-    env:
-       PANTS_BACKEND_PACKAGES: '-["pants.backend.experimental.python.lint.ruff"]'
-       PANTS_VERIFY_CONFIG: false
 
     steps:
     - uses: actions/checkout@v3
@@ -56,11 +50,9 @@ jobs:
 
     strategy:
       matrix:
-        pants-version: ["2.16.0", "2.17.0", "2.18.0rc3"]
+        pants-version: ["2.17.0", "2.18.0", "2.19.0a0"]
 
-    env:
-       PANTS_BACKEND_PACKAGES: '-["pants.backend.experimental.python.lint.ruff"]'
-       PANTS_VERIFY_CONFIG: false
+
 
     steps:
     - uses: actions/checkout@v3
