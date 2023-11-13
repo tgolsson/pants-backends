@@ -154,12 +154,10 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     if embedded_pkgs:
         logger.info(f"Setting entrypoint to: {embedded_pkgs[0].artifacts[0].relpath}")
-        config.extend(
-            [
-                "--config.entrypoint",
-                f"/{embedded_pkgs[0].artifacts[0].relpath}",
-            ]
-        )
+        config.extend([
+            "--config.entrypoint",
+            f"/{embedded_pkgs[0].artifacts[0].relpath}",
+        ])
 
     return ImageLayer(
         request.target.address,

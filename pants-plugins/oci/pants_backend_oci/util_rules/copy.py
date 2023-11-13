@@ -57,13 +57,11 @@ async def copy_from_container(
         ),
         Get(
             Digest,
-            CreateDigest(
-                [
-                    FileContent("copy.sh", ";\n".join(copy_list).encode("utf-8")),
-                    Directory("out"),
-                    Directory("runspace"),
-                ]
-            ),
+            CreateDigest([
+                FileContent("copy.sh", ";\n".join(copy_list).encode("utf-8")),
+                Directory("out"),
+                Directory("runspace"),
+            ]),
         ),
     )
 

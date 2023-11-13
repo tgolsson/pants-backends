@@ -62,31 +62,21 @@ async def run_in_container(
 
     shell_command = [f'"{c}"' for c in oci.command_shell]
 
-    uid_mappings = ",\n".join(
-        [
-            f"""
+    uid_mappings = ",\n".join([f"""
         {{
             "containerID": {container_id},
             "hostID": {host_id},
             "size": {size}
         }}
-        """
-            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)
-        ]
-    )
+        """ for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)])
 
-    gid_mappings = ",\n".join(
-        [
-            f"""
+    gid_mappings = ",\n".join([f"""
         {{
             "containerID": {container_id},
             "hostID": {host_id},
             "size": {size}
         }}
-        """
-            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)
-        ]
-    )
+        """ for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)])
 
     command = request.command.replace('"', '\\"')
 
@@ -112,8 +102,7 @@ async def run_in_container(
     rootless = "true" if oci.rootless else "false"
     namespace = f"pants.runc.{request.bundle.digest.fingerprint}"
 
-    script = dedent(
-        f"""
+    script = dedent(f"""
         set -euxo pipefail
         ROOT=`pwd`
 
@@ -185,8 +174,7 @@ async def run_in_container(
         {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
         `pwd`/{tool.exe} --debug --root runspace --rootless {rootless} run -b unpacked_image {namespace} 0<&-
         cp $ROOT/unpacked_image/config.json.bak $ROOT/unpacked_image/config.json
-    """
-    )
+    """)
     script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
 
     immutable_input_digests = shims.immutable_input_digests

@@ -144,12 +144,10 @@ async def build_image_artifact(
 
         config = []
         for value in request.target.environment.value:
-            config.extend(
-                [
-                    "--config.env",
-                    value,
-                ]
-            )
+            config.extend([
+                "--config.env",
+                value,
+            ])
 
         output_digest = base_digest
         image_with_config = await Get(

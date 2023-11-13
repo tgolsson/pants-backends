@@ -2,6 +2,7 @@
 Exceptions related to secret management.
 """
 
+
 class MissingSecret(Exception):
     pass
 

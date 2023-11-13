@@ -175,12 +175,10 @@ async def build_oci_bundle_package(
     ]
     if request.target.environment.value:
         for value in request.target.environment.value:
-            config.extend(
-                [
-                    "--config.env",
-                    value,
-                ]
-            )
+            config.extend([
+                "--config.env",
+                value,
+            ])
 
     if request.target.args.value:
         for arg in request.target.args.value:

@@ -42,12 +42,10 @@ class PublishImageFieldSet(PublishFieldSet):
     tag: ImageTag
 
     def get_output_data(self) -> PublishOutputData:
-        return PublishOutputData(
-            {
-                "publisher": "skopeo",
-                **super().get_output_data(),
-            }
-        )
+        return PublishOutputData({
+            "publisher": "skopeo",
+            **super().get_output_data(),
+        })
 
 
 @dataclass(frozen=True)

@@ -43,10 +43,8 @@ from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
 
 class PythonMain(StringField):
     alias = "main"
-    help = softwrap(
-        """ The python main to use. If not provided, the rule will
-        attempt to derive it from the dependencies.  """
-    )
+    help = softwrap(""" The python main to use. If not provided, the rule will
+        attempt to derive it from the dependencies.  """)
 
 
 class PythonImageLayers(Dependencies):
