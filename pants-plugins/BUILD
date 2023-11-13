@@ -20,11 +20,9 @@ for name, constraint in name_to_constraint.items():
 
 all_targets = ("pants-plugins", *tuple(name_to_constraint.keys()))
 
-__defaults__(
-    {
-        python_sources: dict(resolve=parametrize(*all_targets)),
-        python_tests: dict(
-            resolve=parametrize(*all_targets[1:]),
-        ),
-    }
-)
+__defaults__({
+    python_sources: dict(resolve=parametrize(*all_targets)),
+    python_tests: dict(
+        resolve=parametrize(*all_targets[1:]),
+    ),
+})
