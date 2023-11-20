@@ -1,7 +1,7 @@
 [project]
 name = "pants_backend_kustomize"
 description = "A Kustomize plugin for the Pants build system"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
