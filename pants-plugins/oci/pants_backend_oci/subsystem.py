@@ -71,6 +71,7 @@ class UmociTool(ExternalTool):
 
     def generate_url(self, plat: Platform) -> str:
         if self.version == "nightly":
+            repo = "https://github.com/tgolsson/umoci-binary"
             platform_mapping = {
                 "linux_x86_64": "linux-amd64",
                 "linux_arm64": "linux-arm64",
@@ -78,14 +79,19 @@ class UmociTool(ExternalTool):
                 "macos_arm64": "darwin-arm64",
             }
             plat_str = platform_mapping[plat.value]
+            binary = f"umoci-{plat_str}"
+            version = f"commit-{self.nightly_commit}"
 
-            return f"https://github.com/tgolsson/umoci-binary/releases/download/commit-{self.nightly_commit}/umoci-{plat_str}"
+        else:
+            repo = "https://github.com/opencontainers/umoci"
+            platform_mapping = {
+                "linux_x86_64": "amd64",
+            }
+            plat_str = platform_mapping[plat.value]
+            binary = f"umoci.{plat_str}"
+            version = self.version
 
-        platform_mapping = {
-            "linux_x86_64": "amd64",
-        }
-        plat_str = platform_mapping[plat.value]
-        return f"https://github.com/opencontainers/umoci/releases/download/{self.version}/umoci.{plat_str}"
+        return f"{repo}/releases/download/{version}/{binary}"
 
     def generate_exe(self, plat: Platform) -> str:
         if self.version == "nightly":
