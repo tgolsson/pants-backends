@@ -4,11 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## [0.3.0] - 2022-11-19
+## [0.3.0] - 2023-11-19
 
 - Target pants version is now 2.18.0
 
-## [0.2.0] - 2022-06-18
+## [0.2.0] - 2023-06-18
 
 * Target pants version is now 2.16.0, with support for 2.15.0.
 
