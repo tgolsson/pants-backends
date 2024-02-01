@@ -1,13 +1,7 @@
 from __future__ import annotations
 
 from pants.engine.rules import collect_rules
-from pants.engine.target import (
-    COMMON_TARGET_FIELDS,
-    Dependencies,
-    MultipleSourcesField,
-    SingleSourceField,
-    Target,
-)
+from pants.engine.target import COMMON_TARGET_FIELDS, Dependencies, MultipleSourcesField, Target
 from pants.util.strutil import softwrap
 
 
@@ -27,11 +21,9 @@ class KustomizeSourcesField(MultipleSourcesField):
     uses_source_roots = False
 
     default = ["*.yaml", "*.yml"]
-    help = softwrap(
-        """
+    help = softwrap("""
         A group of files used in a kustomize target.
-        """
-    )
+        """)
 
 
 class KustomizeTarget(Target):
@@ -41,8 +33,7 @@ class KustomizeTarget(Target):
         KustomizeDependenciesField,
         KustomizeSourcesField,
     )
-    help = softwrap(
-        """A target for converting a kustomization.yaml and dependencies into a YAML document for
+    help = softwrap("""A target for converting a kustomization.yaml and dependencies into a YAML document for
         use with kubectl.
 
         Example BUILD file:
@@ -53,8 +44,7 @@ class KustomizeTarget(Target):
                 dependencies=[],
                 sources=["namespace.yaml", "deployment.yaml", "service.yaml"],
             )
-        """
-    )
+        """)
 
 
 def targets():
