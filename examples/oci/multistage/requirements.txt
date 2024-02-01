@@ -1,1 +1,1 @@
-tensorflow-cpu>=2.11
+requests>=2.31

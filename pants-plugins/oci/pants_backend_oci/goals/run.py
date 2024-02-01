@@ -141,19 +141,17 @@ async def prepare_run_image_bundle(
 
     return await Get(
         Process,
-        FusedProcess(
-            (
-                set_cmd_process,
-                packed_image_process,
-                Process(
-                    ("/usr/bin/sh", "{chroot}/run.sh", "$*"),
-                    description=f"Running {request.target}",
-                    input_digest=input_digest,
-                    immutable_input_digests=immutable_input_digests,
-                    env=env,
-                ),
-            )
-        ),
+        FusedProcess((
+            set_cmd_process,
+            packed_image_process,
+            Process(
+                ("/usr/bin/sh", "{chroot}/run.sh", "$*"),
+                description=f"Running {request.target}",
+                input_digest=input_digest,
+                immutable_input_digests=immutable_input_digests,
+                env=env,
+            ),
+        )),
     )
 
 

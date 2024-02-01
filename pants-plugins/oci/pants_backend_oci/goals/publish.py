@@ -105,16 +105,14 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
         ),
     )
 
-    return PublishProcesses(
-        (
-            PublishPackages(
-                names=(f"{metadata.sha}",),
-                process=InteractiveProcess.from_process(process),
-                description=process.description,
-                data=PublishOutputData({"repository": process.description}),
-            ),
-        )
-    )
+    return PublishProcesses((
+        PublishPackages(
+            names=(f"{metadata.sha}",),
+            process=InteractiveProcess.from_process(process),
+            description=process.description,
+            data=PublishOutputData({"repository": process.description}),
+        ),
+    ))
 
 
 def rules():
