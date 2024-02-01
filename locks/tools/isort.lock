@@ -49,33 +49,28 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "f84c2818376e66cf843d497486ea8fed8700b340f308f076c6fb1229dff318b6",
-              "url": "https://files.pythonhosted.org/packages/0a/63/4036ae70eea279c63e2304b91ee0ac182f467f24f86394ecfe726092340b/isort-5.12.0-py3-none-any.whl"
+              "hash": "8ca5e72a8d85860d5a3fa69b8745237f2939afe12dbf656afbcb47fe72d947a6",
+              "url": "https://files.pythonhosted.org/packages/d1/b3/8def84f539e7d2289a02f0524b944b15d7c75dab7628bedf1c4f0992029c/isort-5.13.2-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "8bef7dde241278824a6d83f44a544709b065191b95b6e50894bdc722fcba0504",
-              "url": "https://files.pythonhosted.org/packages/a9/c4/dc00e42c158fc4dda2afebe57d2e948805c06d5169007f1724f0683010a9/isort-5.12.0.tar.gz"
+              "hash": "48fdfcb9face5d58a4f6dde2e72a1fb8dcaf8ab26f95ab49fab84c2ddefb0109",
+              "url": "https://files.pythonhosted.org/packages/87/f9/c1eb8635a24e87ade2efce21e3ce8cd6b8630bb685ddc9cdaca1349b2eb5/isort-5.13.2.tar.gz"
             }
           ],
           "project_name": "isort",
           "requires_dists": [
-            "colorama>=0.4.3; extra == \"colors\"",
-            "pip-api; extra == \"requirements-deprecated-finder\"",
-            "pip-shims>=0.5.2; extra == \"pipfile-deprecated-finder\"",
-            "pipreqs; extra == \"pipfile-deprecated-finder\" or extra == \"requirements-deprecated-finder\"",
-            "requirementslib; extra == \"pipfile-deprecated-finder\"",
-            "setuptools; extra == \"plugins\""
+            "colorama>=0.4.6; extra == \"colors\""
           ],
           "requires_python": ">=3.8.0",
-          "version": "5.12.0"
+          "version": "5.13.2"
         }
       ],
       "platform_tag": null
     }
   ],
   "path_mappings": {},
-  "pex_version": "2.1.137",
+  "pex_version": "2.1.148",
   "pip_version": "23.0.1",
   "prefer_older_binary": false,
   "requirements": [

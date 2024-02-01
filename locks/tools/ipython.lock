@@ -240,13 +240,13 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "0b48a55dcb3c05f3329815901ea4fc1537514d6ba867a152b581d69ae3710937",
-              "url": "https://files.pythonhosted.org/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl"
+              "hash": "7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523",
+              "url": "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "fc65a43959d153d0114afe13997d439c22823a27cefceb5ff35c2178c6784c0c",
-              "url": "https://files.pythonhosted.org/packages/e5/9b/ff402e0e930e70467a7178abb7c128709a30dfb22d8777c043e501bc1b10/pexpect-4.8.0.tar.gz"
+              "hash": "ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f",
+              "url": "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz"
             }
           ],
           "project_name": "pexpect",
@@ -254,7 +254,7 @@
             "ptyprocess>=0.5"
           ],
           "requires_python": null,
-          "version": "4.8.0"
+          "version": "4.9.0"
         },
         {
           "artifacts": [
@@ -280,13 +280,13 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "99ba3dfb23d5b5af89712f89e60a5f3d9b8b67a9482ca377c5771d0e9047a34b",
-              "url": "https://files.pythonhosted.org/packages/ed/29/cd63ff872dfc213e1cd8131f8060262db184b975868cef33302f44616c3e/prompt_toolkit-3.0.40-py3-none-any.whl"
+              "hash": "a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6",
+              "url": "https://files.pythonhosted.org/packages/ee/fd/ca7bf3869e7caa7a037e23078539467b433a4e01eebd93f77180ab927766/prompt_toolkit-3.0.43-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "a371c06bb1d66cd499fecd708e50c0b6ae00acba9822ba33c586e2f16d1b739e",
-              "url": "https://files.pythonhosted.org/packages/99/ce/172e474a87241a69baad1ce46bc8f31eae590a770cb138b9b73812c8234d/prompt_toolkit-3.0.40.tar.gz"
+              "hash": "3527b7af26106cbc65a040bcc84839a3566ec1b051bb0bfe953631e704b0ff7d",
+              "url": "https://files.pythonhosted.org/packages/cc/c6/25b6a3d5cd295304de1e32c9edbcf319a52e965b339629d37d42bb7126ca/prompt_toolkit-3.0.43.tar.gz"
             }
           ],
           "project_name": "prompt-toolkit",
@@ -294,7 +294,7 @@
             "wcwidth"
           ],
           "requires_python": ">=3.7.0",
-          "version": "3.0.40"
+          "version": "3.0.43"
         },
         {
           "artifacts": [
@@ -318,33 +318,34 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "13fc09fa63bc8d8671a6d247e1eb303c4b343eaee81d861f3404db2935653692",
-              "url": "https://files.pythonhosted.org/packages/43/88/29adf0b44ba6ac85045e63734ae0997d3c58d8b1a91c914d240828d0d73d/Pygments-2.16.1-py3-none-any.whl"
+              "hash": "b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c",
+              "url": "https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "1daff0494820c69bc8941e407aa20f577374ee88364ee10a98fdbe0aece96e29",
-              "url": "https://files.pythonhosted.org/packages/d6/f7/4d461ddf9c2bcd6a4d7b2b139267ca32a69439387cc1f02a924ff8883825/Pygments-2.16.1.tar.gz"
+              "hash": "da46cec9fd2de5be3a8a784f434e4c4ab670b4ff54d605c4c2717e9d49c4c367",
+              "url": "https://files.pythonhosted.org/packages/55/59/8bccf4157baf25e4aa5a0bb7fa3ba8600907de105ebc22b0c78cfbf6f565/pygments-2.17.2.tar.gz"
             }
           ],
           "project_name": "pygments",
           "requires_dists": [
+            "colorama>=0.4.6; extra == \"windows-terminal\"",
             "importlib-metadata; python_version < \"3.8\" and extra == \"plugins\""
           ],
           "requires_python": ">=3.7",
-          "version": "2.16.1"
+          "version": "2.17.2"
         },
         {
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a",
-              "url": "https://files.pythonhosted.org/packages/bb/26/7945080113158354380a12ce26873dd6c1ebd88d47f5bc24e2c5bb38c16a/setuptools-68.2.2-py3-none-any.whl"
+              "hash": "385eb4edd9c9d5c17540511303e39a147ce2fc04bc55289c322b9e5904fe2c05",
+              "url": "https://files.pythonhosted.org/packages/55/3a/5121b58b578a598b269537e09a316ad2a94fdd561a2c6eb75cd68578cc6b/setuptools-69.0.3-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "4ac1475276d2f1c48684874089fefcd83bd7162ddaafb81fac866ba0db282a87",
-              "url": "https://files.pythonhosted.org/packages/ef/cc/93f7213b2ab5ed383f98ce8020e632ef256b406b8569606c3f160ed8e1c9/setuptools-68.2.2.tar.gz"
+              "hash": "be1af57fc409f93647f2e8e4573a142ed38724b8cdd389706a867bb4efcf1e78",
+              "url": "https://files.pythonhosted.org/packages/fc/c9/b146ca195403e0182a374e0ea4dbc69136bad3cd55bc293df496d625d0f7/setuptools-69.0.3.tar.gz"
             }
           ],
           "project_name": "setuptools",
@@ -381,11 +382,11 @@
             "pytest>=6; extra == \"testing\"",
             "rst.linker>=1.9; extra == \"docs\"",
             "sphinx-favicon; extra == \"docs\"",
-            "sphinx-hoverxref<2; extra == \"docs\"",
             "sphinx-inline-tabs; extra == \"docs\"",
             "sphinx-lint; extra == \"docs\"",
             "sphinx-notfound-page<2,>=1; extra == \"docs\"",
             "sphinx-reredirects; extra == \"docs\"",
+            "sphinx<7.2.5; extra == \"docs\"",
             "sphinx>=3.5; extra == \"docs\"",
             "sphinxcontrib-towncrier; extra == \"docs\"",
             "tomli-w>=1.0.0; extra == \"testing\"",
@@ -396,25 +397,25 @@
             "wheel; extra == \"testing-integration\""
           ],
           "requires_python": ">=3.8",
-          "version": "68.2.2"
+          "version": "69.0.3"
         },
         {
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "baf991e61542da48fe8aef8b779a9ea0aa38d8a54166ee250d5af5ecf4486619",
-              "url": "https://files.pythonhosted.org/packages/ed/fd/cfc0d27ca11f3dd12b2a90d06875d8bfb532ef40ce67be4066d10807f4aa/traitlets-5.13.0-py3-none-any.whl"
+              "hash": "2e5a030e6eff91737c643231bfcf04a65b0132078dad75e4936700b213652e74",
+              "url": "https://files.pythonhosted.org/packages/45/34/5dc77fdc7bb4bd198317eea5679edf9cc0a186438b5b19dbb9062fb0f4d5/traitlets-5.14.1-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "9b232b9430c8f57288c1024b34a8f0251ddcc47268927367a0dd3eeaca40deb5",
-              "url": "https://files.pythonhosted.org/packages/5a/0b/b825ac58e20a6fef55c94ba9c7c96f1777f9a3b7e34b3b43b6d54185ec2a/traitlets-5.13.0.tar.gz"
+              "hash": "8585105b371a04b8316a43d5ce29c098575c2e477850b62b848b964f1444527e",
+              "url": "https://files.pythonhosted.org/packages/f1/b9/19206da568095bbf2e57f9f7f7cb6b3b2af2af2670f8c83c23a53d6c00cd/traitlets-5.14.1.tar.gz"
             }
           ],
           "project_name": "traitlets",
           "requires_dists": [
             "argcomplete>=3.0.3; extra == \"test\"",
-            "mypy>=1.6.0; extra == \"test\"",
+            "mypy>=1.7.0; extra == \"test\"",
             "myst-parser; extra == \"docs\"",
             "pre-commit; extra == \"test\"",
             "pydata-sphinx-theme; extra == \"docs\"",
@@ -424,19 +425,19 @@
             "sphinx; extra == \"docs\""
           ],
           "requires_python": ">=3.8",
-          "version": "5.13.0"
+          "version": "5.14.1"
         },
         {
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "9a929bd8380f6cd9571a968a9c8f4353ca58d7cd812a4822bba831f8d685b223",
-              "url": "https://files.pythonhosted.org/packages/19/0b/00728863778b14ececfc97e40850fd71529b6a1695907981cc3fdc085ba6/wcwidth-0.2.9-py2.py3-none-any.whl"
+              "hash": "3da69048e4540d84af32131829ff948f1e022c1c6bdb8d6102117aac784f6859",
+              "url": "https://files.pythonhosted.org/packages/fd/84/fd2ba7aafacbad3c4201d395674fc6348826569da3c0937e75505ead3528/wcwidth-0.2.13-py2.py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "a675d1a4a2d24ef67096a04b85b02deeecd8e226f57b5e3a72dbb9ed99d27da8",
-              "url": "https://files.pythonhosted.org/packages/a6/ad/428bc4ff924e66365c96994873e09a17bb5e8a1228be6e8d185bc2a11de9/wcwidth-0.2.9.tar.gz"
+              "hash": "72ea0c06399eb286d978fdedb6923a9eb47e1c486ce63e9b4e64fc18303972b5",
+              "url": "https://files.pythonhosted.org/packages/6c/63/53559446a878410fc5a5974feb13d31d78d752eb18aeba59c7fef1af7598/wcwidth-0.2.13.tar.gz"
             }
           ],
           "project_name": "wcwidth",
@@ -444,14 +445,14 @@
             "backports.functools-lru-cache>=1.2.1; python_version < \"3.2\""
           ],
           "requires_python": null,
-          "version": "0.2.9"
+          "version": "0.2.13"
         }
       ],
       "platform_tag": null
     }
   ],
   "path_mappings": {},
-  "pex_version": "2.1.137",
+  "pex_version": "2.1.148",
   "pip_version": "23.0.1",
   "prefer_older_binary": false,
   "requirements": [
