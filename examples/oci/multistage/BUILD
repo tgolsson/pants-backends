@@ -1,6 +1,6 @@
 python_sources(
     resolve="example-1",
-    interpreter_constraints=[">=3.8,<3.10"],
+    interpreter_constraints=[">=3.9,<3.10"],
 )
 
 python_requirements(
@@ -18,7 +18,7 @@ pex_binary(
     include_sources=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.8,<3.10"],
+    interpreter_constraints=[">=3.9,<3.10"],
 )
 
 oci_build_layer(
@@ -40,7 +40,7 @@ pex_binary(
     include_requirements=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.8,<3.10"],
+    interpreter_constraints=[">=3.9,<3.10"],
 )
 
 oci_build_layer(

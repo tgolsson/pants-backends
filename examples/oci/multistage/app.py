@@ -2,11 +2,11 @@
 
 """
 
-import tensorflow
+import requests
 
 
 def _run():
-    print("Tensorflow version:", tensorflow.__version__)
+    print("Requests version:", requests.__version__)
 
 
 if __name__ == "__main__":
