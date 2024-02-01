@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
+from pants.option.option_types import BoolOption
+from pants.util.strutil import softwrap
 
 
 class KustomizeTool(ExternalTool):
@@ -15,6 +17,12 @@ class KustomizeTool(ExternalTool):
         "v4.5.7|linux_arm64 |65665b39297cc73c13918f05bbe8450d17556f0acd16242a339271e14861df67|5291095",
         "v4.5.7|linux_x86_64|701e3c4bfa14e4c520d481fdf7131f902531bfc002cb5062dcf31263a09c70c9|5757484",
     ]
+
+    tailor = BoolOption(
+        default=True,
+        help=softwrap(""" If true, add `kustomization` targets with the `tailor` goal."""),
+        advanced=True,
+    )
 
     def generate_url(self, plat: Platform) -> str:
         platform_mapping = {
