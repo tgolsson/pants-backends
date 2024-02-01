@@ -1,13 +1,7 @@
 from __future__ import annotations
 
 from pants.engine.rules import collect_rules
-from pants.engine.target import (
-    COMMON_TARGET_FIELDS,
-    Dependencies,
-    MultipleSourcesField,
-    SingleSourceField,
-    Target,
-)
+from pants.engine.target import COMMON_TARGET_FIELDS, Dependencies, MultipleSourcesField, Target
 from pants.util.strutil import softwrap
 
 
@@ -20,25 +14,13 @@ class KustomizeDependenciesField(Dependencies):
     pass
 
 
-class KustomizeSourceField(SingleSourceField):
-    """A file included in a kustomize run. Likely a .yml or .yaml, but could also be other artifacts
-    consumed by secret/cm generators."""
-
-    expected_file_extensions = (".yaml", ".yml")
-    uses_source_roots = False
-
-    help = softwrap("""
-        A source file included in a kustomize run. Most likely this'll be other .yaml or .yml files,
-        but any other resource that can be put into Kubernetes is valid.
-        """)
-
-
 class KustomizeSourcesField(MultipleSourcesField):
     """A set of files feeding into kustomize."""
 
     alias = "sources"
     uses_source_roots = False
 
+    default = ["*.yaml", "*.yml"]
     help = softwrap("""
         A group of files used in a kustomize target.
         """)
