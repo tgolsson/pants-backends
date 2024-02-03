@@ -7,9 +7,57 @@ from pants.engine.target import (
     Dependencies,
     SingleSourceField,
     StringField,
+    StringSequenceField,
     Target,
 )
 from pants.util.strutil import softwrap
+
+
+class KubeconfigClusterField()
+class KubeconfigSourceField(SingleSourceField):
+    alias = "config_file"
+    default = None
+    help = softwrap("""The kubeconfig to use.""")
+
+
+class KubeconfigHostMarker(StringField):
+    alias = "_kubeconfig_marker"
+    default = None
+    help = softwrap("""Marker field.""")
+
+
+class ExtraBinariesField(StringSequenceField):
+    alias = "extra_binaries"
+    default = []
+
+    help = softwrap(
+        """
+        Extra binaries to include in the sandbox. Useful if the kubectl command needs any authentication tools for example.
+        """
+    )
+
+
+class HostKubeConfig(Target):
+    alias = "host_kubeconfig"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        KubeconfigHostMarker,
+        ExtraBinariesField,
+    )
+    help = "Will retrieve the Host kubeconfig file and expose to the sandbox."
+
+
+class KubeConfig(Target):
+    alias = "kubeconfig"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        KubeconfigSourceField,
+        ExtraBinariesField,
+    )
+
+    help = softwrap(
+        """Reads the kube config file and exposes it to the sandbox. If no config file is provided; the default config file will be used."""
+    )
 
 
 class KubernetesSourceField(SingleSourceField):
@@ -46,16 +94,20 @@ class KubernetesTemplateDependency(Dependencies):
 
 class KubernetesClusterField(StringField):
     alias = "cluster"
-    help = softwrap("""
+    help = softwrap(
+        """
         The target cluster/context to run on. If not provided; the command cannot be ran.
-        """)
+        """
+    )
 
 
 class KubernetesKindField(StringField):
     alias = "kind"
-    help = softwrap("""
+    help = softwrap(
+        """
         A descriptor of the kinds included.
-        """)
+        """
+    )
 
 
 class KubernetesTarget(Target):
