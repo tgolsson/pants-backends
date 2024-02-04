@@ -170,7 +170,13 @@ async def get_kubeconfig_file(request: HostKubeconfigRequest) -> KubeconfigRespo
     if not result.found:
         raise ValueError("Failed to locate kubeconfig file on the host.")
 
-    return KubeconfigResponse(path=result.path)
+    return KubeconfigResponse(
+        path=result.path,
+        context=request.target.context.value,
+        cluster=request.target.cluster.value,
+        namespace=request.target.namespace.value,
+        user=request.target.user.value,
+    )
 
 
 @dataclass(frozen=True)
@@ -208,7 +214,14 @@ async def load_kubconfig_file(request: FileKubeconfigRequest) -> KubeconfigRespo
     if len(sources.snapshot.files) > 1:
         raise ValueError("Kubeconfig source must be a single file")
 
-    return KubeconfigResponse(path=sources.snapshot.files[0], digest=sources.snapshot.digest)
+    return KubeconfigResponse(
+        path=sources.snapshot.files[0],
+        digest=sources.snapshot.digest,
+        context=request.target.context.value,
+        cluster=request.target.cluster.value,
+        namespace=request.target.namespace.value,
+        user=request.target.user.value,
+    )
 
 
 def rules():

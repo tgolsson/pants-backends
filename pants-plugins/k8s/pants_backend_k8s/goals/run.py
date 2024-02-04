@@ -154,7 +154,7 @@ async def prepare_kubernetes_command_process(
                 enable_codegen=True,
             ),
         ),
-        Get(KubeconfigResponse, HostKubeconfigRequest, kubeconfig_request.request),
+        Get(KubeconfigResponse, KubeconfigRequest, kubeconfig_request.request),
         download_kubernetes_get,
     )
 
@@ -190,6 +190,9 @@ async def prepare_kubernetes_command_process(
     if kubernetes_command[KubernetesUserField].value:
         args["--user"] = kubeconfig.user
 
+    print(kubeconfig.path)
+    args["--kubeconfig"] = kubeconfig.path
+
     flat = [item for pair in args.items() for item in pair]
 
     command = (
@@ -197,9 +200,9 @@ async def prepare_kubernetes_command_process(
         kubernetes_command[KubernetesCommandField].value,
         "-f",
         f"{{chroot}}/{target_file}",
-        *args,
+        *flat,
     )
-    print(command)
+
     return Process(
         command,
         description=f"Running {kubernetes_command.alias} {kubernetes_command.address}",

@@ -1,7 +1,6 @@
 host_kubeconfig(
     name="config",
     context="admin@husarvagen",
-    namespace="default",
 )
 
 k8s_source(
