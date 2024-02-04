@@ -15,38 +15,52 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_k8s.target_types import (
+    KubeconfigDependencyField,
     KubernetesClusterField,
     KubernetesCommandField,
+    KubernetesContextField,
     KubernetesKindField,
     KubernetesNamespaceField,
     KubernetesTarget,
     KubernetesTargetBundle,
     KubernetesTargetBundleDependencies,
     KubernetesTemplateDependency,
+    KubernetesUserField,
 )
 
 
 class KubernetesTargetGenerator(TargetGenerator):
     alias = "k8s_object"
-    help = softwrap("""
+    help = softwrap(
+        """
         Generate `kubernetes` targets with all specific commands.
-        """)
+        """
+    )
     generated_target_cls = KubernetesTarget
     core_fields = (
         *COMMON_TARGET_FIELDS,
         KubernetesTemplateDependency,
         KubernetesKindField,
-        KubernetesClusterField,
         KubernetesCommandField,
+        KubeconfigDependencyField,
+        KubernetesUserField,
         KubernetesNamespaceField,
+        KubernetesClusterField,
+        KubernetesContextField,
     )
     copied_fields = (
         *COMMON_TARGET_FIELDS,
         KubernetesKindField,
-        KubernetesClusterField,
+        KubernetesUserField,
         KubernetesNamespaceField,
+        KubernetesClusterField,
+        KubernetesContextField,
     )
-    moved_fields = (KubernetesCommandField, KubernetesTemplateDependency)
+    moved_fields = (
+        KubernetesCommandField,
+        KubernetesTemplateDependency,
+        KubeconfigDependencyField,
+    )
 
 
 class GenerateFromKubernetesRequest(GenerateTargetsRequest):
@@ -64,6 +78,7 @@ def generate_from_k8s_object(
             {
                 KubernetesCommandField.alias: command,
                 KubernetesTemplateDependency.alias: request.template["template"],
+                KubeconfigDependencyField.alias: request.template["kubeconfig"],
                 **request.template,
             },
             request.template_address.create_generated(command),
@@ -82,9 +97,11 @@ class KubernetesTargetBundleCommandProcessRequest:
 
 class KubernetesTargetBundleGenerator(TargetGenerator):
     alias = "k8s_objects"
-    help = softwrap("""
+    help = softwrap(
+        """
         Generate `kubernetes` targets with all specific commands.
-        """)
+        """
+    )
     generated_target_cls = ShellCommandRunTarget
     core_fields = (
         *COMMON_TARGET_FIELDS,
@@ -124,7 +141,9 @@ async def generate_from_k8s_objects(
             union_membership,
         )
 
-    result = [await create_tgt(c) for c in ("apply", "describe", "delete", "get", "replace", "create")]
+    result = [
+        await create_tgt(c) for c in ("apply", "describe", "delete", "get", "replace", "create")
+    ]
 
     return GeneratedTargets(generator, result)
 

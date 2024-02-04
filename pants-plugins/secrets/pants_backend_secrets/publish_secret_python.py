@@ -49,7 +49,9 @@ from pants_backend_secrets.secret_request import (
 class PublishSecretsField(SecretsField):
     alias = "repo_secrets"
 
-    help = softwrap("Dictionary with all secrets to request. Each key should match a repository name.")
+    help = softwrap(
+        "Dictionary with all secrets to request. Each key should match a repository name."
+    )
 
 
 class PublishPythonWithSecretPackageRequest(PublishPythonPackageRequest):
@@ -65,10 +67,12 @@ class PublishPythonWithSecretPackageFieldSet(PublishFieldSet):
     skip_twine: SkipTwineUploadField
 
     def get_output_data(self) -> PublishOutputData:
-        return PublishOutputData({
-            "publisher": "twine",
-            **super().get_output_data(),
-        })
+        return PublishOutputData(
+            {
+                "publisher": "twine",
+                **super().get_output_data(),
+            }
+        )
 
 
 class PythonDistributionWithSecret(Target):
@@ -88,10 +92,12 @@ class PythonDistributionWithSecret(Target):
         LongDescriptionPathField,
         PublishSecretsField,
     )
-    help = softwrap(f"""
+    help = softwrap(
+        f"""
         A publishable Python setuptools distribution (e.g. an sdist or wheel).
         See {doc_url('python-distributions')}.
-        """)
+        """
+    )
 
 
 @rule
@@ -101,7 +107,10 @@ async def twine_upload_with_secret(
     global_options: GlobalOptions,
 ) -> PublishProcesses:
     dists = tuple(
-        artifact.relpath for pkg in request.packages for artifact in pkg.artifacts if artifact.relpath
+        artifact.relpath
+        for pkg in request.packages
+        for artifact in pkg.artifacts
+        if artifact.relpath
     )
 
     if twine_subsystem.skip or not dists:
@@ -117,12 +126,14 @@ async def twine_upload_with_secret(
         skip = f"(no `{request.field_set.repositories.alias}` specified for {request.field_set.address})"
 
     if skip:
-        return PublishProcesses([
-            PublishPackages(
-                names=dists,
-                description=skip,
-            ),
-        ])
+        return PublishProcesses(
+            [
+                PublishPackages(
+                    names=dists,
+                    description=skip,
+                ),
+            ]
+        )
 
     twine_pex, packages_digest, config_files = await MultiGet(
         Get(VenvPex, PexRequest, twine_subsystem.to_pex_request()),
@@ -153,7 +164,9 @@ async def twine_upload_with_secret(
         )
         wrapped_target = await Get(
             WrappedTarget,
-            WrappedTargetRequest(secret_address[0], description_of_origin="twine_upload_with_secret"),
+            WrappedTargetRequest(
+                secret_address[0], description_of_origin="twine_upload_with_secret"
+            ),
         )
 
         secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
@@ -163,7 +176,9 @@ async def twine_upload_with_secret(
                 f"type `{wrapped_target.target.alias}`"
             )
 
-        secret_requests.append(Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request))
+        secret_requests.append(
+            Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
+        )
 
     fallible_secrets = await MultiGet(*secret_requests)
     secrets = []
@@ -192,7 +207,9 @@ async def twine_upload_with_secret(
             )
         )
 
-    processes = await MultiGet(Get(Process, VenvPexProcess, request) for request in pex_proc_requests)
+    processes = await MultiGet(
+        Get(Process, VenvPexProcess, request) for request in pex_proc_requests
+    )
 
     return PublishProcesses(
         PublishPackages(

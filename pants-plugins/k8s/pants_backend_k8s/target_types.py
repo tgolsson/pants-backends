@@ -1,23 +1,67 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable, Optional, Tuple
 
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
+    Address,
     Dependencies,
+    InvalidFieldException,
+    OptionalSingleSourceField,
     SingleSourceField,
+    SpecialCasedDependencies,
     StringField,
     StringSequenceField,
     Target,
 )
-from pants.util.strutil import softwrap
+from pants.util.strutil import pluralize, softwrap
 
 
-class KubeconfigClusterField()
-class KubeconfigSourceField(SingleSourceField):
-    alias = "config_file"
+class KubeconfigClusterField(StringField):
+    alias = "cluster"
+    help = softwrap("""The default cluster to use with this kubeconfig.""")
+
+
+class KubeconfigUserField(StringField):
+    alias = "user"
+    help = softwrap("""The default user to use with this kubeconfig.""")
+
+
+class KubeconfigContextField(StringField):
+    alias = "context"
+    help = softwrap("""The default context to use with this kubeconfig.""")
+
+
+class KubeconfigNamespaceField(StringField):
+    alias = "namespace"
+    help = softwrap("""The default namespace to use with this kubeconfig.""")
+
+
+KUBECONFIG_COMMON_FIELDS = (
+    KubeconfigClusterField,
+    KubeconfigUserField,
+    KubeconfigContextField,
+    KubeconfigNamespaceField,
+)
+
+
+class KubeconfigSourceField(OptionalSingleSourceField):
+    alias = "from_source"
     default = None
-    help = softwrap("""The kubeconfig to use.""")
+    help = softwrap(
+        """A kubeconfig file that is checked in as a source file, or
+        generated into the repository itself."""
+    )
+
+
+class KubeconfigGeneratedField(Dependencies):
+    alias = "from_generator"
+    default = None
+    help = softwrap(
+        """The kubeconfig file is generated as a single
+        file from the rule"""
+    )
 
 
 class KubeconfigHostMarker(StringField):
@@ -26,23 +70,12 @@ class KubeconfigHostMarker(StringField):
     help = softwrap("""Marker field.""")
 
 
-class ExtraBinariesField(StringSequenceField):
-    alias = "extra_binaries"
-    default = []
-
-    help = softwrap(
-        """
-        Extra binaries to include in the sandbox. Useful if the kubectl command needs any authentication tools for example.
-        """
-    )
-
-
 class HostKubeConfig(Target):
     alias = "host_kubeconfig"
     core_fields = (
         *COMMON_TARGET_FIELDS,
+        *KUBECONFIG_COMMON_FIELDS,
         KubeconfigHostMarker,
-        ExtraBinariesField,
     )
     help = "Will retrieve the Host kubeconfig file and expose to the sandbox."
 
@@ -51,13 +84,37 @@ class KubeConfig(Target):
     alias = "kubeconfig"
     core_fields = (
         *COMMON_TARGET_FIELDS,
+        *KUBECONFIG_COMMON_FIELDS,
         KubeconfigSourceField,
-        ExtraBinariesField,
+        KubeconfigGeneratedField,
     )
 
     help = softwrap(
         """Reads the kube config file and exposes it to the sandbox. If no config file is provided; the default config file will be used."""
     )
+
+
+class KubeconfigDependencyField(SpecialCasedDependencies):
+    alias = "kubeconfig"
+    help = "The kubeconfig target to use for this target."
+
+    @classmethod
+    def compute_value(
+        cls, raw_value: Optional[Iterable[str]], address: Address
+    ) -> Optional[Tuple[str, ...]]:
+        value = super().compute_value(raw_value, address)
+
+        if value is None:
+            return None
+
+        if len(value) > 1:
+            expected_str = pluralize(self.expected_num_files, "file")
+            raise InvalidFieldException(
+                f"The {repr(self.alias)} field in target {self.address} must have "
+                f"a single dependency, but it had {pluralize(len(value), 'dependencies')}."
+            )
+
+        return value
 
 
 class KubernetesSourceField(SingleSourceField):
@@ -96,7 +153,25 @@ class KubernetesClusterField(StringField):
     alias = "cluster"
     help = softwrap(
         """
-        The target cluster/context to run on. If not provided; the command cannot be ran.
+        The target cluster to run on. If not provided; the command cannot be ran.
+        """
+    )
+
+
+class KubernetesContextField(StringField):
+    alias = "context"
+    help = softwrap(
+        """
+        The target context to run on. If not provided; the command cannot be ran.
+        """
+    )
+
+
+class KubernetesUserField(StringField):
+    alias = "user"
+    help = softwrap(
+        """
+        The target user to run on. If not provided; the command cannot be ran.
         """
     )
 
@@ -119,6 +194,9 @@ class KubernetesTarget(Target):
         KubernetesClusterField,
         KubernetesCommandField,
         KubernetesNamespaceField,
+        KubernetesUserField,
+        KubeconfigDependencyField,
+        KubernetesContextField,
     )
     help = "A kubernetes target."
 
@@ -149,7 +227,4 @@ class KubernetesTargetBundle(Target):
 
 
 def targets():
-    return [
-        KubernetesSourceTarget,
-        KubernetesTarget,
-    ]
+    return [KubernetesSourceTarget, KubernetesTarget, HostKubeConfig, KubeConfig]

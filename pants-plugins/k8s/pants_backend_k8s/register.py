@@ -9,4 +9,4 @@ def target_types():
 
 
 def rules():
-    return [*target_generators.rules(), *run.rules(), *kubeconfig.rules()]
+    return [*kubeconfig.rules(), *target_generators.rules(), *run.rules()]
