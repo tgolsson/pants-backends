@@ -9,12 +9,12 @@ from dataclasses import dataclass
 from pants.engine.platform import Platform
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import WrappedTarget, WrappedTargetRequest
-from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
-from pants_backend_secrets.secret_request import SecretsResponse
 
 from pants_backend_bitwarden.subsystem import BitwardenTool
 from pants_backend_bitwarden.targets import BitWardenItemField
 from pants_backend_bitwarden.util_rules.secret import FallibleBitWardenSecretsRequest
+from pants_backend_secrets.goals.decrypt import DecryptFieldSet, DecryptRequest, DecryptResponse
+from pants_backend_secrets.secret_request import SecretsResponse
 
 
 class DecryptBitwardenRequest(DecryptRequest):

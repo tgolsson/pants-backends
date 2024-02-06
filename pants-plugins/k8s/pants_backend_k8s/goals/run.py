@@ -3,16 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
+from pants.core.util_rules.environments import EnvironmentNameRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Addresses, UnparsedAddressInputs
+from pants.engine.environment import EnvironmentName
 from pants.engine.fs import EMPTY_DIGEST, Digest, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
-    COMMON_TARGET_FIELDS,
-    Dependencies,
     DependenciesRequest,
     SourcesField,
     Target,
@@ -36,8 +36,6 @@ from pants_backend_k8s.target_types import (
     KubernetesUserField,
 )
 from pants_backend_k8s.util.kubeconfig import (
-    FileKubeconfigRequest,
-    HostKubeconfigRequest,
     KubeconfigRequest,
     KubeconfigRequestRequest,
     KubeconfigRequestWrap,
@@ -65,9 +63,7 @@ async def compute_command_line(
     request: KubernetesCommandLineProcessRequest, tool: KubernetesTool, platform: Platform
 ) -> Process:
     kubernetes_command = request.target
-    download_kubernetes_get = Get(
-        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
-    )
+    download_kubernetes_get = Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
 
     deps = await Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]))
     (sources, tool) = await MultiGet(
@@ -94,12 +90,10 @@ async def compute_command_line(
     ]
 
     if kubernetes_command.has_field(KubernetesNamespaceField):
-        command.extend(
-            [
-                "--namespace",
-                kubernetes_command[KubernetesNamespaceField].value,
-            ]
-        )
+        command.extend([
+            "--namespace",
+            kubernetes_command[KubernetesNamespaceField].value,
+        ])
 
     return Process(
         command,
@@ -115,10 +109,6 @@ async def prepare_kubernetes_command_process(
     platform: Platform,
     unions: UnionMembership,
 ) -> Process:
-    download_kubernetes_get = Get(
-        DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)
-    )
-
     kubernetes_command: KubernetesTarget = request.target
 
     kubeconfig_address = await Get(
@@ -126,11 +116,11 @@ async def prepare_kubernetes_command_process(
         UnparsedAddressInputs(
             kubernetes_command[KubeconfigDependencyField].value,
             owning_address=request.target.address,
-            description_of_origin=f"asd",
+            description_of_origin="asd",
         ),
     )
 
-    deps, kubeconfig_deps = await MultiGet(
+    deps, kubeconfig_target, environment_name = await MultiGet(
         Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency])),
         Get(
             WrappedTarget,
@@ -139,11 +129,14 @@ async def prepare_kubernetes_command_process(
                 description_of_origin="kubectl run",
             ),
         ),
+        Get(
+            EnvironmentName,
+            EnvironmentNameRequest,
+            EnvironmentNameRequest.from_target(request.target),
+        ),
     )
 
-    kubeconfig_request = await Get(
-        KubeconfigRequestWrap, KubeconfigRequestRequest(kubeconfig_deps.target)
-    )
+    kubeconfig_request = await Get(KubeconfigRequestWrap, KubeconfigRequestRequest(kubeconfig_target.target))
 
     sources, kubeconfig, tool = await MultiGet(
         Get(
@@ -154,18 +147,24 @@ async def prepare_kubernetes_command_process(
                 enable_codegen=True,
             ),
         ),
-        Get(KubeconfigResponse, KubeconfigRequest, kubeconfig_request.request),
-        download_kubernetes_get,
+        Get(
+            KubeconfigResponse,
+            {kubeconfig_request.request: KubeconfigRequest, environment_name: EnvironmentName},
+        ),
+        Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform)),
     )
 
-    target_file = sources.files[0]
+    args = {}
     digests = [sources.snapshot.digest, tool.digest]
+
     if kubeconfig.digest:
         digests.append(kubeconfig.digest)
+        args["--kubeconfig"] = f"{{chroot}}/{kubeconfig.path}"
+
+    else:
+        args["--kubeconfig"] = kubeconfig.path
+
     input_digest = await Get(Digest, MergeDigests(digests))
-
-    args = {}
-
     if kubeconfig.namespace:
         args["--namespace"] = kubeconfig.namespace
 
@@ -190,11 +189,9 @@ async def prepare_kubernetes_command_process(
     if kubernetes_command[KubernetesUserField].value:
         args["--user"] = kubeconfig.user
 
-    print(kubeconfig.path)
-    args["--kubeconfig"] = kubeconfig.path
-
     flat = [item for pair in args.items() for item in pair]
 
+    target_file = sources.files[0]
     command = (
         f"{{chroot}}/{tool.exe}",
         kubernetes_command[KubernetesCommandField].value,

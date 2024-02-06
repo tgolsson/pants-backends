@@ -1,21 +1,24 @@
 from __future__ import annotations
 
-import os.path
-from abc import ABC, ABCMeta, abstractmethod
+from abc import ABCMeta
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Generic, Type, TypeVar
 
+from pants.core.target_types import FileSourceField
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.engine.addresses import Addresses, UnparsedAddressInputs
 from pants.engine.environment import EnvironmentName
+from pants.engine.fs import Digest
 from pants.engine.rules import Get, collect_rules, rule
-from pants.engine.target import Dependencies, FieldSet, SourcesField, Target, Targets
+from pants.engine.target import FieldSet, SourcesField, Target, WrappedTarget, WrappedTargetRequest
 from pants.engine.unions import UnionMembership, UnionRule, union
+from pants.util.strutil import bullet_list
 
 from pants_backend_k8s.target_types import (
-    KUBECONFIG_COMMON_FIELDS,
     KubeconfigClusterField,
     KubeconfigContextField,
+    KubeconfigGeneratedField,
     KubeconfigHostMarker,
     KubeconfigNamespaceField,
     KubeconfigSourceField,
@@ -138,10 +141,8 @@ class KubeconfigFieldSet(Generic[_T], FieldSet, metaclass=ABCMeta):
     @classmethod
     def rules(cls) -> tuple[UnionRule, ...]:
         """Helper method for registering the union members."""
-        return (
-            UnionRule(KubeconfigFieldSet, cls),
-            UnionRule(KubeconfigRequest, cls.kubeconfig_request_type),
-        )
+
+        return (UnionRule(KubeconfigFieldSet, cls),)
 
 
 @dataclass(frozen=True)
@@ -152,7 +153,7 @@ class HostKubeconfigRequest(KubeconfigRequest):
 @dataclass(frozen=True)
 class HostKubeconfigFieldSet(KubeconfigFieldSet):
     kubeconfig_request_type = HostKubeconfigRequest
-    required_fields = (KubeconfigHostMarker, *KUBECONFIG_COMMON_FIELDS)
+    required_fields = (KubeconfigHostMarker,)
 
     context: KubeconfigContextField
     namespace: KubeconfigNamespaceField
@@ -187,9 +188,10 @@ class FileKubeconfigRequest(KubeconfigRequest):
 @dataclass(frozen=True)
 class FileKubeconfigFieldSet(KubeconfigFieldSet):
     kubeconfig_request_type = FileKubeconfigRequest
-    required_fields = (KubeconfigSourceField, *KUBECONFIG_COMMON_FIELDS)
+    required_fields = (KubeconfigSourceField,)
 
     source: KubeconfigSourceField
+    generator: KubeconfigGeneratedField
     context: KubeconfigContextField
     namespace: KubeconfigNamespaceField
     cluster: KubeconfigClusterField
@@ -201,13 +203,34 @@ FileKubeconfigRequest.field_set_type = FileKubeconfigFieldSet
 
 @rule(desc="Loading kubeconfig file")
 async def load_kubconfig_file(request: FileKubeconfigRequest) -> KubeconfigResponse:
-    targets = await Get(Targets, Dependencies, request.target.from_generator)
+    source_files_request = [request.target.source]
+    if request.target.generator.value:
+        kubeconfig_address = await Get(
+            Addresses,
+            UnparsedAddressInputs(
+                request.target.generator.value,
+                owning_address=request.target.address,
+                description_of_origin="asd",
+            ),
+        )
+
+        targets = await Get(
+            WrappedTarget,
+            WrappedTargetRequest(
+                kubeconfig_address[0],
+                description_of_origin="kubectl run",
+            ),
+        )
+
+        if targets.target.has_field(SourcesField):
+            source_files_request.append(targets.target[SourcesField])
 
     sources = await Get(
         SourceFiles,
         SourceFilesRequest(
-            [request.target.source]
-            + [tgt[SourcesField] for tgt in targets if tgt.has_field(SourcesField)]
+            source_files_request,
+            enable_codegen=True,
+            for_sources_types=(FileSourceField,),
         ),
     )
 
@@ -229,4 +252,6 @@ def rules():
         *collect_rules(),
         *FileKubeconfigFieldSet.rules(),
         *HostKubeconfigFieldSet.rules(),
+        UnionRule(KubeconfigRequest, HostKubeconfigRequest),
+        UnionRule(KubeconfigRequest, FileKubeconfigRequest),
     ]

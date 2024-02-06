@@ -12,7 +12,6 @@ from pants.engine.target import (
     SingleSourceField,
     SpecialCasedDependencies,
     StringField,
-    StringSequenceField,
     Target,
 )
 from pants.util.strutil import pluralize, softwrap
@@ -49,19 +48,15 @@ KUBECONFIG_COMMON_FIELDS = (
 class KubeconfigSourceField(OptionalSingleSourceField):
     alias = "from_source"
     default = None
-    help = softwrap(
-        """A kubeconfig file that is checked in as a source file, or
-        generated into the repository itself."""
-    )
+    help = softwrap("""A kubeconfig file that is checked in as a source file, or
+        generated into the repository itself.""")
 
 
 class KubeconfigGeneratedField(Dependencies):
     alias = "from_generator"
     default = None
-    help = softwrap(
-        """The kubeconfig file is generated as a single
-        file from the rule"""
-    )
+    help = softwrap("""The kubeconfig file is generated as a single
+        file from the rule""")
 
 
 class KubeconfigHostMarker(StringField):
@@ -89,9 +84,8 @@ class KubeConfig(Target):
         KubeconfigGeneratedField,
     )
 
-    help = softwrap(
-        """Reads the kube config file and exposes it to the sandbox. If no config file is provided; the default config file will be used."""
-    )
+    help = softwrap("""Reads the kube config file and exposes it to the
+        sandbox.""")
 
 
 class KubeconfigDependencyField(SpecialCasedDependencies):
@@ -99,18 +93,16 @@ class KubeconfigDependencyField(SpecialCasedDependencies):
     help = "The kubeconfig target to use for this target."
 
     @classmethod
-    def compute_value(
-        cls, raw_value: Optional[Iterable[str]], address: Address
-    ) -> Optional[Tuple[str, ...]]:
+    def compute_value(cls, raw_value: Optional[Iterable[str]], address: Address) -> Optional[Tuple[str, ...]]:
         value = super().compute_value(raw_value, address)
 
         if value is None:
             return None
 
         if len(value) > 1:
-            expected_str = pluralize(self.expected_num_files, "file")
+            pluralize(cls.expected_num_files, "file")
             raise InvalidFieldException(
-                f"The {repr(self.alias)} field in target {self.address} must have "
+                f"The {repr(cls.alias)} field in target {cls.address} must have "
                 f"a single dependency, but it had {pluralize(len(value), 'dependencies')}."
             )
 
@@ -151,38 +143,30 @@ class KubernetesTemplateDependency(Dependencies):
 
 class KubernetesClusterField(StringField):
     alias = "cluster"
-    help = softwrap(
-        """
+    help = softwrap("""
         The target cluster to run on. If not provided; the command cannot be ran.
-        """
-    )
+        """)
 
 
 class KubernetesContextField(StringField):
     alias = "context"
-    help = softwrap(
-        """
+    help = softwrap("""
         The target context to run on. If not provided; the command cannot be ran.
-        """
-    )
+        """)
 
 
 class KubernetesUserField(StringField):
     alias = "user"
-    help = softwrap(
-        """
+    help = softwrap("""
         The target user to run on. If not provided; the command cannot be ran.
-        """
-    )
+        """)
 
 
 class KubernetesKindField(StringField):
     alias = "kind"
-    help = softwrap(
-        """
+    help = softwrap("""
         A descriptor of the kinds included.
-        """
-    )
+        """)
 
 
 class KubernetesTarget(Target):
