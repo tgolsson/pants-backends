@@ -13,7 +13,4 @@ adhoc_tool(
     output_files=["out.yaml"],
 )
 
-kubeconfig(
-    name="config",
-    from_generator=[":gen_config"]
-)
+kubeconfig(name="config", from_generator=[":gen_config"])

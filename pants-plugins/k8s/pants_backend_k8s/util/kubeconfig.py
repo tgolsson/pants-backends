@@ -230,7 +230,7 @@ async def load_kubconfig_file(request: FileKubeconfigRequest) -> KubeconfigRespo
         SourceFilesRequest(
             source_files_request,
             enable_codegen=True,
-            for_sources_types=(FileSourceField,),
+            for_sources_types=(FileSourceField, KubeconfigSourceField),
         ),
     )
 
