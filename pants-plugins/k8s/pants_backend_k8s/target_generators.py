@@ -15,14 +15,17 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_k8s.target_types import (
+    KubeconfigDependencyField,
     KubernetesClusterField,
     KubernetesCommandField,
+    KubernetesContextField,
     KubernetesKindField,
     KubernetesNamespaceField,
     KubernetesTarget,
     KubernetesTargetBundle,
     KubernetesTargetBundleDependencies,
     KubernetesTemplateDependency,
+    KubernetesUserField,
 )
 
 
@@ -36,17 +39,26 @@ class KubernetesTargetGenerator(TargetGenerator):
         *COMMON_TARGET_FIELDS,
         KubernetesTemplateDependency,
         KubernetesKindField,
-        KubernetesClusterField,
         KubernetesCommandField,
+        KubeconfigDependencyField,
+        KubernetesUserField,
         KubernetesNamespaceField,
+        KubernetesClusterField,
+        KubernetesContextField,
     )
     copied_fields = (
         *COMMON_TARGET_FIELDS,
         KubernetesKindField,
-        KubernetesClusterField,
+        KubernetesUserField,
         KubernetesNamespaceField,
+        KubernetesClusterField,
+        KubernetesContextField,
     )
-    moved_fields = (KubernetesCommandField, KubernetesTemplateDependency)
+    moved_fields = (
+        KubernetesCommandField,
+        KubernetesTemplateDependency,
+        KubeconfigDependencyField,
+    )
 
 
 class GenerateFromKubernetesRequest(GenerateTargetsRequest):
@@ -64,6 +76,7 @@ def generate_from_k8s_object(
             {
                 KubernetesCommandField.alias: command,
                 KubernetesTemplateDependency.alias: request.template["template"],
+                KubeconfigDependencyField.alias: request.template["kubeconfig"],
                 **request.template,
             },
             request.template_address.create_generated(command),
