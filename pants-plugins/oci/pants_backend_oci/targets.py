@@ -22,6 +22,7 @@ from pants_backend_oci.target_types import (
     ImageEmptyMarker,
     ImageEntrypoint,
     ImageEnvironment,
+    ImageLayerOutputPathField,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -32,9 +33,11 @@ from pants_backend_oci.target_types import (
 # Only used here
 class _ImageVariants(DictStringToStringField):
     alias = "variants"
-    help = softwrap("""
+    help = softwrap(
+        """
         The digests to use and names to export as.
-        """)
+        """
+    )
 
 
 class PullImage(Target):
@@ -50,9 +53,11 @@ class PullImage(Target):
 
 class PullImagesGenerator(TargetGenerator):
     alias = "oci_pull_images"
-    help = softwrap("""
+    help = softwrap(
+        """
         The list of base images to import.
-        """)
+        """
+    )
     generated_target_cls = PullImage
     core_fields = (
         *COMMON_TARGET_FIELDS,
@@ -134,8 +139,18 @@ class ImageBuildStep(Target):
     help = "An imported OCI image."
 
 
+class ImageLayer(Target):
+    alias = "oci_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageDependencies,
+        ImageLayerOutputPathField,
+    )
+    help = "A layer that can be inserted directly into an imgae"
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty]
+    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty, ImageLayer]
 
 
 def rules():
