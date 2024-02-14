@@ -14,7 +14,15 @@ from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest, MergeDigests, Snapshot
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import FieldSetsPerTarget, FieldSetsPerTargetRequest, SourcesField, Target
+from pants.engine.target import (
+    Dependencies,
+    DependenciesRequest,
+    FieldSetsPerTarget,
+    FieldSetsPerTargetRequest,
+    SourcesField,
+    Target,
+    Targets,
+)
 
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar
 
@@ -29,6 +37,7 @@ logger = logging
 @dataclass(frozen=True)
 class ImageLayerRequest:
     target: Target
+    old_style: bool = True
 
 
 @dataclass(frozen=True)
@@ -44,8 +53,11 @@ class ImageLayer:
 
 @rule
 async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
-    # Get all dependencies for the root target.
-    root_dependencies = [request.target]
+    if request.old_style:
+        root_dependencies = [request.target]
+
+    else:
+        root_dependencies = await Get(Targets, DependenciesRequest(request.target[Dependencies]))
 
     # Get all file sources from the root dependencies. That includes any non-file sources that can
     # be "codegen"ed into a file source.
@@ -114,12 +126,10 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
         raw_layer_digest = await Get(Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar"))
         layer_name = "layers/image_bundle.tar"
-        real_layers.append(
-            (
-                raw_layer_digest,
-                layer_name,
-            )
-        )
+        real_layers.append((
+            raw_layer_digest,
+            layer_name,
+        ))
 
     for layer in layer_artifacts:
         snapshot = await Get(
@@ -127,12 +137,10 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
             MergeDigests([layer.digest]),
         )
 
-        real_layers.append(
-            (
-                snapshot.digest,
-                snapshot.files[0],
-            )
-        )
+        real_layers.append((
+            snapshot.digest,
+            snapshot.files[0],
+        ))
 
     if len(real_layers) > 1:
         # TODO[TSolberg]: Support multiple layers. We need to merge the layers together to create a single
@@ -154,12 +162,10 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     if embedded_pkgs:
         logger.info(f"Setting entrypoint to: {embedded_pkgs[0].artifacts[0].relpath}")
-        config.extend(
-            [
-                "--config.entrypoint",
-                f"/{embedded_pkgs[0].artifacts[0].relpath}",
-            ]
-        )
+        config.extend([
+            "--config.entrypoint",
+            f"/{embedded_pkgs[0].artifacts[0].relpath}",
+        ])
 
     return ImageLayer(
         request.target.address,

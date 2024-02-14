@@ -52,7 +52,7 @@ class BuildImageBundleFieldSet(FieldSet):
     required_fields = (ImageBase, ImageDependencies)
 
     base: ImageBase
-    dependencies: Dependencies
+    dependencies: ImageDependencies
     environment: ImageEnvironment
     entrypoint: ImageEntrypoint
     args: ImageArgs
@@ -92,12 +92,11 @@ async def build_oci_bundle_package(
     )
 
     layer_requests = []
-
     if request.target.layers:
         layer_dependencies = await Get(Targets, DependenciesRequest(request.target.layers))
 
         for dependency in layer_dependencies:
-            layer_requests.append(Get(ImageLayer, ImageLayerRequest(dependency)))
+            layer_requests.append(Get(ImageLayer, ImageLayerRequest(dependency, old_style=False)))
 
     if request.target.dependencies:
         root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))
@@ -158,17 +157,6 @@ async def build_oci_bundle_package(
 
         output_digest = image.output_digest
 
-    else:
-        maybe_built_base, layers = await MultiGet(
-            Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request) * layers,
-        )
-
-        if maybe_built_base.output is None:
-            return dataclasses.replace(maybe_built_base, dependency_failed=True)
-
-        base = maybe_built_base.output
-        output_digest = base.digest
-
     if request.target.commands.value:
         bundle = ImageBundle(output_digest, "", True)
 
@@ -184,12 +172,10 @@ async def build_oci_bundle_package(
     ]
     if request.target.environment.value:
         for value in request.target.environment.value:
-            config.extend(
-                [
-                    "--config.env",
-                    value,
-                ]
-            )
+            config.extend([
+                "--config.env",
+                value,
+            ])
 
     if request.target.args.value:
         for arg in request.target.args.value:
