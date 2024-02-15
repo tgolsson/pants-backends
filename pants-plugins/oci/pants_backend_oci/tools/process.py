@@ -36,7 +36,6 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
         env.update(p.env)
 
     script = """
-    set -euxo pipefail
     export ROOT_DIR="$(pwd)"
     export SANDBOX_DIR="{chroot}"
     cd $SANDBOX_DIR

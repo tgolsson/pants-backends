@@ -103,7 +103,6 @@ async def run_in_container(
     namespace = f"pants.runc.{request.bundle.digest.fingerprint}"
 
     script = dedent(f"""
-        set -euxo pipefail
         ROOT=`pwd`
 
         cp $ROOT/unpacked_image/config.json $ROOT/unpacked_image/config.json.bak
