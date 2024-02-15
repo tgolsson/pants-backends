@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Adding layers to an image is changing. As a preparatory step, there's now an `oci_layer` target. Add
+  these to the `layers` field of an `oci_image_build`, instead of dependencies. These will process a bit
+  better, and gives more control over what goes into each layer.
+
 ## 0.5.0 - 2023-11-19
 
 - Fix a crash when image pulling fails
