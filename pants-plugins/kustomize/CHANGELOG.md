@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Add `tailor` support
+- Import `git` to sandbox during expansion to support github downloads
+  - submodule check seems to fail so it might help to add `?submodules=false` to the link to disable it
 
 ## [0.3.0] - 2023-11-19
 
