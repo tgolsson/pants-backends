@@ -16,6 +16,7 @@ def test_run_oci_container() -> None:
                     name="python3-d11",
                     repository="gcr.io/distroless/python3-debian11",
                     variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
+                    anonymous=True,
                 )
 
                 pex_binary(name="example", entry_point="example.py", shebang="#!/usr/bin/python")
@@ -66,6 +67,7 @@ def test_run_oci_container_file() -> None:
                     name="python3-d11",
                     repository="gcr.io/distroless/python3-debian11",
                     variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
+                    anonymous=True,
                 )
 
                 file(name="files", source="file.txt")
@@ -124,6 +126,7 @@ def test_run_oci_container_files() -> None:
                     name="python3-d11",
                     repository="gcr.io/distroless/python3-debian11",
                     variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
+                    anonymous=True,
                 )
 
                 files(name="files", sources=["file.txt"])
