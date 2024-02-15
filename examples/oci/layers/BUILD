@@ -40,5 +40,5 @@ oci_image_build(
     args=["/examples.oci.layers/binary-srcs.pex"],
     env=[
         "PEX_PATH=/examples.oci.layers/binary-srcs.pex:/examples.oci.layers/binary-deps.pex",
-    ]
+    ],
 )
