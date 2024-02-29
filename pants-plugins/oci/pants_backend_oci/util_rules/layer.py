@@ -14,7 +14,15 @@ from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest, MergeDigests, Snapshot
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import FieldSetsPerTarget, FieldSetsPerTargetRequest, SourcesField, Target
+from pants.engine.target import (
+    Dependencies,
+    DependenciesRequest,
+    FieldSetsPerTarget,
+    FieldSetsPerTargetRequest,
+    SourcesField,
+    Target,
+    Targets,
+)
 
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar
 
@@ -29,6 +37,7 @@ logger = logging
 @dataclass(frozen=True)
 class ImageLayerRequest:
     target: Target
+    old_style: bool = True
 
 
 @dataclass(frozen=True)
@@ -44,8 +53,11 @@ class ImageLayer:
 
 @rule
 async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
-    # Get all dependencies for the root target.
-    root_dependencies = [request.target]
+    if request.old_style:
+        root_dependencies = [request.target]
+
+    else:
+        root_dependencies = await Get(Targets, DependenciesRequest(request.target[Dependencies]))
 
     # Get all file sources from the root dependencies. That includes any non-file sources that can
     # be "codegen"ed into a file source.

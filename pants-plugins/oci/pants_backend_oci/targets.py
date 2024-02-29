@@ -22,6 +22,8 @@ from pants_backend_oci.target_types import (
     ImageEmptyMarker,
     ImageEntrypoint,
     ImageEnvironment,
+    ImageLayerOutputPathField,
+    ImageLayersField,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -99,6 +101,7 @@ class ImageBuild(Target):
         ImageRepository,
         ImageTag,
         ImageBase,
+        ImageLayersField,
         ImageDependencies,
         ImageRunTty,
         ImageEnvironment,
@@ -134,8 +137,18 @@ class ImageBuildStep(Target):
     help = "An imported OCI image."
 
 
+class ImageLayer(Target):
+    alias = "oci_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageDependencies,
+        ImageLayerOutputPathField,
+    )
+    help = "A layer that can be inserted directly into an imgae"
+
+
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty]
+    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty, ImageLayer]
 
 
 def rules():

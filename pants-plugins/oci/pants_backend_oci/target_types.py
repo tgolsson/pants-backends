@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from pants.core.goals.package import OutputPathField
 from pants.engine.addresses import Address
 from pants.engine.target import (
     BoolField,
@@ -137,3 +138,15 @@ class ImageArtifactExclusions(StringSequenceField):
     help = softwrap("""
         A list of globs to exclude from the artifact.
         """)
+
+
+class ImageLayerOutputPathField(OutputPathField):
+    pass
+
+
+class ImageLayersField(Dependencies):
+    alias = "layers"
+
+    help = softwrap("""
+    The layers to include in the image.
+    """)
