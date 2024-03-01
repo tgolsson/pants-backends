@@ -118,8 +118,8 @@ jobs:
         id -g
         sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
         sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
-        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
-        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map
+        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map || true
+        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map || true
 
         /home/runner/bin/pants package examples::
 
