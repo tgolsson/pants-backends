@@ -84,6 +84,45 @@ jobs:
 
         /home/runner/bin/pants package ::
 
+  package-examples:
+
+    strategy:
+      matrix:
+        os: ["ubuntu-20.04", "macos-13"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v3
+      with:
+        python-version: 3.9
+
+    - name: Tell Pants to use Python 3.9
+      run: |
+        echo "PANTS_VERSION=2.19.0" >> $GITHUB_ENV
+
+    - name: Initialize Pants
+      uses: pantsbuild/actions/init-pants@main
+      with:
+        # cache0 makes it easy to bust the cache if needed
+        gha-cache-key: cache1-package-py3.9-pants2.19.0
+        named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
+
+    - name: Package all targets
+      run: |
+        ./get-pants.sh
+        id
+        id -u
+        id -g
+        sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
+        sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
+        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
+        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map
+
+        /home/runner/bin/pants package examples::
+
   check-and-lint:
     runs-on: ubuntu-20.04
 
