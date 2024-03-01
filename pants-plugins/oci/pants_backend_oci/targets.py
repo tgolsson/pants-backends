@@ -48,6 +48,8 @@ class PullImage(Target):
         ImageRepository,
         ImageRepositoryAnonymous,
         ImageDigest,
+        ImageOsField,
+        ImageArchitectureField,
     )
     help = "An imported OCI image."
 
