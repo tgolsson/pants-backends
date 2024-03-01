@@ -63,10 +63,10 @@ async def pull_oci_image(
     ]
 
     if request.target.architecture.value:
-        args.extend(["--override-arch", request.architecture.value])
+        args.extend(["--override-arch", request.target.architecture.value])
 
     if request.target.os.value:
-        args.extend(["--override-os", request.architecture.value])
+        args.extend(["--override-os", request.target.os.value])
 
     args.append("copy")
 
