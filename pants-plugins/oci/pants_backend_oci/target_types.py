@@ -150,3 +150,19 @@ class ImageLayersField(Dependencies):
     help = softwrap("""
     The layers to include in the image.
     """)
+
+
+class ImageArchitectureField(StringField):
+    alias = "architecture"
+
+    help = softwrap("""
+    The architecture to build the image for.
+    """)
+
+
+class ImageOsField(StringField):
+    alias = "os"
+
+    help = softwrap("""
+    The os to build the image for.
+    """)

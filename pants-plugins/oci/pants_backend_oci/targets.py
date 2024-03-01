@@ -12,6 +12,7 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    ImageArchitectureField,
     ImageArgs,
     ImageArtifactExclusions,
     ImageBase,
@@ -24,6 +25,7 @@ from pants_backend_oci.target_types import (
     ImageEnvironment,
     ImageLayerOutputPathField,
     ImageLayersField,
+    ImageOsField,
     ImageRepository,
     ImageRepositoryAnonymous,
     ImageRunTty,
@@ -60,6 +62,8 @@ class PullImagesGenerator(TargetGenerator):
         *COMMON_TARGET_FIELDS,
         ImageRepository,
         ImageRepositoryAnonymous,
+        ImageOsField,
+        ImageArchitectureField,
         _ImageVariants,
     )
     copied_fields = (*COMMON_TARGET_FIELDS,)
@@ -148,7 +152,14 @@ class ImageLayer(Target):
 
 
 def targets():
-    return [PullImage, PullImagesGenerator, ImageBuild, ImageBuildStep, ImageEmpty, ImageLayer]
+    return [
+        PullImage,
+        PullImagesGenerator,
+        ImageBuild,
+        ImageBuildStep,
+        ImageEmpty,
+        ImageLayer,
+    ]
 
 
 def rules():
