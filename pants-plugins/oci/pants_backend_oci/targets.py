@@ -66,7 +66,11 @@ class PullImagesGenerator(TargetGenerator):
         ImageArchitectureField,
         _ImageVariants,
     )
-    copied_fields = (*COMMON_TARGET_FIELDS,)
+    copied_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageOsField,
+        ImageArchitectureField,
+    )
     moved_fields = tuple()
 
 
