@@ -121,7 +121,7 @@ jobs:
         docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map || true
         docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map || true
 
-        /home/runner/bin/pants package examples::
+        pants package examples::
 
   check-and-lint:
     runs-on: ubuntu-20.04
