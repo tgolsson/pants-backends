@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adding layers to an image is changing. As a preparatory step, there's now an `oci_layer` target. Add
   these to the `layers` field of an `oci_image_build`, instead of dependencies. These will process a bit
   better, and gives more control over what goes into each layer.
+- Mac support has improved. In order to provide determinism, the `gtar` (GNU tar) binary has to be available.
+- Both umoci and skopeo are now supported on Mac M1 and x86_64. This plugin does not support image run steps
+  on Mac still.
+- When pulling multi-arch images you can now specify `os` and `architecture` on the `oci_pull_image` target
+
 
 ## 0.5.0 - 2023-11-19
 
