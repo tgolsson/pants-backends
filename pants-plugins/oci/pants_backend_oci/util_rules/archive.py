@@ -12,8 +12,14 @@ import logging
 import os
 from dataclasses import dataclass
 
-from pants.core.util_rules.system_binaries import TarBinary
+from pants.core.util_rules.system_binaries import (
+    BinaryPathRequest,
+    BinaryPaths,
+    BinaryPathTest,
+    TarBinary,
+)
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
+from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
 from pants.util.frozendict import FrozenDict
@@ -28,6 +34,11 @@ class TarEnvironment:
     env: FrozenDict[str, str]
 
 
+@dataclass(frozen=True)
+class GTarBinary(TarBinary):
+    pass
+
+
 if PANTS_SEMVER >= Version("2.19.0.dev0"):
     from pants.core.util_rules.system_binaries import SystemBinariesSubsystem
 
@@ -38,6 +49,19 @@ if PANTS_SEMVER >= Version("2.19.0.dev0"):
         env = {"PATH": os.pathsep.join(system_binaries_subsystem.system_binary_paths), "GZIP": "-n"}
         return TarEnvironment(env=FrozenDict(env))
 
+    @rule(desc="Finding the `tar` binary", level=LogLevel.DEBUG)
+    async def find_gtar(
+        platform: Platform, system_binaries: SystemBinariesSubsystem.EnvironmentAware
+    ) -> GTarBinary:
+        request = BinaryPathRequest(
+            binary_name="gtar",
+            search_path=system_binaries.system_binary_paths,
+            test=BinaryPathTest(args=["--version"]),
+        )
+        paths = await Get(BinaryPaths, BinaryPathRequest, request)
+        first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
+        return GTarBinary(first_path.path, first_path.fingerprint, platform)
+
 else:
     from pants.core.util_rules.system_binaries import SEARCH_PATHS
 
@@ -45,6 +69,17 @@ else:
     def tar_environment() -> TarEnvironment:
         env = {"PATH": os.pathsep.join(SEARCH_PATHS), "GZIP": "-n"}
         return TarEnvironment(env=FrozenDict(env))
+
+    @rule(desc="Finding the `gtar` binary", level=LogLevel.DEBUG)
+    async def find_gtar(platform: Platform) -> GTarBinary:
+        request = BinaryPathRequest(
+            binary_name="gtar",
+            search_path=SEARCH_PATHS,
+            test=BinaryPathTest(args=["--version"]),
+        )
+        paths = await Get(BinaryPaths, BinaryPathRequest, request)
+        first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
+        return GTarBinary(first_path.path, first_path.fingerprint, platform)
 
 
 @dataclass(frozen=True)
@@ -72,8 +107,14 @@ class CreateDeterministicDirectoryTar:
 
 @rule
 async def tar_directory_process(
-    request: CreateDeterministicDirectoryTar, tar_binary: TarBinary, env: TarEnvironment
+    request: CreateDeterministicDirectoryTar, env: TarEnvironment, platform: Platform
 ) -> Process:
+    if platform in (Platform.macos_arm64, Platform.macos_x86_64):
+        tar_binary = await Get(GTarBinary)
+
+    else:
+        tar_binary = await Get(TarBinary)
+
     argv = [
         tar_binary.path,
         "--sort=name",
@@ -114,9 +155,13 @@ async def tar_directory_process(
 
 
 @rule(desc="Creating an archive file", level=LogLevel.DEBUG)
-async def create_archive(
-    request: CreateDeterministicTar, tar_binary: TarBinary, env: TarEnvironment
-) -> Digest:
+async def create_archive(request: CreateDeterministicTar, env: TarEnvironment, platform: Platform) -> Digest:
+    if platform in (Platform.macos_arm64, Platform.macos_x86_64):
+        tar_binary = await Get(GTarBinary)
+
+    else:
+        tar_binary = await Get(TarBinary)
+
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.
     # passing a list of filenames into the utilities fixes this.
     FILE_LIST_FILENAME = "__pants_archive_filelist__"

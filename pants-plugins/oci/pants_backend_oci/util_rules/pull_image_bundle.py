@@ -13,7 +13,13 @@ from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionRule
 
 from pants_backend_oci.subsystem import SkopeoTool
-from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageRepositoryAnonymous
+from pants_backend_oci.target_types import (
+    ImageArchitectureField,
+    ImageDigest,
+    ImageOsField,
+    ImageRepository,
+    ImageRepositoryAnonymous,
+)
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -28,6 +34,8 @@ class ImageBundlePullFieldSet(FieldSet):
     repository: ImageRepository
     digest: ImageDigest
     anonymous: ImageRepositoryAnonymous
+    architecture: ImageArchitectureField
+    os: ImageOsField
 
 
 @dataclass(frozen=True)
@@ -52,8 +60,15 @@ async def pull_oci_image(
         # TODO[TSOL]: Should likely provide a way to inject a policy
         # into this... Maybe dependency injector?
         "--insecure-policy",
-        "copy",
     ]
+
+    if request.target.architecture.value:
+        args.extend(["--override-arch", request.target.architecture.value])
+
+    if request.target.os.value:
+        args.extend(["--override-os", request.target.os.value])
+
+    args.append("copy")
 
     relevant_env = Environment()
     if request.target.anonymous.value:
