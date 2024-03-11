@@ -119,6 +119,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     real_layers = []
 
     if all_digests:
+        print(all_digests)
         snapshot = await Get(
             Snapshot,
             MergeDigests(all_digests),

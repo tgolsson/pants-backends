@@ -152,6 +152,14 @@ class ImageLayersField(Dependencies):
     """)
 
 
+class DebArchive(Dependencies):
+    alias = "deb_archive"
+
+    help = softwrap("""
+    The .deb archive to extract from.
+    """)
+
+
 class ImageArchitectureField(StringField):
     alias = "architecture"
 

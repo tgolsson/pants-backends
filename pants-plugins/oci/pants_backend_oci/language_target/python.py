@@ -141,6 +141,7 @@ async def build_python_image(
                 output_directories=("build/",),
             ),
         )
+
         if layer.compressed:
             layer_processes = (
                 Process(

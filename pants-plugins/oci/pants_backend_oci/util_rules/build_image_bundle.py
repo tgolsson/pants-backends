@@ -33,7 +33,9 @@ from pants_backend_oci.target_types import (
     ImageEnvironment,
     ImageLayersField,
 )
+from pants_backend_oci.targets import DebLayer
 from pants_backend_oci.tools.process import FusedProcess
+from pants_backend_oci.util_rules.deb_layer import DebLayer, DebLayerRequest
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
@@ -95,7 +97,10 @@ async def build_oci_bundle_package(
         layer_dependencies = await Get(Targets, DependenciesRequest(request.target.layers))
 
         for dependency in layer_dependencies:
-            layer_requests.append(Get(ImageLayer, ImageLayerRequest(dependency, old_style=False)))
+            if isinstance(dependency, DebLayer):
+                layer_requests.append(Get(ImageLayer, DebLayerRequest(dependency)))
+            else:
+                layer_requests.append(Get(ImageLayer, ImageLayerRequest(dependency, old_style=False)))
 
     if request.target.dependencies:
         root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))

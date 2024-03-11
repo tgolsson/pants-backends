@@ -5,6 +5,7 @@ from pants_backend_oci.util_rules import (
     build_image_bundle,
     configure,
     copy,
+    deb_layer,
     empty_image_bundle,
     image_bundle,
     jq,
@@ -20,6 +21,7 @@ from pants_backend_oci.util_rules import (
 def rules():
     return [
         *copy.rules(),
+        *deb_layer.rules(),
         *archive.rules(),
         *build_image_bundle.rules(),
         *image_bundle.rules(),

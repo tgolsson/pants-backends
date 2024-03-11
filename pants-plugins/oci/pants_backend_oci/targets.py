@@ -12,6 +12,7 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    DebArchive,
     ImageArchitectureField,
     ImageArgs,
     ImageArtifactExclusions,
@@ -154,7 +155,13 @@ class ImageLayer(Target):
         ImageDependencies,
         ImageLayerOutputPathField,
     )
-    help = "A layer that can be inserted directly into an imgae"
+    help = "A layer that can be inserted directly into an image"
+
+
+class DebLayer(Target):
+    alias = "deb_layer"
+    core_fields = (*COMMON_TARGET_FIELDS, DebArchive)
+    help = "A layer that can be inserted directly into an image"
 
 
 def targets():
@@ -165,6 +172,7 @@ def targets():
         ImageBuildStep,
         ImageEmpty,
         ImageLayer,
+        DebLayer,
     ]
 
 
