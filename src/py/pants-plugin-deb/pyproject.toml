@@ -1,0 +1,45 @@
+[project]
+name = "pants_plugin_deb"
+description = "Debian package installer for use with container builds."
+version = "0.1.0"
+authors = [
+    { name = "Tom Solberg", email = "me@sbg.dev" }
+]
+
+dependencies = [
+    "python-debian>=0.1.49",
+]
+
+readme = "README.md"
+license = {file = "LICENSE-MIT.txt"}
+keywords = ["pantsbuild", "pants", "backend", "debian", "container"]
+
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Topic :: Software Development :: Build Tools",
+]
+
+[project.urls]
+Repository = "https://github.com/tgolsson/pants-backends"
+Code = "https://github.com/tgolsson/pants-backends/tree/main/src/py/pants_plugin_deb"
+Changelog = "https://github.com/tgolsson/pants-backends/tree/main/src/py/pants_plugin_deb/CHANGELOG.md"
+
+[tool.pdm.build]
+includes = [
+    "pants_backend_k8s",
+]
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.isort]
+profile = "black"
+
+known_first_party = ["pants_plugin_deb"]
+line_length = 100
+include_trailing_comma = true
+
+[tool.black]
+line-length = 100

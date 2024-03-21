@@ -1,0 +1,14 @@
+deb_packages(
+    release="bookworm",
+    snapshot="20240101T090148Z",
+    architecture="amd64",
+    pools=[
+        "main",
+        "contrib",
+        "non-free",
+    ],
+    packages=[
+        "python3.11",
+        "jq",
+    ]
+)

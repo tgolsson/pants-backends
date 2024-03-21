@@ -9,6 +9,7 @@ pythonpath = [
    "%(buildroot)s/pants-plugins/mdbook",
    "%(buildroot)s/pants-plugins/bitwarden",
    "%(buildroot)s/pants-plugins/secrets",
+   "%(buildroot)s/src/py/pants-plugin-deb",
 ]
 
 backend_packages = [
@@ -26,6 +27,7 @@ backend_packages = [
   "pants_backend_oci",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
+  "pants_plugin_deb",
 
   "pants.backend.shell",
   "pants.backend.experimental.python.lint.ruff",
@@ -101,3 +103,6 @@ config = "['pyproject.toml']"
 args = ["--no-header"]
 execution_slot_var = "TEST_EXECUTION_SLOT"
 install_from_resolve = "pytest"
+
+[debian-packages.resolves]
+example-bookworm = "examples/deb/bookworm.lock"
