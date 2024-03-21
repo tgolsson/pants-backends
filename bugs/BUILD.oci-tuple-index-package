@@ -1,0 +1,47 @@
+oci_pull_image(
+    name="debian-bookworm",
+    repository="docker.io/library/debian",
+    digest="993f5593466f84c9200e3e877ab5902dfc0e4a792f291c25c365dbe89833411f",
+)
+
+file(
+    name="cmake-tar",
+    source=http_source(
+        url="https://github.com/Kitware/CMake/releases/download/v3.28.3/cmake-3.28.3-linux-x86_64.tar.gz",
+        len=52618129,
+        sha256="804d231460ab3c8b556a42d2660af4ac7a0e21c98a7f8ee3318a74b4a9a187a6",
+    ),
+)
+
+for binary in ["bash", "gzip", "tar", "mv"]:
+    system_binary(
+        name=binary,
+        binary_name=binary,
+        fingerprint_args=["--version"],
+    )
+
+adhoc_tool(
+    name="unpack-cmake",
+    runnable_dependencies=[":gzip", ":tar", ":mv"],
+    execution_dependencies=[":cmake-tar"],
+    runnable=":bash",
+    args=[
+        "-c",
+        """
+set -euo pipefail
+tar xf bugs/cmake-3.28.3-linux-x86_64.tar.gz
+mv cmake-3.28.3-linux-x86_64 usr
+""",
+    ],
+    output_directories=["usr"],
+    workdir="/",
+)
+
+oci_image_build(
+    name="debian-cmake",
+    base=[":debian-bookworm#slim"],
+    packages=[
+        ":unpack-cmake",
+    ],
+    entrypoint="/usr/bin/cmake",
+)

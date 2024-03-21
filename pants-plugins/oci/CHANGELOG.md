@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Both umoci and skopeo are now supported on Mac M1 and x86_64. This plugin does not support image run steps
   on Mac still.
 - When pulling multi-arch images you can now specify `os` and `architecture` on the `oci_pull_image` target
-
+- Fix a bug where OCI layer building would fail if no dependencies were specified
 
 ## 0.5.0 - 2023-11-19
 

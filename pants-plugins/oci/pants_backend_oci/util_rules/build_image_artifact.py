@@ -102,7 +102,7 @@ async def build_image_artifact(
     base = maybe_built_base.output
     base_digest = base.digest
 
-    if request.target.dependencies:
+    if request.target.dependencies.value:
         dependencies = await MultiGet(
             Get(Targets, DependenciesRequest(request.target.dependencies)),
         )
