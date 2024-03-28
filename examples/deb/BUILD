@@ -1,7 +1,7 @@
 deb_packages(
     release="bookworm",
     snapshot="20240101T090148Z",
-    architecture="amd64",
+    architectures=["amd64"],
     pools=[
         "main",
         "contrib",
@@ -10,5 +10,6 @@ deb_packages(
     packages=[
         "python3.11",
         "jq",
-    ]
+    ],
+    resolve="example-bookworm",
 )

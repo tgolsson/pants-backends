@@ -15,7 +15,7 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_plugin_deb.targets import (
-    DebianArchitectureField,
+    DebianArchitecturesField,
     DebianPackageField,
     DebianPackagesField,
     DebianPoolsField,
@@ -36,7 +36,7 @@ class DebianPackagesTargetGenerator(TargetGenerator):
     generated_target_cls = DebPackage
     core_fields = (
         *COMMON_TARGET_FIELDS,
-        DebianArchitectureField,
+        DebianArchitecturesField,
         DebianPackagesField,
         DebianPoolsField,
         DebianReleaseField,
@@ -45,7 +45,11 @@ class DebianPackagesTargetGenerator(TargetGenerator):
     )
     copied_fields = (
         *COMMON_TARGET_FIELDS,
+        DebianArchitecturesField,
+        DebianPoolsField,
+        DebianReleaseField,
         DebianResolveField,
+        DebianSnapshotField,
     )
     moved_fields = ()
 
@@ -60,10 +64,7 @@ def generate_from_debian_packages(
 ) -> GeneratedTargets:
     generator = request.generator
 
-    print("xx")
-
     def create_tgt(package: str) -> DebPackage:
-        print(package)
         return DebPackage(
             {
                 DebianPackageField.alias: package,

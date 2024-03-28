@@ -35,7 +35,7 @@ class DebianPackageField(StringField):
 
 class DebianResolveField(StringField):
     alias = "resolve"
-
+    required = True
     help = softwrap(
         """
         The resolve name used by the lockfile.
@@ -43,12 +43,12 @@ class DebianResolveField(StringField):
     )
 
 
-class DebianArchitectureField(StringField):
-    alias = "architecture"
+class DebianArchitecturesField(StringSequenceField):
+    alias = "architectures"
     valid_choices = ("amd64", "arm64")
     help = softwrap(
         """
-        The architecture of the Debian package. This is a required field.
+        The architectures of the Debian package. This is a required field.
         """
     )
 
@@ -90,7 +90,15 @@ class DebianPoolsField(StringSequenceField):
 
 class DebPackage(Target):
     alias = "deb_package"
-    core_fields = (*COMMON_TARGET_FIELDS, DebianPackageField, DebianResolveField)
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        DebianArchitecturesField,
+        DebianPoolsField,
+        DebianReleaseField,
+        DebianResolveField,
+        DebianSnapshotField,
+        DebianPackageField,
+    )
     help = softwrap(
         """
         A Debian package that can be installed in containers.
