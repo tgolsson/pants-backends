@@ -42,10 +42,12 @@ class PublishImageFieldSet(PublishFieldSet):
     tag: ImageTag
 
     def get_output_data(self) -> PublishOutputData:
-        return PublishOutputData({
-            "publisher": "skopeo",
-            **super().get_output_data(),
-        })
+        return PublishOutputData(
+            {
+                "publisher": "skopeo",
+                **super().get_output_data(),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -89,15 +91,21 @@ async def publish_oci_process(
 @rule(desc="Publish OCI Image")
 async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
     field_set = request.field_set
+
     package = request.packages[0]
     metadata = package.artifacts[0]
+
+    if field_set.repository.value is None:
+        return PublishProcesses(
+            (PublishPackages(names=(f"{field_set.address}",), description="(because it has no repository)"),)
+        )
 
     process = await Get(
         Process,
         OciPublishProcessRequest(
             input_digest=package.digest,
             repository=field_set.repository.value,
-            tag=field_set.tag.value,
+            tag=field_set.tag.value or "latest",
             description=(
                 f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}"
             ),
@@ -105,14 +113,16 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
         ),
     )
 
-    return PublishProcesses((
-        PublishPackages(
-            names=(f"{metadata.sha}",),
-            process=InteractiveProcess.from_process(process),
-            description=process.description,
-            data=PublishOutputData({"repository": process.description}),
-        ),
-    ))
+    return PublishProcesses(
+        (
+            PublishPackages(
+                names=(f"{metadata.sha}",),
+                process=InteractiveProcess.from_process(process),
+                description=process.description,
+                data=PublishOutputData({"repository": process.description}),
+            ),
+        )
+    )
 
 
 def rules():
