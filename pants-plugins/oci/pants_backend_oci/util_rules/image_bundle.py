@@ -74,7 +74,6 @@ def ibr_to_fibr(
     request: ImageBundleRequest, union_membership: UnionMembership
 ) -> FallibleImageBundleRequestWrap:
     tgt = request.target
-
     concrete_requests = [
         request_type(request_type.field_set_type.create(tgt))
         for request_type in union_membership[FallibleImageBundleRequest]
