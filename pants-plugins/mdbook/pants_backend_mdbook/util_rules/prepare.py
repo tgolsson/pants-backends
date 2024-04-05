@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 
+from pants.core.target_types import FileSourceField
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Address, Addresses
@@ -8,11 +9,11 @@ from pants.engine.fs import Digest, MergeDigests
 from pants.engine.platform import Platform
 from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import (
+    Dependencies,
+    DependenciesRequest,
     InvalidTargetException,
     SourcesField,
     Targets,
-    TransitiveTargets,
-    TransitiveTargetsRequest,
 )
 
 from pants_backend_mdbook.subsystem import MdBookTool
@@ -35,18 +36,23 @@ class MdBookAnalysisRequest:
 async def prepare_md_book_ctx(
     request: MdBookAnalysisRequest, mdbook: MdBookTool, platform: Platform
 ) -> MdBookAnalysis:
-    (targets, transitive_targets) = await MultiGet(
-        Get(Targets, Addresses([request.address])),
-        Get(TransitiveTargets, TransitiveTargetsRequest([request.address])),
-    )
+    target = await Get(Targets, Addresses([request.address]))
+    target = target[0]
+    dependencies = await Get(Targets, DependenciesRequest(target[Dependencies]))
 
-    target = targets[0]
-
-    (sources, tool) = await MultiGet(
+    (sources, codegened, tool) = await MultiGet(
         Get(
             SourceFiles,
             SourceFilesRequest(
-                [target.get(MdBookSources)] + [t.get(SourcesField) for t in transitive_targets.dependencies],
+                [target.get(MdBookSources)] + [t.get(SourcesField) for t in dependencies],
+            ),
+        ),
+        Get(
+            SourceFiles,
+            SourceFilesRequest(
+                [t.get(SourcesField) for t in dependencies],
+                for_sources_types=(FileSourceField, MdBookSources),
+                enable_codegen=True,
             ),
         ),
         Get(
@@ -64,7 +70,9 @@ async def prepare_md_book_ctx(
     if build_root is None:
         raise InvalidTargetException("Must include a `book.toml` in the `md_book` sources.")
 
-    sandbox_input = await Get(Digest, MergeDigests([tool.digest, sources.snapshot.digest]))
+    sandbox_input = await Get(
+        Digest, MergeDigests([tool.digest, sources.snapshot.digest, codegened.snapshot.digest])
+    )
     return MdBookAnalysis(sandbox_input, build_root, tool.exe)
 
 

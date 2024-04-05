@@ -1,7 +1,7 @@
 [project]
 name = "pants_backend_mdbook"
 description = "A  MdBook documentation builder plugin for the Pants buildsystem."
-version = "0.3.0"
+version = "0.4.0"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
@@ -28,8 +28,8 @@ includes = [
 ]
 
 [build-system]
-requires = ["pdm-pep517>=1.0.0"]
-build-backend = "pdm.pep517.api"
+requires = ["pdm-backend>2.0"]
+build-backend = "pdm.backend"
 
 [tool.isort]
 profile = "black"

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.4.0] - 2024-04-05
+
+- Will now also include codegen sources, allowing integration with `adhoc_tool` and other generators. Note that only file and direct mdbook sources are included.
+
 ## [0.3.0] - 2023-11-21
 
 * Target pants version is now 2.18.0, with support for 2.17.0.
