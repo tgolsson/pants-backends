@@ -11,6 +11,7 @@ _mdbook_platform_mapping = {
     "linux_x86_64": "x86_64-unknown-linux-gnu",
     "linux_arm64": "aarch64-unknown-linux-musl",
     "macos_x86_64": "x86_64-apple-darwin",
+    "macos_arm64": "x86_64-apple-darwin",
 }
 
 
@@ -20,6 +21,7 @@ class MdBookTool(ExternalTool):
 
     default_version = "v0.4.35"
     default_known_versions = [
+        "v0.4.35|macos_arm64 |ca3281c2b5437a1ccd9079ed8121b3dd97c49be74dae32ea803b540a38c334bb|4701269",  # using rosetta?
         "v0.4.35|macos_x86_64|ca3281c2b5437a1ccd9079ed8121b3dd97c49be74dae32ea803b540a38c334bb|4701269",
         "v0.4.35|linux_x86_64|4ef777bfcb3fd01687deed990372a6eb5e125f79b592014b0ac09b61595f0b34|5348678",
         "v0.4.35|linux_arm64 |359af01b77fbd6bf6243a3f2b2491a37b5480bbb2674eb2d94f91354253b34f4|5442606",
