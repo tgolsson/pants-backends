@@ -1,7 +1,7 @@
 [project]
 name = "pants_backend_mdbook"
 description = "A  MdBook documentation builder plugin for the Pants buildsystem."
-version = "0.4.0"
+version = "0.4.1"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+
+## [0.4.1] - 2024-04-12
+
+- Will now use x86_64 mdbook binary on arm64, relying on Rosetta.
+
 ## [0.4.0] - 2024-04-05
 
 - Will now also include codegen sources, allowing integration with `adhoc_tool` and other generators. Note that only file and direct mdbook sources are included.

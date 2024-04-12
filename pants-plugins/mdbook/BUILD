@@ -10,10 +10,9 @@ python_distribution_with_secret(
     ],
     provides=python_artifact(
         name="pants_backend_mdbook",
-        version="0.4.0",
+        version="0.4.1",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/mdbook/README.md",
-    wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
     repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )
