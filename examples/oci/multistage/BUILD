@@ -1,6 +1,6 @@
 python_sources(
     resolve="example-1",
-    interpreter_constraints=[">=3.9,<3.10"],
+    interpreter_constraints=[">=3.11,<3.12"],
 )
 
 python_requirements(
@@ -18,7 +18,7 @@ pex_binary(
     include_sources=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.9,<3.10"],
+    interpreter_constraints=[">=3.11,<3.12"],
 )
 
 oci_build_layer(
@@ -28,7 +28,7 @@ oci_build_layer(
     commands="python /examples.oci.multistage/binary-deps.pex venv --scope=deps --compile /bin/app",
     env=[
         "PEX_TOOLS=1",
-        "PY=python3.9",
+        "PY=python3.11",
     ],
     outputs=["bin/app/"],
 )
@@ -40,7 +40,7 @@ pex_binary(
     include_requirements=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.9,<3.10"],
+    interpreter_constraints=[">=3.11,<3.12"],
 )
 
 oci_build_layer(
@@ -50,7 +50,7 @@ oci_build_layer(
     commands="python /examples.oci.multistage/binary-srcs.pex venv --scope=srcs --compile /bin/app",
     env=[
         "PEX_TOOLS=1",
-        "PY=python3.9",
+        "PY=python3.11",
     ],
     outputs=["bin/app/"],
 )

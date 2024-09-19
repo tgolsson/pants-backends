@@ -16,6 +16,7 @@ from pants.core.util_rules.system_binaries import (
     BinaryPathRequest,
     BinaryPaths,
     BinaryPathTest,
+    SystemBinariesSubsystem,
     TarBinary,
 )
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
@@ -24,7 +25,6 @@ from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import Get, collect_rules, rule
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_oci.subsystem import OciSubsystem
 
@@ -41,47 +41,26 @@ class GTarBinary(TarBinary):
     pass
 
 
-if PANTS_SEMVER >= Version("2.19.0.dev0"):
-    from pants.core.util_rules.system_binaries import SystemBinariesSubsystem
+@rule
+def tar_environment(
+    system_binaries_subsystem: SystemBinariesSubsystem.EnvironmentAware,
+) -> TarEnvironment:
+    env = {"PATH": os.pathsep.join(system_binaries_subsystem.system_binary_paths), "GZIP": "-n"}
+    return TarEnvironment(env=FrozenDict(env))
 
-    @rule
-    def tar_environment(
-        system_binaries_subsystem: SystemBinariesSubsystem.EnvironmentAware,
-    ) -> TarEnvironment:
-        env = {"PATH": os.pathsep.join(system_binaries_subsystem.system_binary_paths), "GZIP": "-n"}
-        return TarEnvironment(env=FrozenDict(env))
 
-    @rule(desc="Finding the `tar` binary", level=LogLevel.DEBUG)
-    async def find_gtar(
-        platform: Platform, system_binaries: SystemBinariesSubsystem.EnvironmentAware
-    ) -> GTarBinary:
-        request = BinaryPathRequest(
-            binary_name="gtar",
-            search_path=system_binaries.system_binary_paths,
-            test=BinaryPathTest(args=["--version"]),
-        )
-        paths = await Get(BinaryPaths, BinaryPathRequest, request)
-        first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
-        return GTarBinary(first_path.path, first_path.fingerprint, platform)
-
-else:
-    from pants.core.util_rules.system_binaries import SEARCH_PATHS
-
-    @rule
-    def tar_environment() -> TarEnvironment:
-        env = {"PATH": os.pathsep.join(SEARCH_PATHS), "GZIP": "-n"}
-        return TarEnvironment(env=FrozenDict(env))
-
-    @rule(desc="Finding the `gtar` binary", level=LogLevel.DEBUG)
-    async def find_gtar(platform: Platform) -> GTarBinary:
-        request = BinaryPathRequest(
-            binary_name="gtar",
-            search_path=SEARCH_PATHS,
-            test=BinaryPathTest(args=["--version"]),
-        )
-        paths = await Get(BinaryPaths, BinaryPathRequest, request)
-        first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
-        return GTarBinary(first_path.path, first_path.fingerprint, platform)
+@rule(desc="Finding the `tar` binary", level=LogLevel.DEBUG)
+async def find_gtar(
+    platform: Platform, system_binaries: SystemBinariesSubsystem.EnvironmentAware
+) -> GTarBinary:
+    request = BinaryPathRequest(
+        binary_name="gtar",
+        search_path=system_binaries.system_binary_paths,
+        test=BinaryPathTest(args=["--version"]),
+    )
+    paths = await Get(BinaryPaths, BinaryPathRequest, request)
+    first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
+    return GTarBinary(first_path.path, first_path.fingerprint, platform)
 
 
 @dataclass(frozen=True)

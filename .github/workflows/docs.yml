@@ -28,20 +28,20 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v2
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.11
         uses: actions/setup-python@v3
         with:
-          python-version: 3.9
+          python-version: 3.11
 
-      - name: Tell Pants to use Python 3.9
+      - name: Tell Pants to use Python 3.11
         run: |
-          echo "PY=python3.9" >> $GITHUB_ENV
-          echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=['==3.9.*']" >> $GITHUB_ENV
+          echo "PY=python3.11" >> $GITHUB_ENV
+          echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=['==3.11.*']" >> $GITHUB_ENV
 
       - name: Initialize Pants
         uses: pantsbuild/actions/init-pants@main
         with:
-          gha-cache-key: cache0-docs-py3.9
+          gha-cache-key: cache0-docs-py3.11
           named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
       - name: Build docs

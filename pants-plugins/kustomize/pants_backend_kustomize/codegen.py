@@ -2,7 +2,11 @@ import os
 from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.system_binaries import BinaryShims, BinaryShimsRequest
+from pants.core.util_rules.system_binaries import (
+    BinaryShims,
+    BinaryShimsRequest,
+    SystemBinariesSubsystem,
+)
 from pants.engine.fs import AddPrefix, Digest, MergeDigests, Snapshot
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
@@ -10,7 +14,6 @@ from pants.engine.rules import Get, MultiGet, collect_rules, rule
 from pants.engine.target import GeneratedSources, GenerateSourcesRequest
 from pants.engine.unions import UnionRule
 from pants.source.source_root import SourceRoot, SourceRootRequest
-from pants.version import PANTS_SEMVER, Version
 
 from pants_backend_k8s.target_types import KubernetesSourceField
 from pants_backend_kustomize.subsystem import KustomizeTool
@@ -26,41 +29,21 @@ class GitRequest:
     pass
 
 
-if PANTS_SEMVER >= Version("2.19.0.dev0"):
-    from pants.core.util_rules.system_binaries import SystemBinariesSubsystem
+@rule
+async def get_binary_shims(
+    _: GitRequest, system_binaries_subsystem: SystemBinariesSubsystem.EnvironmentAware
+) -> BinaryShims:
+    kwargs = dict(
+        rationale="asdqwe",
+        search_path=system_binaries_subsystem.system_binary_paths,
+    )
 
-    @rule
-    async def get_binary_shims(
-        _: GitRequest, system_binaries_subsystem: SystemBinariesSubsystem.EnvironmentAware
-    ) -> BinaryShims:
-        kwargs = dict(
-            rationale="asdqwe",
-            search_path=system_binaries_subsystem.system_binary_paths,
-        )
+    binary_shims = BinaryShimsRequest.for_binaries(
+        "git",
+        **kwargs,
+    )
 
-        binary_shims = BinaryShimsRequest.for_binaries(
-            "git",
-            **kwargs,
-        )
-
-        return await Get(BinaryShims, BinaryShimsRequest, binary_shims)
-
-else:
-    from pants.core.util_rules.system_binaries import SEARCH_PATHS
-
-    @rule
-    async def get_binary_shims(_: GitRequest) -> BinaryShims:
-        kwargs = dict(
-            rationale="asdqwe",
-            search_path=SEARCH_PATHS,
-        )
-
-        binary_shims = BinaryShimsRequest.for_binaries(
-            "git",
-            **kwargs,
-        )
-
-        return await Get(BinaryShims, BinaryShimsRequest, binary_shims)
+    return await Get(BinaryShims, BinaryShimsRequest, binary_shims)
 
 
 class GenerateKubernetesFromKustomizeRequest(GenerateSourcesRequest):

@@ -15,26 +15,26 @@ jobs:
 
     strategy:
       matrix:
-        pants-version: ["2.18.0", "2.19.0", "2.20.0.dev7"]
+        pants-version: ["2.21.0", "2.22.0"]
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v3
+    - name: Set up Python 3.9 and 3.11
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.9
+        python-version: |
+          3.9
+          3.11
 
-    - name: Tell Pants to use Python 3.9
+    - name: Tell Pants to use Python 3.11
       run: |
-        echo "PY=python3.9" >> $GITHUB_ENV
         echo "PANTS_VERSION=${{ matrix.pants-version }}" >> $GITHUB_ENV
-        echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=['==3.9.*']" >> $GITHUB_ENV
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-test-py3.9-pants${{ matrix.pants-version }}
+        gha-cache-key: cache1-test-py3.11-pants${{ matrix.pants-version }}
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Test everything
@@ -49,26 +49,26 @@ jobs:
 
     strategy:
       matrix:
-        pants-version: ["2.18.0", "2.19.0", "2.20.0.dev7"]
+        pants-version: ["2.21.0", "2.22.0"]
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v3
+    - name: Set up Python 3.9 and 3.11
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.9
+        python-version: |
+          3.9
+          3.11
 
-    - name: Tell Pants to use Python 3.9
+    - name: Tell Pants to use Python 3.11
       run: |
-        # echo "PY=python3.9" >> $GITHUB_ENV
-        # echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=['==3.9.*']" >> $GITHUB_ENV
         echo "PANTS_VERSION=${{ matrix.pants-version }}" >> $GITHUB_ENV
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-package-py3.9-pants${{ matrix.pants-version }}
+        gha-cache-key: cache1-package-py3.11-pants${{ matrix.pants-version }}
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Package all targets
@@ -94,20 +94,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v3
+    - name: Set up Python 3.9 and 3.11
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.9
-
-    - name: Tell Pants to use Python 3.9
-      run: |
-        echo "PANTS_VERSION=2.19.0" >> $GITHUB_ENV
+        python-version: |
+          3.9
+          3.11
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-package-py3.9-pants2.19.0
+        gha-cache-key: cache1-package-py3.11-pants2.19.0
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Package all targets
@@ -128,14 +126,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v3
+    - name: Set up Python 3.9 and 3.11
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.9
-    - name: Tell Pants to use Python 3.9
-      run: 'echo "PY=python3.9" >> $GITHUB_ENV
-        echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=[''==3.9.*'']" >> $GITHUB_ENV
-        '
+        python-version: |
+          3.9
+          3.11
+
     - name: Run linters on all targets
       run: |
         ./get-pants.sh
@@ -146,14 +143,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v3
+    - name: Set up Python 3.9 and 3.11
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.9
-    - name: Tell Pants to use Python 3.9
-      run: 'echo "PY=python3.9" >> $GITHUB_ENV
-        echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=[''==3.9.*'']" >> $GITHUB_ENV
-        '
+        python-version: |
+          3.9
+          3.11
+
     - name: Validate that tailor files are up to date
       run: |
         ./get-pants.sh
