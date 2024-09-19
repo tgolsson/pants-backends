@@ -5,8 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## 0.4.0 - 2024-09-19
 
+- Now targets `pants` version `2.22`.
 - Add `tailor` support
 - Import `git` to sandbox during expansion to support github downloads
   - submodule check seems to fail so it might help to add `?submodules=false` to the link to disable it
