@@ -19,10 +19,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.11
+    - name: Set up Python 3.9 and 3.11
       uses: actions/setup-python@v3
       with:
-        python-version: 3.11
+        python-version: |
+          3.9
+          3.11
 
     - name: Tell Pants to use Python 3.11
       run: |
@@ -51,10 +53,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.11
+    - name: Set up Python 3.9 and 3.11
       uses: actions/setup-python@v3
       with:
-        python-version: 3.11
+        python-version: |
+          3.9
+          3.11
 
     - name: Tell Pants to use Python 3.11
       run: |
@@ -90,10 +94,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.11
+    - name: Set up Python 3.9 and 3.11
       uses: actions/setup-python@v3
       with:
-        python-version: 3.11
+        python-version: |
+          3.9
+          3.11
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
@@ -120,10 +126,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.11
+    - name: Set up Python 3.9 and 3.11
       uses: actions/setup-python@v3
       with:
-        python-version: 3.11
+        python-version: |
+          3.9
+          3.11
 
     - name: Run linters on all targets
       run: |
@@ -135,10 +143,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.11
+    - name: Set up Python 3.9 and 3.11
       uses: actions/setup-python@v3
       with:
-        python-version: 3.11
+        python-version: |
+          3.9
+          3.11
 
     - name: Validate that tailor files are up to date
       run: |
