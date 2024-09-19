@@ -26,7 +26,6 @@ jobs:
 
     - name: Tell Pants to use Python 3.11
       run: |
-        echo "PY=python3.11" >> $GITHUB_ENV
         echo "PANTS_VERSION=${{ matrix.pants-version }}" >> $GITHUB_ENV
 
     - name: Initialize Pants
@@ -59,8 +58,6 @@ jobs:
 
     - name: Tell Pants to use Python 3.11
       run: |
-        # echo "PY=python3.11" >> $GITHUB_ENV
-        # echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=['==3.11.*']" >> $GITHUB_ENV
         echo "PANTS_VERSION=${{ matrix.pants-version }}" >> $GITHUB_ENV
 
     - name: Initialize Pants
@@ -127,8 +124,7 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: 3.11
-    - name: Tell Pants to use Python 3.11
-      run: 'echo "PY=python3.11" >> $GITHUB_ENV'
+
     - name: Run linters on all targets
       run: |
         ./get-pants.sh
@@ -143,8 +139,6 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: 3.11
-    - name: Tell Pants to use Python 3.11
-      run: 'echo "PY=python3.11" >> $GITHUB_ENV'
 
     - name: Validate that tailor files are up to date
       run: |
