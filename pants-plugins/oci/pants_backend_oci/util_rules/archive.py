@@ -26,6 +26,8 @@ from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 from pants.version import PANTS_SEMVER, Version
 
+from pants_backend_oci.subsystem import OciSubsystem
+
 logger = logging.getLogger(__name__)
 
 
@@ -155,7 +157,9 @@ async def tar_directory_process(
 
 
 @rule(desc="Creating an archive file", level=LogLevel.DEBUG)
-async def create_archive(request: CreateDeterministicTar, env: TarEnvironment, platform: Platform) -> Digest:
+async def create_archive(
+    request: CreateDeterministicTar, env: TarEnvironment, oci_subsystem: OciSubsystem, platform: Platform
+) -> Digest:
     if platform in (Platform.macos_arm64, Platform.macos_x86_64):
         tar_binary = await Get(GTarBinary)
 
@@ -185,6 +189,9 @@ async def create_archive(request: CreateDeterministicTar, env: TarEnvironment, p
         "--group=0",
         "--numeric-owner",
     ]
+
+    if oci_subsystem.unsafe_tar_ignore_file_changed:
+        argv[8:8] = ["--warning=no-file-changed"]
 
     # `tar` expects to find a couple binaries like `gzip` and `xz` by looking on the PATH.
     env = {**env.env}

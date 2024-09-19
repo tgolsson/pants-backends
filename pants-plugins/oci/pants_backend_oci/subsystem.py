@@ -4,6 +4,7 @@ from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
 from pants.option.option_types import BoolOption, StrListOption, StrOption
 from pants.option.subsystem import Subsystem
+from pants.util.strutil import softwrap
 
 
 class OciSubsystem(Subsystem):
@@ -41,6 +42,18 @@ class OciSubsystem(Subsystem):
         default="empty",
         advanced=False,
         help="The name of the synthetic target for an empty base image.",
+    )
+
+    unsafe_tar_ignore_file_changed = BoolOption(
+        default=False,
+        advanced=True,
+        help=softwrap("""
+        Adds `--warning=no-file-changed` to tar calls.
+
+        When working with large files, Pants will use symlinks instead of copying files into the
+        sandboxes. Unfortunately, creating a symlink *modifies the target file*, which means
+        that tar can detect that the file was linked into another sandbox and fail with  a "file changed"
+        warning."""),
     )
 
 
