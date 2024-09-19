@@ -1,7 +1,7 @@
 [project]
 name = "pants_backend_oci"
 description = "An OCI plugin for the Pants build system"
-version = "0.6.1"
+version = "0.6.2"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
