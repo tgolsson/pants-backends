@@ -1,9 +1,9 @@
 pants_requirements(name="pants", resolve="pants-plugins")
 
 name_to_constraint = {
-    "pants-previous": ">=2.18.0a0,<2.19.0",
-    "pants-current": ">=2.19.0a0,<2.20.0",
-    "pants-next": "==2.20.0.dev7",
+    "pants-previous": ">=2.21.0a0,<2.22.0",
+    "pants-current": ">=2.22.0a0,<2.23.0",
+    "pants-next": "==2.23.0a0",
 }
 
 for name, constraint in name_to_constraint.items():
