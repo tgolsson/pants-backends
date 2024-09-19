@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## 0.5.0 - 2024-09-19
+
+- Now targets `pants` version `2.22`.
 
 ## [0.4.1] - 2024-04-12
 

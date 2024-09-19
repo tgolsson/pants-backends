@@ -4,8 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## Unreleased
+## 0.4.0 - 2024-09-19
 
+- Now targets `pants` version `2.22`.
 - Kubeconfig files are no longer automatically picked up from the host. In order to support scripted
   provisioning and local configuration files, all targets now take a `kubeconfig` field. This can
   point to either `kubeconfig` target which uses a straight source or a generated, or a
