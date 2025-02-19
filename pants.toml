@@ -1,5 +1,5 @@
 [GLOBAL]
-pants_version = "2.22.0"
+pants_version = "2.24.0"
 build_file_prelude_globs = ["examples/macros.py"]
 
 pythonpath = [
@@ -28,7 +28,8 @@ backend_packages = [
   "pants_backend_secrets",
 
   "pants.backend.shell",
-  "pants.backend.experimental.python.lint.ruff",
+  "pants.backend.experimental.python.lint.ruff.check",
+  "pants.backend.experimental.python.lint.ruff.format",
   "pants.backend.experimental.adhoc"
 ]
 
@@ -53,16 +54,16 @@ repo_id = "e32e6905-7a7d-405f-82b1-86d2723b0c4d"
 
 [python]
 tailor_pex_binary_targets = true
-interpreter_constraints = ["==3.9.*"]
+interpreter_constraints = [">=3.9,<3.12"]
 enable_resolves = true
 default_resolve = "pants-plugins"
-pip_version = "23.0.1"
+
 
 [python.resolves]
 pants-plugins = "pants-plugins/pants.lock"
 pants-previous = "pants-plugins/previous.lock"
 pants-current = "pants-plugins/current.lock"
-pants-next = "pants-plugins/next.lock"
+# pants-next = "pants-plugins/next.lock"
 example-1 = "locks/example-1.lock"
 
 pytest = "locks/tools/pytest.lock"
@@ -72,11 +73,11 @@ black = "locks/tools/black.lock"
 
 
 [python.resolves_to_interpreter_constraints]
-pants-plugins = ["==3.9.*"]
-pants-previous = ["==3.9.*"]
-pants-current = ["==3.9.*"]
-pants-next = ["==3.9.*"]
-pytest = ["==3.9.*"]
+pants-plugins = [">=3.9,<3.12"]
+pants-previous = [">=3.9,<3.12"]
+pants-current = [">=3.9,<3.12"]
+# pants-next = [">=3.9,<3.12"]
+pytest = [">=3.9,<3.12"]
 
 black = [">=3.9,<3.10"]
 example-1 = [">=3.11,<3.12"]
