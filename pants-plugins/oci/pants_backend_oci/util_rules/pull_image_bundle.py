@@ -77,10 +77,12 @@ async def pull_oci_image(
     else:
         relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
 
-    args.extend([
-        f"docker://{request.target.repository.value}@sha256:{request.target.digest.value}",
-        "oci:build:build",
-    ])
+    args.extend(
+        [
+            f"docker://{request.target.repository.value}@sha256:{request.target.digest.value}",
+            "oci:build:build",
+        ]
+    )
 
     desc = f"Download OCI image {request.target.repository.value}@sha256:{request.target.digest.value}"
 

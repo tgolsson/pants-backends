@@ -1,6 +1,4 @@
-"""
-
-"""
+""" """
 
 from __future__ import annotations
 
@@ -126,10 +124,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
         raw_layer_digest = await Get(Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar"))
         layer_name = "layers/image_bundle.tar"
-        real_layers.append((
-            raw_layer_digest,
-            layer_name,
-        ))
+        real_layers.append(
+            (
+                raw_layer_digest,
+                layer_name,
+            )
+        )
 
     for layer in layer_artifacts:
         snapshot = await Get(
@@ -137,10 +137,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
             MergeDigests([layer.digest]),
         )
 
-        real_layers.append((
-            snapshot.digest,
-            snapshot.files[0],
-        ))
+        real_layers.append(
+            (
+                snapshot.digest,
+                snapshot.files[0],
+            )
+        )
 
     if len(real_layers) > 1:
         # TODO[TSolberg]: Support multiple layers. We need to merge the layers together to create a single
@@ -162,10 +164,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     if embedded_pkgs:
         logger.info(f"Setting entrypoint to: {embedded_pkgs[0].artifacts[0].relpath}")
-        config.extend([
-            "--config.entrypoint",
-            f"/{embedded_pkgs[0].artifacts[0].relpath}",
-        ])
+        config.extend(
+            [
+                "--config.entrypoint",
+                f"/{embedded_pkgs[0].artifacts[0].relpath}",
+            ]
+        )
 
     return ImageLayer(
         request.target.address,

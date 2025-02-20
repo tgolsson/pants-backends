@@ -1,6 +1,4 @@
-"""
-
-"""
+""" """
 
 from pants.engine.target import COMMON_TARGET_FIELDS, Dependencies, MultipleSourcesField, Target
 from pants.util.strutil import softwrap
