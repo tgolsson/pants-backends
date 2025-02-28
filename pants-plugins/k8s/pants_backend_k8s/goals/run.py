@@ -90,10 +90,12 @@ async def compute_command_line(
     ]
 
     if kubernetes_command.has_field(KubernetesNamespaceField):
-        command.extend([
-            "--namespace",
-            kubernetes_command[KubernetesNamespaceField].value,
-        ])
+        command.extend(
+            [
+                "--namespace",
+                kubernetes_command[KubernetesNamespaceField].value,
+            ]
+        )
 
     return Process(
         command,

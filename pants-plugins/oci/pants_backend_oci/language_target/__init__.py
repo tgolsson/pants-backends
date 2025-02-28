@@ -1,6 +1,4 @@
-"""
-
-"""
+""" """
 
 from pants_backend_oci.language_target import python
 

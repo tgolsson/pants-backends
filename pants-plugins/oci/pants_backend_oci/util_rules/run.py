@@ -62,21 +62,31 @@ async def run_in_container(
 
     shell_command = [f'"{c}"' for c in oci.command_shell]
 
-    uid_mappings = ",\n".join([f"""
+    uid_mappings = ",\n".join(
+        [
+            f"""
         {{
             "containerID": {container_id},
             "hostID": {host_id},
             "size": {size}
         }}
-        """ for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)])
+        """
+            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.uid_map)
+        ]
+    )
 
-    gid_mappings = ",\n".join([f"""
+    gid_mappings = ",\n".join(
+        [
+            f"""
         {{
             "containerID": {container_id},
             "hostID": {host_id},
             "size": {size}
         }}
-        """ for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)])
+        """
+            for container_id, host_id, size in map(lambda desc: desc.split(":"), oci.gid_map)
+        ]
+    )
 
     command = request.command.replace('"', '\\"')
 

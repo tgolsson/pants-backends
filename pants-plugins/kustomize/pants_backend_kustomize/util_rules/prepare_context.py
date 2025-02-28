@@ -115,11 +115,13 @@ async def prepare_build_context(
 
     input_digest = await Get(
         Digest,
-        MergeDigests([
-            patched_root,
-            *[built_package.digest for built_package in embedded_pkgs],
-            *[base.digest for base in bases],
-        ]),
+        MergeDigests(
+            [
+                patched_root,
+                *[built_package.digest for built_package in embedded_pkgs],
+                *[base.digest for base in bases],
+            ]
+        ),
     )
 
     return KustomizationContext(input_digest)

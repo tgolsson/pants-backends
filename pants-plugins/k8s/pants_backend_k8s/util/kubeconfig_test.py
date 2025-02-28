@@ -48,12 +48,14 @@ def rule_runner() -> RuleRunner:
 
 
 def test_file_k8s_request(rule_runner):
-    rule_runner.write_files({
-        "BUILD": dedent("""
+    rule_runner.write_files(
+        {
+            "BUILD": dedent("""
             kubeconfig(name="config", from_source="foo.yaml"),
             """),
-        "foo.yaml": "some_text\n",
-    })
+            "foo.yaml": "some_text\n",
+        }
+    )
 
     target = rule_runner.get_target(Address("", target_name="config"))
     request = FileKubeconfigRequest(FileKubeconfigFieldSet.create(target))

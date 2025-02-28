@@ -1,6 +1,4 @@
-"""
-
-"""
+""" """
 
 from pants.engine.target import DictStringToStringField, SpecialCasedDependencies, softwrap
 
