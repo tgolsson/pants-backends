@@ -231,7 +231,6 @@ async def extract_image_artifact(
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
 
-    umoci_request = Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
     base = maybe_built_base.output
 
     bundle = ImageBundle(base.digest, "", True)
