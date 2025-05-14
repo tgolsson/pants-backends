@@ -32,6 +32,7 @@ from pants_backend_oci.target_types import (
     ImageBuildOutputs,
     ImageDependencies,
     ImageEnvironment,
+    ImageExtractMarker,
 )
 from pants_backend_oci.util_rules.copy import CopyFromRequest
 from pants_backend_oci.util_rules.image_bundle import (
@@ -62,10 +63,26 @@ class ImageArtifactBuildFieldSet(PackageFieldSet):
     exclude: ImageArtifactExclusions
 
 
+@dataclass(frozen=True)
+class ImageArtifactExtractFieldSet(PackageFieldSet):
+    required_fields = (ImageBase, ImageBuildOutputs, ImageExtractMarker)
+
+    base: ImageBase
+    outputs: ImageBuildOutputs
+    output_path: OutputPathField
+    exclude: ImageArtifactExclusions
+
+
 class ImageArtifactBuildRequest(FallibleImageBundleRequest):
     target: Target
 
     field_set_type: ClassVar[type[FieldSet]] = ImageArtifactBuildFieldSet
+
+
+class ImageArtifactExtractRequest(FallibleImageBundleRequest):
+    target: Target
+
+    field_set_type: ClassVar[type[FieldSet]] = ImageArtifactExtractFieldSet
 
 
 @rule(desc="Build artifact in container", level=LogLevel.DEBUG)
@@ -176,6 +193,48 @@ async def build_image_artifact(
         ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
     )
     bundle = ImageBundle(modified_image.output_digest, "", True)
+
+    artifacts = await Get(
+        ProcessResult,
+        CopyFromRequest(
+            request.target.output_path.value_or_default(file_ending="tar.gz"),
+            bundle,
+            tuple(),
+            request.target.outputs.value,
+            exclude_patterns=tuple(request.target.exclude.value or ()),
+        ),
+    )
+
+    return artifacts
+
+
+@rule(desc="Extract artifact from container", level=LogLevel.DEBUG)
+async def extract_image_artifact(
+    request: ImageArtifactExtractRequest,
+    umoci: UmociTool,
+    platform: Platform,
+) -> ProcessResult:
+    base = await Get(
+        Addresses,
+        UnparsedAddressInputs,
+        request.target.base.to_unparsed_address_inputs(),
+    )
+
+    wrapped_target = await Get(
+        WrappedTarget,
+        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
+    )
+
+    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
+
+    if maybe_built_base.output is None:
+        return dataclasses.replace(maybe_built_base, dependency_failed=True)
+
+    umoci_request = Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
+    base = maybe_built_base.output
+
+    bundle = ImageBundle(base.digest, "", True)
 
     artifacts = await Get(
         ProcessResult,

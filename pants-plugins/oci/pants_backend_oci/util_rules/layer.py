@@ -55,7 +55,10 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         root_dependencies = [request.target]
 
     else:
-        root_dependencies = await Get(Targets, DependenciesRequest(request.target[Dependencies]))
+        if request.target.has_field(Dependencies):
+            root_dependencies = await Get(Targets, DependenciesRequest(request.target[Dependencies]))
+        else:
+            root_dependencies = []
 
     # Get all file sources from the root dependencies. That includes any non-file sources that can
     # be "codegen"ed into a file source.
