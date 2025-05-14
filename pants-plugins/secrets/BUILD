@@ -10,7 +10,7 @@ python_distribution_with_secret(
     ],
     provides=python_artifact(
         name="pants_backend_secrets",
-        version="0.4.0",
+        version="0.5.0",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/secrets/README.md",
