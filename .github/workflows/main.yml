@@ -111,13 +111,16 @@ jobs:
     - name: Package all targets
       run: |
         ./get-pants.sh
+
         id
         id -u
         id -g
+
         sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
         sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
-        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:24.04 cat /proc/self/gid_map || true
-        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:24.04 cat /proc/self/uid_map || true
+
+        podman run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:24.04 cat /proc/self/gid_map || true
+        podman run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:24.04 cat /proc/self/uid_map || true
 
         pants --umoci-version=nightly --filter-address-regex='^((?!multistage).)*$' package examples::
 
