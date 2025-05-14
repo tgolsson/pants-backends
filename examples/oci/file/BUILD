@@ -1,10 +1,9 @@
 oci_pull_images(
     name="python",
     repository="docker.io/library/python",
-    variants=
-        {
-            "3.11.10-slim": "459ee2a00675825a5cf39a34d0c4a3f7cb994c76b647c88c1605ed9aca05b97e",
-        },
+    variants={
+        "3.11.10-slim": "459ee2a00675825a5cf39a34d0c4a3f7cb994c76b647c88c1605ed9aca05b97e",
+    },
     architecture="amd64",
     os="linux",
 )
