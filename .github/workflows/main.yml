@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     strategy:
       matrix:
@@ -45,7 +45,7 @@ jobs:
         /home/runner/bin/pants test ::
 
   package:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     strategy:
       matrix:
@@ -79,8 +79,8 @@ jobs:
         id -g
         sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
         sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
-        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map
-        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map
+        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:22.04 cat /proc/self/gid_map
+        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:22.04 cat /proc/self/uid_map
 
         /home/runner/bin/pants package ::
 
@@ -88,7 +88,7 @@ jobs:
 
     strategy:
       matrix:
-        os: ["ubuntu-20.04", "macos-13"]
+        os: ["ubuntu-22.04", "macos-13"]
 
     runs-on: ${{ matrix.os }}
 
@@ -111,18 +111,20 @@ jobs:
     - name: Package all targets
       run: |
         ./get-pants.sh
+
         id
         id -u
         id -g
+
         sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
         sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
-        docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:20.04 cat /proc/self/gid_map || true
-        docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:20.04 cat /proc/self/uid_map || true
+        podman run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:22.04 cat /proc/self/gid_map || true
+        podman run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:22.04 cat /proc/self/uid_map || true
 
         pants --umoci-version=nightly --filter-address-regex='^((?!multistage).)*$' package examples::
 
   check-and-lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v3
@@ -139,7 +141,7 @@ jobs:
         /home/runner/bin/pants update-build-files --check lint ::
 
   validate-tailor:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v3

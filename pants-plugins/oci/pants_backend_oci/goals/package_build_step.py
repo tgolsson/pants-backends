@@ -17,8 +17,12 @@ from pants_backend_oci.target_types import (
     ImageBuildOutputs,
     ImageDependencies,
     ImageEnvironment,
+    ImageExtractMarker,
 )
-from pants_backend_oci.util_rules.build_image_artifact import ImageArtifactBuildRequest
+from pants_backend_oci.util_rules.build_image_artifact import (
+    ImageArtifactBuildRequest,
+    ImageArtifactExtractRequest,
+)
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
 
 
@@ -33,6 +37,15 @@ class ImageLayerPackageFieldSet(PackageFieldSet):
 
     dependencies: ImageDependencies
     environment: ImageEnvironment
+    output_path: OutputPathField
+
+
+@dataclass(frozen=True)
+class ImageExtractPackageFieldSet(PackageFieldSet):
+    required_fields = (ImageBase, ImageBuildOutputs, ImageExtractMarker)
+
+    base: ImageBase
+    outputs: ImageBuildOutputs
     output_path: OutputPathField
 
 
@@ -58,8 +71,31 @@ async def package_oci_layer(field_set: ImageLayerPackageFieldSet) -> BuiltPackag
     return BuiltPackage(output.output_digest, (artifact,))
 
 
+@rule(desc="Package OCI Image", level=LogLevel.DEBUG)
+async def package_oci_layer_extract(field_set: ImageExtractPackageFieldSet) -> BuiltPackage:
+    wrapped_target = await Get(
+        WrappedTarget,
+        WrappedTargetRequest(field_set.address, description_of_origin="Package OCI layer"),
+    )
+
+    target = wrapped_target.target
+
+    output = await Get(
+        ProcessResult,
+        ImageArtifactExtractRequest(ImageArtifactExtractRequest.field_set_type.create(target)),
+    )
+
+    artifact = BuiltLayerArtifact(
+        relpath=field_set.output_path.value_or_default(file_ending="tar.gz"),
+        extra_log_lines=(f"Built artifacts: {output.output_digest}",),
+    )
+
+    return BuiltPackage(output.output_digest, (artifact,))
+
+
 def rules():
     return [
         *collect_rules(),
         UnionRule(PackageFieldSet, ImageLayerPackageFieldSet),
+        UnionRule(PackageFieldSet, ImageExtractPackageFieldSet),
     ]

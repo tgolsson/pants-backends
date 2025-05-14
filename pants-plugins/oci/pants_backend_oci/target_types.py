@@ -92,6 +92,17 @@ class ImageEmptyMarker(ScalarField):
         return super().compute_value(raw_value, address=address)
 
 
+class ImageExtractMarker(ScalarField):
+    alias = "_marker"
+    expected_type = type(None)
+    expected_type_description = ""
+    default = None
+
+    @classmethod
+    def compute_value(cls, raw_value: Optional[NoneType], address: Address) -> Optional[NoneType]:
+        return super().compute_value(raw_value, address=address)
+
+
 class ImageBuildOutputs(StringSequenceField):
     alias = "outputs"
 

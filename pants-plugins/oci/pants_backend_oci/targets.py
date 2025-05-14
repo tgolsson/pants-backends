@@ -23,6 +23,7 @@ from pants_backend_oci.target_types import (
     ImageEmptyMarker,
     ImageEntrypoint,
     ImageEnvironment,
+    ImageExtractMarker,
     ImageLayerOutputPathField,
     ImageLayersField,
     ImageOsField,
@@ -147,6 +148,20 @@ class ImageBuildStep(Target):
     help = "An imported OCI image."
 
 
+class ImageExtractStep(Target):
+    alias = "oci_extract"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        ImageBase,
+        ImageBuildOutputs,
+        ImageEnvironment,
+        ImageExtractMarker,
+        ImageArtifactExclusions,
+        OutputPathField,
+    )
+    help = "Extracts artifacts from an image."
+
+
 class ImageLayer(Target):
     alias = "oci_layer"
     core_fields = (
@@ -165,6 +180,7 @@ def targets():
         ImageBuildStep,
         ImageEmpty,
         ImageLayer,
+        ImageExtractStep,
     ]
 
 

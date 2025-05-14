@@ -36,7 +36,7 @@ async def copy_from_container(
 ) -> ProcessResult:
     copy_list = [
         dedent(f"""
-        {mkdir.path} -p out/{os.path.dirname(os.path.dirname(path))}
+        {mkdir.path} -p out/{os.path.dirname(path)}
         {cp.path} -r unpacked_image/rootfs/{path} out/{path}
         """)
         for path in request.output_directories

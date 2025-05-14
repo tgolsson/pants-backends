@@ -30,7 +30,7 @@ oci_build_layer(
         "PEX_TOOLS=1",
         "PY=python3.11",
     ],
-    outputs=["bin/app/"],
+    outputs=["bin/app"],
 )
 
 pex_binary(
@@ -52,7 +52,7 @@ oci_build_layer(
         "PEX_TOOLS=1",
         "PY=python3.11",
     ],
-    outputs=["bin/app/"],
+    outputs=["bin/app"],
 )
 
 oci_image_build(
