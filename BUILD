@@ -15,6 +15,7 @@ TOOLS = {
     "black": ["black>=22.6.0,<24"],
     "ipython": ["ipython>=7.27.0,<8"],
     "isort": ["isort[pyproject,colors]>=5.9.3,<6.0"],
+    "twine": ["twine>=5"]
 }
 
 for tool, reqs in TOOLS.items():
