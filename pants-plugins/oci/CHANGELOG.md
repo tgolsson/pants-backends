@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- Add `pants_backend_oci.utility.mirror` plugin
+- Add `pants_backend_oci.utility.mirror` plugin to mirror images between repositories.
 
 ## 0.8.0 - 2025-05-14
 
