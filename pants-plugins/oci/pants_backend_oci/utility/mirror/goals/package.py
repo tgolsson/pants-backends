@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from oci_mirror.targets import DestinationRepository, ImageDigest, ImageTag, SourceRepository
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
 from pants.engine.fs import EMPTY_DIGEST
 from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
+
+from pants_backend_oci.utility.mirror.targets import (
+    DestinationRepository,
+    ImageDigest,
+    ImageTag,
+    SourceRepository,
+)
 
 
 @dataclass(frozen=True)

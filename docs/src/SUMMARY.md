@@ -19,6 +19,7 @@
 
 - [Introduction](oci-readme.md)
 - [Changelog](./oci-changelog.md)
+- [Mirroring backend](./oci-mirror.md)
 
 # MdBook
 

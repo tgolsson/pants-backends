@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from oci_mirror.targets import DestinationRepository, ImageDigest, ImageTag, SourceRepository
 from pants.core.goals.publish import (
     PublishFieldSet,
     PublishOutputData,
@@ -20,6 +19,12 @@ from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import SkopeoTool
+from pants_backend_oci.utility.mirror.targets import (
+    DestinationRepository,
+    ImageDigest,
+    ImageTag,
+    SourceRepository,
+)
 
 
 @dataclass(frozen=True)
