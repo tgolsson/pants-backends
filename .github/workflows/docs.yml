@@ -33,11 +33,6 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Tell Pants to use Python 3.11
-        run: |
-          echo "PY=python3.11" >> $GITHUB_ENV
-          echo "PANTS_PYTHON_INTERPRETER_CONSTRAINTS=['==3.11.*']" >> $GITHUB_ENV
-
       - name: Initialize Pants
         uses: pantsbuild/actions/init-pants@main
         with:
@@ -50,10 +45,10 @@ jobs:
           /home/runner/bin/pants package docs:docs
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v4
         with:
           path: 'dist/docs/book'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v4
