@@ -1,10 +1,20 @@
-resources(name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"])
+resources(
+    name="package_data",
+    sources=[
+        "pyproject.toml",
+        "README.md",
+        "LICENSE-MIT.txt",
+        "CHANGELOG.md",
+        "pants_backend_oci/utility/mirror/README.md",
+    ],
+)
 
 python_distribution_with_secret(
     name="package",
     dependencies=[
         ":package_data",
         "./pants_backend_oci:pants_backend_oci@resolve=pants-plugins",
+        "./pants_backend_oci/utility/mirror:mirror@resolve=pants-plugins",
     ],
     provides=python_artifact(
         name="pants_backend_oci",

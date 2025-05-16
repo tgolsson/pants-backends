@@ -143,16 +143,38 @@ oci_image_empty(
 | `decsription` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |
 
+### `oci_extract`
+
+Extract one or more files from another container image.
+
+``` python
+oci_extract(
+    name="my-app-binary"
+	base=[":some-app"],
+	outputs=['/usr/bin/local/the-app'],
+)
+```
+
+| Argument      | Meaning                                                                        | Default value                                          |
+|---------------|--------------------------------------------------------------------------------|--------------------------------------------------------|
+| `name`        | The target name                                                                | Same as any other target, which is the directory name  |
+| `outputs`     | Paths to capture into the built layer.                                         | `[]`                                                   |
+| `exclude`     | Globs to not include in the output.                                            | `[]`                                                   |
+| `decsription` | A description of the target                                                    |                                                        |
+| `output_path` | The output path during `pants package`                                         | A variant generated from the target name and directory |
+| `tags`        | List of tags                                                                   | `[]`                                                   |
+
 ### `oci_build_layer`
 
-Run an image command, and capture the configured output into a layer artifact, that can be injected into other images. This matches the `COPY --from` workflows.
+Run a command in an image, and capture the configured output into a layer artifact, that can be injected into other images. This matches the `COPY --from` workflows.
 
+``` python
 oci_build_layer(
     name="layer"
 	base=[":rust-1-70"],
     packages=[":files"],
     env=['RUSTC_OPTS=...'],
-	command=['cd /my-package && cargo build --release'],
+	commands=['cd /my-package && cargo build --release'],
 	outputs=['/my-package/target/release/my-package'],
 )
 ```
@@ -160,6 +182,7 @@ oci_build_layer(
 | Argument      | Meaning                                                                        | Default value                                          |
 |---------------|--------------------------------------------------------------------------------|--------------------------------------------------------|
 | `name`        | The target name                                                                | Same as any other target, which is the directory name  |
+| `commands`    | The commands to execute in the container                                       | `[]`                                                   |
 | `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                   |
 | `env`         | Environment variables to set. Does not support interpolation.                  | `[]`                                                   |
 | `outputs`     | Paths to capture into the built layer.                                         | `[]`                                                   |
