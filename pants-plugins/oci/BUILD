@@ -18,11 +18,11 @@ python_distribution_with_secret(
     ],
     provides=python_artifact(
         name="pants_backend_oci",
-        version="0.8.0",
+        version="0.8.1",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/oci/README.md",
-    wheel_config_settings={"--global-option": ["--python-tag", "py38.py39"]},
+    wheel_config_settings={"--global-option": ["--python-tag", "py39"]},
     repo_secrets={"@pypi": "//examples/bitwarden:pypi_token"},
 )
 
