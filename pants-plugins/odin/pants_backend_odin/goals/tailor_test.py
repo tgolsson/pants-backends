@@ -1,4 +1,4 @@
-from pants.core.goals.tailor import PutativeTargets, PutativeTargetsRequest
+from pants.core.goals.tailor import PutativeTargets
 from pants.core.goals.tailor import rules as core_tailor_rules
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
