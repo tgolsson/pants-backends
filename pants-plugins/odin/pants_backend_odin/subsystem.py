@@ -13,13 +13,13 @@ PLATFORM_MAPPING = {
 
 
 class OdinTool(ExternalTool):
-    options_scope = "odin-tool"
+    options_scope = "odin"
     help = "Wrapper for Odin compiler and tools."
 
     default_version = "dev-2025-07"
     default_known_versions = [
-        "dev-2025-07|macos_arm64 |25bd7b9276e3e73a296a4c0ed5ad33d50da177216b10f29d45ead86b5950c2ce|114294784",
-        "dev-2025-07|macos_x86_64|8c1193f49fa7285a8d69a2b303fc7ac0e9751da7837788ac596fbde9a66270f9|121634816",
+        "dev-2025-07|macos_arm64 |25bd7b9276e3e73a296a4c0ed5ad33d50da177216b10f29d45ead86b5950c2ce|114366622",
+        "dev-2025-07|macos_x86_64|8c1193f49fa7285a8d69a2b303fc7ac0e9751da7837788ac596fbde9a66270f9|122094700",
         "dev-2025-07|linux_x86_64|271a200a8c5428cdd9377b6116829b8ae70ffaaa639295acef83a5529264313b|106413093",
     ]
 
