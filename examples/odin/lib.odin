@@ -1,5 +1,5 @@
-package lib
+package main
 
-square :: proc(x: int3) -> int {
+square :: proc(x: int) -> int {
 	return x * x
 }
