@@ -12,10 +12,9 @@ class OdinTool(ExternalTool):
 
     default_version = "dev-2025-07"
     default_known_versions = [
-        "dev-2025-07|macos_arm64 |e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
-        "dev-2025-07|macos_x86_64|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
-        "dev-2025-07|linux_arm64 |e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
-        "dev-2025-07|linux_x86_64|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
+        "dev-2025-07|macos_arm64 |25bd7b9276e3e73a296a4c0ed5ad33d50da177216b10f29d45ead86b5950c2ce|114294784",
+        "dev-2025-07|macos_x86_64|8c1193f49fa7285a8d69a2b303fc7ac0e9751da7837788ac596fbde9a66270f9|121634816",
+        "dev-2025-07|linux_x86_64|271a200a8c5428cdd9377b6116829b8ae70ffaaa639295acef83a5529264313b|105906176",
     ]
 
     skip = BoolOption(
@@ -31,14 +30,13 @@ class OdinTool(ExternalTool):
 
     def generate_url(self, plat: Platform) -> str:
         platform_mapping = {
-            "macos_arm64": "darwin-arm64",
-            "macos_x86_64": "darwin-amd64",
-            "linux_arm64": "linux-arm64",
+            "macos_arm64": "macos-arm64",
+            "macos_x86_64": "macos-amd64",
             "linux_x86_64": "linux-amd64",
         }
         plat_str = platform_mapping[plat.value]
         base = "https://github.com/odin-lang/Odin/releases/download"
-        return f"{base}/{self.version}/odin-{self.version}-{plat_str}.tar.gz"
+        return f"{base}/{self.version}/odin-{plat_str}-{self.version}.tar.gz"
 
     def generate_exe(self, _: Platform) -> str:
         return "./odin"
