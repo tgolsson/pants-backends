@@ -4,6 +4,7 @@ from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 from pants_backend_odin.goals.tailor import PutativeOdinTargetsRequest
 from pants_backend_odin.goals.tailor import rules as odin_tailor_rules
+from pants_backend_odin.subsystem import OdinTool
 from pants_backend_odin.target_types import OdinSourcesGeneratorTarget
 
 
@@ -12,6 +13,7 @@ def test_find_putative_odin_targets():
         rules=[
             *core_tailor_rules(),
             *odin_tailor_rules(),
+            *OdinTool.rules(),
             QueryRule(PutativeTargets, [PutativeOdinTargetsRequest]),
         ],
         target_types=[OdinSourcesGeneratorTarget],
@@ -20,7 +22,7 @@ def test_find_putative_odin_targets():
     rule_runner.write_files(
         {
             "src/main.odin": "package main\n\nmain :: proc() {}",
-            "src/lib.odin": "package lib\n\nsquare :: proc(x: int) -> int { return x * x }",
+            "src/lib.odin": "package main\n\nsquare :: proc(x: int) -> int { return x * x }",
             "other/test.txt": "not an odin file",
         }
     )
@@ -29,18 +31,19 @@ def test_find_putative_odin_targets():
         PutativeTargets,
         [
             PutativeOdinTargetsRequest(
-                ("src/*.odin", "other/*.odin"),
-                description_of_origin="tests",
+                ("src/", "other/"),
             )
         ],
     )
 
-    assert len(pts.putative_targets) == 1
-    pt = pts.putative_targets[0]
-    assert pt.target_type == OdinSourcesGeneratorTarget
+    assert len(pts) == 1
+    pt = list(pts)[0]
+
+    print(pt)
+    assert pt.type_alias == "odin_sources"
     assert pt.path == "src"
     assert pt.name == "odin"
-    assert set(pt.triggering_sources) == {"src/main.odin", "src/lib.odin"}
+    assert set(pt.triggering_sources) == {"main.odin", "lib.odin"}
 
 
 def test_find_putative_odin_targets_empty():
@@ -49,6 +52,7 @@ def test_find_putative_odin_targets_empty():
         rules=[
             *core_tailor_rules(),
             *odin_tailor_rules(),
+            *OdinTool.rules(),
             QueryRule(PutativeTargets, [PutativeOdinTargetsRequest]),
         ],
         target_types=[OdinSourcesGeneratorTarget],
@@ -65,10 +69,9 @@ def test_find_putative_odin_targets_empty():
         PutativeTargets,
         [
             PutativeOdinTargetsRequest(
-                ("src/*.odin", "other/*.odin"),
-                description_of_origin="tests",
+                ("src/", "other/"),
             )
         ],
     )
 
-    assert len(pts.putative_targets) == 0
+    assert len(pts) == 0

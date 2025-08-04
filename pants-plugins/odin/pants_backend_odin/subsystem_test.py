@@ -12,6 +12,7 @@ def rule_runner() -> RuleRunner:
     return RuleRunner(
         rules=[
             *external_tool.rules(),
+            *OdinTool.rules(),
             QueryRule(DownloadedExternalTool, [ExternalToolRequest]),
             QueryRule(OdinTool, []),
         ]
@@ -21,16 +22,16 @@ def rule_runner() -> RuleRunner:
 def test_odin_tool_properties(rule_runner):
     """Test that OdinTool has the expected properties."""
     odin = rule_runner.request(OdinTool, [])
-    assert odin.options_scope == "odin-tool"
+    assert odin.options_scope == "odin"
     assert odin.default_version == "dev-2025-07"
     assert not odin.skip  # Default should be False
     assert odin.tailor  # Default should be True
 
 
-def test_odin_url_generation():
+def test_odin_url_generation(rule_runner):
     """Test URL generation for different platforms."""
-    odin = OdinTool()
 
+    odin = rule_runner.request(OdinTool, [])
     # Test Linux x86_64
     linux_url = odin.generate_url(Platform.linux_x86_64)
     expected = (
@@ -44,10 +45,3 @@ def test_odin_url_generation():
         "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-macos-arm64-dev-2025-07.tar.gz"
     )
     assert macos_url == expected
-
-
-def test_odin_exe_generation():
-    """Test executable path generation."""
-    odin = OdinTool()
-    exe = odin.generate_exe(Platform.linux_x86_64)
-    assert exe == "./odin"

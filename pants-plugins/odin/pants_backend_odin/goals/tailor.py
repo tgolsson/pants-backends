@@ -33,7 +33,6 @@ async def find_putative_targets(
         return PutativeTargets()
 
     paths = await Get(Paths, PathGlobs, req.path_globs("*.odin"))
-
     unowned_files = set(paths.files) - set(all_owned_sources)
 
     pts = []
