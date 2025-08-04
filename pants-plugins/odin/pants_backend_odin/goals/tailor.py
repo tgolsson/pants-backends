@@ -14,7 +14,6 @@ from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
 from pants.util.dirutil import group_by_dir
 from pants.util.logging import LogLevel
-
 from pants_backend_odin.subsystem import OdinTool
 from pants_backend_odin.target_types import OdinSourcesGeneratorTarget
 

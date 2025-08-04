@@ -4,7 +4,6 @@ from pants.core.util_rules.external_tool import DownloadedExternalTool, External
 from pants.engine.platform import Platform
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
-
 from pants_backend_odin.subsystem import OdinTool
 
 
@@ -31,15 +30,19 @@ def test_odin_tool_properties(rule_runner):
 def test_odin_url_generation():
     """Test URL generation for different platforms."""
     odin = OdinTool()
-    
+
     # Test Linux x86_64
     linux_url = odin.generate_url(Platform.linux_x86_64)
-    expected = "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-linux-amd64-dev-2025-07.tar.gz"
+    expected = (
+        "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-linux-amd64-dev-2025-07.tar.gz"
+    )
     assert linux_url == expected
-    
+
     # Test macOS arm64
     macos_url = odin.generate_url(Platform.macos_arm64)
-    expected = "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-macos-arm64-dev-2025-07.tar.gz"
+    expected = (
+        "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-macos-arm64-dev-2025-07.tar.gz"
+    )
     assert macos_url == expected
 
 

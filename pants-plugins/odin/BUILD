@@ -1,6 +1,4 @@
-resources(
-    name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"]
-)
+resources(name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-MIT.txt", "CHANGELOG.md"])
 
 python_distribution_with_secret(
     name="package",
