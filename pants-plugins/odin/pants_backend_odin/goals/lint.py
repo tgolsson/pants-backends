@@ -4,28 +4,30 @@ from dataclasses import dataclass
 
 from pants.core.goals.lint import LintResult, LintTargetsRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.partitions import Partitions
-from pants.engine.fs import Digest, GlobMatchErrorBehavior, PathGlobs
+from pants.core.util_rules.partitions import Partition, Partitions
+from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.engine.fs import Digest, GlobMatchErrorBehavior, MergeDigests, PathGlobs
 from pants.engine.internals.selectors import Get, MultiGet
+from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
+from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 from pants.util.strutil import pluralize
-
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinSourceField
+from pants_backend_odin.target_types import OdinSourcesField
 
 
 @dataclass(frozen=True)
 class OdinFieldSet(FieldSet):
-    required_fields = (OdinSourceField,)
+    required_fields = (OdinSourcesField,)
 
-    source: OdinSourceField
+    source: OdinSourcesField
 
     @classmethod
     def opt_out(cls, tgt: Target) -> bool:
-        return tgt.get(OdinSourceField).value is None
+        return tgt.get(OdinSourcesField).value is None
 
 
 class OdinLintRequest(LintTargetsRequest):
@@ -33,60 +35,68 @@ class OdinLintRequest(LintTargetsRequest):
     tool_subsystem = OdinTool
 
 
+@dataclass(frozen=True)
+class BatchMetadata:
+    directory: str
+
+    @property
+    def description(self) -> None:
+        return None
+
+
 @rule(level=LogLevel.DEBUG, desc="Partition Odin source files for linting")
 async def partition_odin_sources(
     request: OdinLintRequest.PartitionRequest[OdinFieldSet], odin: OdinTool
-) -> Partitions[OdinFieldSet, None]:
+) -> Partitions[OdinFieldSet, BatchMetadata]:
     if odin.skip:
         return Partitions()
-    return Partitions.single_partition(request.field_sets)
+
+    directories = {}
+    for field_set in request.field_sets:
+        source_path = field_set.address.spec_path
+
+        if source_path not in directories:
+            directories[source_path] = []
+
+        directories[source_path].append(field_set)
+
+    return Partitions(Partition(frozenset(v), metadata=BatchMetadata(d)) for d, v in directories.items())
 
 
 @rule(level=LogLevel.DEBUG, desc="Lint with Odin check")
-async def odin_lint(request: OdinLintRequest.Batch, odin: OdinTool) -> LintResult:
-    download_odin_get = Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request())
-    
+async def odin_lint(
+    request: OdinLintRequest.Batch[OdinFieldSet, BatchMetadata], odin: OdinTool, platform: Platform
+) -> LintResult:
+    download_odin_get = Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request(platform))
+
     # Get the source files
-    sources_paths = [field_set.source.file_path for field_set in request.elements]
     sources_digest_get = Get(
-        Digest,
-        PathGlobs(
-            sources_paths,
-            glob_match_error_behavior=GlobMatchErrorBehavior.error,
-        ),
+        SourceFiles, SourceFilesRequest([field_set.source for field_set in request.elements])
     )
 
     downloaded_odin, sources_digest = await MultiGet(download_odin_get, sources_digest_get)
+    input_digest = await Get(
+        Digest,
+        MergeDigests(
+            [
+                downloaded_odin.digest,
+                sources_digest.snapshot.digest,
+            ]
+        ),
+    )
 
-    # Create a process to run odin check on each source file
-    processes = []
-    for source_path in sources_paths:
-        process = Process(
-            argv=[downloaded_odin.exe, "check", source_path],
-            input_digest=sources_digest,
-            description=f"Run odin check on {source_path}",
-        )
-        processes.append(Get(FallibleProcessResult, Process, process))
-
-    process_results = await MultiGet(*processes)
-
-    # Combine results
-    exit_code = 0
-    stdout = ""
-    stderr = ""
-    
-    for i, result in enumerate(process_results):
-        if result.exit_code != 0:
-            exit_code = result.exit_code
-        stdout += result.stdout.decode()
-        stderr += result.stderr.decode()
+    process_result = await Get(
+        FallibleProcessResult,
+        Process(
+            argv=[downloaded_odin.exe, "check", request.partition_metadata.directory],
+            input_digest=input_digest,
+            description=f"Run odin check on {request.partition_metadata.directory}",
+        ),
+    )
 
     return LintResult.create(
         request,
-        exit_code=exit_code,
-        stdout=stdout,
-        stderr=stderr,
-        report=None,
+        process_result,
     )
 
 
