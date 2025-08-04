@@ -10,12 +10,12 @@ class OdinTool(ExternalTool):
     options_scope = "odin-tool"
     help = "Wrapper for Odin compiler and tools."
 
-    default_version = "v0.13.0"
+    default_version = "dev-2025-07"
     default_known_versions = [
-        "v0.13.0|macos_arm64 |e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
-        "v0.13.0|macos_x86_64|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
-        "v0.13.0|linux_arm64 |e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
-        "v0.13.0|linux_x86_64|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
+        "dev-2025-07|macos_arm64 |e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
+        "dev-2025-07|macos_x86_64|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
+        "dev-2025-07|linux_arm64 |e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
+        "dev-2025-07|linux_x86_64|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855|0",
     ]
 
     skip = BoolOption(

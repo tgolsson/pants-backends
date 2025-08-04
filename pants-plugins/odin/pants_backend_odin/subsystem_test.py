@@ -23,7 +23,7 @@ def test_odin_tool_properties(rule_runner):
     """Test that OdinTool has the expected properties."""
     odin = rule_runner.request(OdinTool, [])
     assert odin.options_scope == "odin-tool"
-    assert odin.default_version == "v0.13.0"
+    assert odin.default_version == "dev-2025-07"
     assert not odin.skip  # Default should be False
     assert odin.tailor  # Default should be True
 
@@ -34,12 +34,12 @@ def test_odin_url_generation():
     
     # Test Linux x86_64
     linux_url = odin.generate_url(Platform.linux_x86_64)
-    expected = "https://github.com/odin-lang/Odin/releases/download/v0.13.0/odin-v0.13.0-linux-amd64.tar.gz"
+    expected = "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-dev-2025-07-linux-amd64.tar.gz"
     assert linux_url == expected
     
     # Test macOS arm64
     macos_url = odin.generate_url(Platform.macos_arm64)
-    expected = "https://github.com/odin-lang/Odin/releases/download/v0.13.0/odin-v0.13.0-darwin-arm64.tar.gz"
+    expected = "https://github.com/odin-lang/Odin/releases/download/dev-2025-07/odin-dev-2025-07-darwin-arm64.tar.gz"
     assert macos_url == expected
 
 
