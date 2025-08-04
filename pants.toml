@@ -9,7 +9,6 @@ pythonpath = [
    "%(buildroot)s/pants-plugins/mdbook",
    "%(buildroot)s/pants-plugins/bitwarden",
    "%(buildroot)s/pants-plugins/secrets",
-   "%(buildroot)s/pants-plugins/odin",
 ]
 
 backend_packages = [
@@ -27,7 +26,6 @@ backend_packages = [
   "pants_backend_oci.utility.mirror",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
-  "pants_backend_odin",
 
   "pants.backend.shell",
   "pants.backend.experimental.python.lint.ruff.check",
