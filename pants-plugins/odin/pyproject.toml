@@ -1,0 +1,25 @@
+[project]
+name = "pants-backend-odin"
+description = "A Pants backend for Odin language"
+version = "0.1.0"
+authors = [
+    {name = "Tom Solberg", email="me@sbg.dev"}
+]
+
+dependencies = []
+readme = "README.md"
+license = "MIT"
+keywords = ["pantsbuild", "pants", "backend", "kubernetes"]
+dynamic = ["requires-python"]
+
+[project.urls]
+Homepage = "https://github.com/tgolsson/pants-backends"
+Repository = "https://github.com/tgolsson/pants-backends.git"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pants_backend_odin*"]
