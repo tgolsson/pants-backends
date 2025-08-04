@@ -7,7 +7,7 @@ from pants.engine.target import (
     MultipleSourcesField,
     SingleSourceField,
     Target,
-    TargetGenerator,
+    TargetFilesGenerator,
 )
 from pants.util.strutil import softwrap
 
@@ -22,7 +22,7 @@ class OdinSourcesField(MultipleSourcesField):
     """A set of Odin source files."""
 
     alias = "sources"
-    uses_source_roots = False
+    uses_source_roots = True
     default = ("*.odin",)
 
     help = softwrap("""
@@ -48,7 +48,7 @@ class OdinSourceTarget(Target):
         """)
 
 
-class OdinSourcesGeneratorTarget(TargetGenerator):
+class OdinSourcesGeneratorTarget(TargetFilesGenerator):
     alias = "odin_sources"
     core_fields = (
         *COMMON_TARGET_FIELDS,

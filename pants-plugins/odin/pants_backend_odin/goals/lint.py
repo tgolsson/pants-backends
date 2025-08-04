@@ -6,28 +6,26 @@ from pants.core.goals.lint import LintResult, LintTargetsRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.partitions import Partition, Partitions
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.engine.fs import Digest, GlobMatchErrorBehavior, MergeDigests, PathGlobs
+from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get, MultiGet
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
-from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
-from pants.util.strutil import pluralize
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinSourcesField
+from pants_backend_odin.target_types import OdinSourceField
 
 
 @dataclass(frozen=True)
 class OdinFieldSet(FieldSet):
-    required_fields = (OdinSourcesField,)
+    required_fields = (OdinSourceField,)
 
-    source: OdinSourcesField
+    source: OdinSourceField
 
     @classmethod
     def opt_out(cls, tgt: Target) -> bool:
-        return tgt.get(OdinSourcesField).value is None
+        return tgt.get(OdinSourceField).value is None
 
 
 class OdinLintRequest(LintTargetsRequest):
