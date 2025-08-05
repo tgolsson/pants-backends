@@ -103,14 +103,21 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
         source_field_sets.append(target[OdinSourceField])
     
     if not source_field_sets:
-        # No source files found, return empty package
-        return BuiltPackage(Digest(), tuple())
+        # No source files found, this could be a configuration error
+        raise Exception(
+            f"No Odin source files found for package {field_set.address}. "
+            f"Make sure the odin_package target has dependencies on odin_source targets."
+        )
     
     # Get the source files
     sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
     
     # Extract directory from the field_set address
     directory = field_set.address.spec_path or "."
+    
+    # Validate directory path for security 
+    if ".." in directory or directory.startswith("/"):
+        raise Exception(f"Invalid directory path: {directory}")
     
     # Create build request
     build_request = OdinBuildRequest(
