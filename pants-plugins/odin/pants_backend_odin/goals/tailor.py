@@ -15,7 +15,7 @@ from pants.engine.unions import UnionRule
 from pants.util.dirutil import group_by_dir
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinPackageTarget
+from pants_backend_odin.target_types import OdinPackageTarget, OdinSourcesGeneratorTarget
 
 
 @dataclass(frozen=True)
@@ -38,12 +38,21 @@ async def find_putative_targets(
     pts = []
 
     for dirname, filenames in group_by_dir(unowned_files).items():
+        # Generate both odin_package and odin_sources targets
         pts.append(
             PutativeTarget.for_target_type(
                 OdinPackageTarget,
                 path=dirname,
-                name="odin",
+                name="package",
                 triggering_sources=(),  # OdinPackageTarget doesn't have sources field
+            )
+        )
+        pts.append(
+            PutativeTarget.for_target_type(
+                OdinSourcesGeneratorTarget,
+                path=dirname,
+                name="odin",
+                triggering_sources=filenames,
             )
         )
 

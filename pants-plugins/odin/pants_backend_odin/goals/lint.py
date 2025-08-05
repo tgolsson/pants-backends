@@ -18,26 +18,10 @@ from pants_backend_odin.target_types import OdinDependenciesField, OdinSourceFie
 
 
 @dataclass(frozen=True)
-class OdinFieldSet(FieldSet):
-    required_fields = (OdinSourceField,)
-
-    source: OdinSourceField
-
-    @classmethod
-    def opt_out(cls, tgt: Target) -> bool:
-        return tgt.get(OdinSourceField).value is None
-
-
-@dataclass(frozen=True)
 class OdinPackageFieldSet(FieldSet):
     required_fields = (OdinDependenciesField,)
 
     dependencies: OdinDependenciesField
-
-
-class OdinLintRequest(LintTargetsRequest):
-    field_set_type = OdinFieldSet
-    tool_subsystem = OdinTool
 
 
 class OdinPackageLintRequest(LintTargetsRequest):
@@ -52,62 +36,6 @@ class BatchMetadata:
     @property
     def description(self) -> None:
         return None
-
-
-@rule(level=LogLevel.DEBUG, desc="Partition Odin source files for linting")
-async def partition_odin_sources(
-    request: OdinLintRequest.PartitionRequest[OdinFieldSet], odin: OdinTool
-) -> Partitions[OdinFieldSet, BatchMetadata]:
-    if odin.skip:
-        return Partitions()
-
-    directories = {}
-    for field_set in request.field_sets:
-        source_path = field_set.address.spec_path
-
-        if source_path not in directories:
-            directories[source_path] = []
-
-        directories[source_path].append(field_set)
-
-    return Partitions(Partition(frozenset(v), metadata=BatchMetadata(d)) for d, v in directories.items())
-
-
-@rule(level=LogLevel.DEBUG, desc="Lint with Odin check")
-async def odin_lint(
-    request: OdinLintRequest.Batch[OdinFieldSet, BatchMetadata], odin: OdinTool, platform: Platform
-) -> LintResult:
-    download_odin_get = Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request(platform))
-
-    # Get the source files
-    sources_digest_get = Get(
-        SourceFiles, SourceFilesRequest([field_set.source for field_set in request.elements])
-    )
-
-    downloaded_odin, sources_digest = await MultiGet(download_odin_get, sources_digest_get)
-    input_digest = await Get(
-        Digest,
-        MergeDigests(
-            [
-                downloaded_odin.digest,
-                sources_digest.snapshot.digest,
-            ]
-        ),
-    )
-
-    process_result = await Get(
-        FallibleProcessResult,
-        Process(
-            argv=[downloaded_odin.exe, "check", request.partition_metadata.directory],
-            input_digest=input_digest,
-            description=f"Run odin check on {request.partition_metadata.directory}",
-        ),
-    )
-
-    return LintResult.create(
-        request,
-        process_result,
-    )
 
 
 @rule(level=LogLevel.DEBUG, desc="Partition Odin package targets for linting")
@@ -187,6 +115,5 @@ async def odin_package_lint(
 def rules():
     return [
         *collect_rules(),
-        *OdinLintRequest.rules(),
         *OdinPackageLintRequest.rules(),
     ]
