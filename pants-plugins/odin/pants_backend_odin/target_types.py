@@ -45,7 +45,6 @@ class OdinSourceTarget(Target):
     alias = "odin_source"
     core_fields = (
         *COMMON_TARGET_FIELDS,
-        OdinDependenciesField,
         OdinSourceField,
     )
     help = softwrap("""
@@ -57,12 +56,11 @@ class OdinSourcesGeneratorTarget(TargetFilesGenerator):
     alias = "odin_sources"
     core_fields = (
         *COMMON_TARGET_FIELDS,
-        OdinDependenciesField,
         OdinSourcesField,
     )
     generated_target_cls = OdinSourceTarget
     copied_fields = COMMON_TARGET_FIELDS
-    moved_fields = (OdinDependenciesField, OdinSourceField)
+    moved_fields = (OdinSourceField,)
     help = softwrap("""
         Generate an `odin_source` target for each file in the `sources` field.
 
@@ -83,7 +81,7 @@ class OdinPackageTarget(Target):
     )
     help = softwrap("""
         An Odin package target that represents all .odin files in a directory.
-        
+
         This target automatically depends on all odin_source targets in its directory,
         making it suitable for representing Odin packages which are typically organized
         as all .odin files in a directory sharing the same package declaration.
