@@ -1,1 +1,1 @@
-odin_package()
+odin_sources()

@@ -14,7 +14,7 @@ from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet, Target
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinPackageSourcesField, OdinSourceField
+from pants_backend_odin.target_types import OdinSourceField
 
 
 @dataclass(frozen=True)
@@ -28,24 +28,8 @@ class OdinFieldSet(FieldSet):
         return tgt.get(OdinSourceField).value is None
 
 
-@dataclass(frozen=True)
-class OdinPackageFieldSet(FieldSet):
-    required_fields = (OdinPackageSourcesField,)
-
-    sources: OdinPackageSourcesField
-
-    @classmethod
-    def opt_out(cls, tgt: Target) -> bool:
-        return tgt.get(OdinPackageSourcesField).value is None
-
-
 class OdinLintRequest(LintTargetsRequest):
     field_set_type = OdinFieldSet
-    tool_subsystem = OdinTool
-
-
-class OdinPackageLintRequest(LintTargetsRequest):
-    field_set_type = OdinPackageFieldSet
     tool_subsystem = OdinTool
 
 
@@ -114,64 +98,8 @@ async def odin_lint(
     )
 
 
-@rule(level=LogLevel.DEBUG, desc="Partition Odin package targets for linting")
-async def partition_odin_packages(
-    request: OdinPackageLintRequest.PartitionRequest[OdinPackageFieldSet], odin: OdinTool
-) -> Partitions[OdinPackageFieldSet, BatchMetadata]:
-    if odin.skip:
-        return Partitions()
-
-    # Each package is already a single unit to lint
-    partitions = []
-    for field_set in request.field_sets:
-        directory = field_set.address.spec_path
-        partitions.append(
-            Partition(frozenset([field_set]), metadata=BatchMetadata(directory))
-        )
-
-    return Partitions(partitions)
-
-
-@rule(level=LogLevel.DEBUG, desc="Lint Odin package with odin check")
-async def odin_package_lint(
-    request: OdinPackageLintRequest.Batch[OdinPackageFieldSet, BatchMetadata], odin: OdinTool, platform: Platform
-) -> LintResult:
-    download_odin_get = Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request(platform))
-
-    # Get all source files in the package
-    sources_digest_get = Get(
-        SourceFiles, SourceFilesRequest([field_set.sources for field_set in request.elements])
-    )
-
-    downloaded_odin, sources_digest = await MultiGet(download_odin_get, sources_digest_get)
-    input_digest = await Get(
-        Digest,
-        MergeDigests(
-            [
-                downloaded_odin.digest,
-                sources_digest.snapshot.digest,
-            ]
-        ),
-    )
-
-    process_result = await Get(
-        FallibleProcessResult,
-        Process(
-            argv=[downloaded_odin.exe, "check", request.partition_metadata.directory],
-            input_digest=input_digest,
-            description=f"Run odin check on package {request.partition_metadata.directory}",
-        ),
-    )
-
-    return LintResult.create(
-        request,
-        process_result,
-    )
-
-
 def rules():
     return [
         *collect_rules(),
         *OdinLintRequest.rules(),
-        *OdinPackageLintRequest.rules(),
     ]
