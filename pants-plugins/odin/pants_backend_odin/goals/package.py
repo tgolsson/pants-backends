@@ -64,6 +64,9 @@ async def build_odin_package(
 ) -> OdinBuildResult:
     """Internal rule to build an Odin package with the Odin compiler."""
 
+    extra_shims = tuple()
+    if platform.value in ("macos_x86_64", "macos_arm64"):
+        extra_shims = ("m", "xcrun")
     binary_shims = await Get(
         BinaryShims,
         BinaryShimsRequest.for_binaries(
@@ -74,6 +77,7 @@ async def build_odin_package(
             "ar",
             "realpath",
             "clang",
+            *extra_shims,
             rationale="Odin",
             search_path=system_binaries_environment.system_binary_paths,
         ),
