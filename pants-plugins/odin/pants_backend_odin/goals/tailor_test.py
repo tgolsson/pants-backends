@@ -36,13 +36,20 @@ def test_find_putative_odin_targets():
         ],
     )
 
-    assert len(pts) == 1
+    assert len(pts) == 2
+
     pt = list(pts)[0]
 
-    print(pt)
-    assert pt.type_alias == "odin_package"
+    assert pt.type_alias == "odin_sources"
     assert pt.path == "src"
     assert pt.name == "odin"
+    assert sorted(pt.triggering_sources) == sorted(("main.odin", "lib.odin"))
+
+    pt = list(pts)[1]
+
+    assert pt.type_alias == "odin_package"
+    assert pt.path == "src"
+    assert pt.name == "package"
     assert pt.triggering_sources == ()  # OdinPackageTarget doesn't have triggering sources
 
 
