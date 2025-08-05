@@ -8,7 +8,6 @@ from pants.engine.target import (
     Dependencies,
     FieldSet,
     InferDependenciesRequest,
-    InferredDependencies,
     MultipleSourcesField,
     SingleSourceField,
     Target,
