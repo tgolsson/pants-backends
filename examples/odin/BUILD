@@ -1,3 +1,6 @@
-odin_package(name="package")
+odin_package(
+    name="package",
+    defines=["DEBUG=true", "VERSION=1.0.0"],
+)
 
 odin_sources()

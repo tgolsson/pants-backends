@@ -10,6 +10,7 @@ from pants.engine.target import (
     InferDependenciesRequest,
     MultipleSourcesField,
     SingleSourceField,
+    StringSequenceField,
     Target,
     TargetFilesGenerator,
 )
@@ -38,6 +39,19 @@ class OdinDependenciesField(Dependencies):
     """Dependencies for Odin targets."""
 
     pass
+
+
+class OdinDefinesField(StringSequenceField):
+    """Build-time defines for Odin compilation."""
+
+    alias = "defines"
+    help = softwrap("""
+        A list of build-time defines to pass to the Odin compiler.
+        Each define should be in the format 'KEY=VALUE'.
+        
+        Example:
+            defines=["DEBUG=true", "VERSION=1.0.0"]
+        """)
 
 
 class OdinSourceTarget(Target):
@@ -77,6 +91,7 @@ class OdinPackageTarget(Target):
     core_fields = (
         *COMMON_TARGET_FIELDS,
         OdinDependenciesField,
+        OdinDefinesField,
     )
     help = softwrap("""
         An Odin package target that represents all .odin files in a directory.
@@ -89,6 +104,7 @@ class OdinPackageTarget(Target):
 
             odin_package(
                 name="mypackage",
+                defines=["DEBUG=true"],
             )
         """)
 
