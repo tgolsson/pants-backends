@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.goals.package import BuiltPackage, BuiltPackageArtifact, PackageFieldSet
+from pants.core.goals.package import (
+    BuiltPackage,
+    BuiltPackageArtifact,
+    OutputPathField,
+    PackageFieldSet,
+)
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.core.util_rules.system_binaries import (
-    BashBinary,
-    BinaryPath,
-    BinaryPathRequest,
-    BinaryPaths,
-    BinaryPathTest,
     BinaryShims,
     BinaryShimsRequest,
     SystemBinariesSubsystem,
 )
 from pants.engine.fs import Digest, MergeDigests
-from pants.engine.internals.selectors import Get, MultiGet
+from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import collect_rules, rule
@@ -35,6 +35,7 @@ class OdinBuildRequest:
     sources_digest: Digest
     defines: tuple[str, ...]
     directory: str
+    output_path: str
 
 
 @dataclass(frozen=True)
@@ -47,10 +48,11 @@ class OdinBuildResult:
 
 @dataclass(frozen=True)
 class OdinPackageFieldSet(PackageFieldSet):
-    required_fields = (OdinDependenciesField,)
+    required_fields = (OdinDependenciesField, OutputPathField)
 
     dependencies: OdinDependenciesField
     defines: OdinDefinesField
+    output_path: OutputPathField
 
 
 @rule(level=LogLevel.DEBUG, desc="Build Odin package")
@@ -98,7 +100,7 @@ async def build_odin_package(
         argv.append(f"-define:{define}")
 
     # Add output flag to build binary in current directory
-    argv.append(f"-out:{request.directory}/{request.address.target_name}")
+    argv.append(f"-out:{request.output_path}")
 
     process_result = await Get(
         ProcessResult,
@@ -106,7 +108,7 @@ async def build_odin_package(
             argv=argv,
             input_digest=input_digest,
             description=f"Build Odin package {request.address}",
-            output_files=(f"{request.directory}/{request.address.target_name}",),
+            output_files=(request.output_path,),
             env={"PATH": f"{binary_shims.path_component}"},
             immutable_input_digests={
                 **binary_shims.immutable_input_digests,
@@ -157,6 +159,7 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
         sources_digest=sources_digest.snapshot.digest,
         defines=tuple(field_set.defines.value or ()),
         directory=directory,
+        output_path=field_set.output_path.value_or_default(file_ending=""),
     )
 
     # Build the package
@@ -164,8 +167,8 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
 
     if not build_result.success:
         raise Exception(f"Failed to build Odin package {field_set.address}")
-    artifact = BuiltPackageArtifact(relpath=str(output_filename))
-    return BuiltPackage(build_result.digest, tuple())
+    artifact = BuiltPackageArtifact(relpath=str(build_request.output_path))
+    return BuiltPackage(build_result.digest, (artifact,))
 
 
 def rules():

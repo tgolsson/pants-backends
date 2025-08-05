@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pants.core.goals.package import OutputPathField
 from pants.engine.rules import collect_rules
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
@@ -48,7 +49,7 @@ class OdinDefinesField(StringSequenceField):
     help = softwrap("""
         A list of build-time defines to pass to the Odin compiler.
         Each define should be in the format 'KEY=VALUE'.
-        
+
         Example:
             defines=["DEBUG=true", "VERSION=1.0.0"]
         """)
@@ -92,6 +93,7 @@ class OdinPackageTarget(Target):
         *COMMON_TARGET_FIELDS,
         OdinDependenciesField,
         OdinDefinesField,
+        OutputPathField,
     )
     help = softwrap("""
         An Odin package target that represents all .odin files in a directory.
