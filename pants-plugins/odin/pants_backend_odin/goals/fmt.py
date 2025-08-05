@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pants.core.goals.fmt import FmtResult, FmtTargetsRequest
-from pants.core.util_rules.partitions import Partition, Partitions
+from pants.core.util_rules.partitions import Partition, PartitionerType, Partitions
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
@@ -24,9 +24,20 @@ class OdinSourceFmtFieldSet(FieldSet):
     source: OdinSourceField
 
 
+@dataclass(frozen=True)
 class OdinSourceFmtRequest(FmtTargetsRequest):
     field_set_type = OdinSourceFmtFieldSet
+    partitioner_type = PartitionerType.CUSTOM
     tool_subsystem = OdinfmtTool
+
+
+@dataclass(frozen=True)
+class PackageMetadata:
+    address: Address
+
+    @property
+    def description(self) -> None:
+        return None
 
 
 @rule(level=LogLevel.DEBUG, desc="Partition Odin source files for formatting")
@@ -36,34 +47,47 @@ async def partition_odin_sources(
     if odinfmt.skip:
         return Partitions()
 
-    # Format each Odin source file individually
-    return Partitions(Partition([field_set], metadata=None) for field_set in request.field_sets)
+    partitions = []
+    for field_set in request.field_sets:
+        source_files = await Get(
+            SourceFiles,
+            SourceFilesRequest([field_set.source]),
+        )
+
+        partitions.append(
+            Partition(
+                frozenset([f for f in source_files.files if f.endswith("odin")]),
+                PackageMetadata(
+                    address=field_set.address,
+                ),
+            )
+        )
+
+    return Partitions(partitions)
 
 
 @rule(level=LogLevel.DEBUG, desc="Format Odin source files with odinfmt")
 async def odin_source_fmt(
-    request: OdinSourceFmtRequest.Batch[OdinSourceFmtFieldSet, None],
+    request: OdinSourceFmtRequest.Batch[OdinSourceFmtFieldSet],
     odinfmt: OdinfmtTool,
     platform: Platform,
 ) -> FmtResult:
-    build_odinfmt_result = await Get(
-        BuildOdinfmtResult, 
-        BuildOdinfmtRequest, 
-        BuildOdinfmtRequest(platform)
-    )
+    print("yy")
+    build_odinfmt_result = await Get(BuildOdinfmtResult, BuildOdinfmtRequest, BuildOdinfmtRequest(platform))
 
+    print(request.elements)
     # Get the source files to format
-    source_files = await Get(
-        SourceFiles,
-        SourceFilesRequest([field_set.source for field_set in request.elements])
-    )
+
+    source_files = await Get(SourceFiles, SourceFilesRequest([field_set for field_set in request.elements]))
 
     input_digest = await Get(
         Digest,
-        MergeDigests([
-            build_odinfmt_result.digest,
-            source_files.snapshot.digest,
-        ]),
+        MergeDigests(
+            [
+                build_odinfmt_result.digest,
+                source_files.snapshot.digest,
+            ]
+        ),
     )
 
     # Run odinfmt on the files
