@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pants.core.goals.package import rules as core_package_rules
+from pants.core.util_rules import config_files, external_tool, source_files
 from pants.engine.addresses import Address
+from pants.engine.internals import graph
 from pants.testutil.rule_runner import RuleRunner
 from pants_backend_odin import target_types as odin_target_types
 from pants_backend_odin.goals.package import OdinBuildRequest, OdinBuildResult, OdinPackageFieldSet
@@ -21,6 +23,10 @@ def test_odin_package_field_set():
             *core_package_rules(),
             *odin_package_rules(),
             *odin_target_types.rules(),
+            *config_files.rules(),
+            *external_tool.rules(),
+            *source_files.rules(),
+            *graph.rules(),
             *OdinTool.rules(),
         ],
         target_types=[OdinPackageTarget, OdinSourceTarget, OdinSourcesGeneratorTarget],
@@ -58,6 +64,7 @@ def test_odin_build_request_creation():
         sources_digest=EMPTY_DIGEST,
         defines=("DEBUG=true", "VERSION=1.0.0"),
         directory="src",
+        output_path="src/main",
     )
 
     assert request.address == "src:main"
@@ -86,6 +93,10 @@ def test_odin_package_field_set_no_defines():
             *core_package_rules(),
             *odin_package_rules(),
             *odin_target_types.rules(),
+            *config_files.rules(),
+            *external_tool.rules(),
+            *source_files.rules(),
+            *graph.rules(),
             *OdinTool.rules(),
         ],
         target_types=[OdinPackageTarget, OdinSourceTarget, OdinSourcesGeneratorTarget],
