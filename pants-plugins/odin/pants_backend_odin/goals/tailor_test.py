@@ -5,7 +5,7 @@ from pants.testutil.rule_runner import RuleRunner
 from pants_backend_odin.goals.tailor import PutativeOdinTargetsRequest
 from pants_backend_odin.goals.tailor import rules as odin_tailor_rules
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinSourcesGeneratorTarget
+from pants_backend_odin.target_types import OdinPackageTarget, OdinSourcesGeneratorTarget
 
 
 def test_find_putative_odin_targets():
@@ -16,7 +16,7 @@ def test_find_putative_odin_targets():
             *OdinTool.rules(),
             QueryRule(PutativeTargets, [PutativeOdinTargetsRequest]),
         ],
-        target_types=[OdinSourcesGeneratorTarget],
+        target_types=[OdinPackageTarget, OdinSourcesGeneratorTarget],
     )
 
     rule_runner.write_files(
@@ -40,10 +40,10 @@ def test_find_putative_odin_targets():
     pt = list(pts)[0]
 
     print(pt)
-    assert pt.type_alias == "odin_sources"
+    assert pt.type_alias == "odin_package"
     assert pt.path == "src"
     assert pt.name == "odin"
-    assert set(pt.triggering_sources) == {"main.odin", "lib.odin"}
+    assert pt.triggering_sources == ()  # OdinPackageTarget doesn't have triggering sources
 
 
 def test_find_putative_odin_targets_empty():
@@ -55,7 +55,7 @@ def test_find_putative_odin_targets_empty():
             *OdinTool.rules(),
             QueryRule(PutativeTargets, [PutativeOdinTargetsRequest]),
         ],
-        target_types=[OdinSourcesGeneratorTarget],
+        target_types=[OdinPackageTarget, OdinSourcesGeneratorTarget],
     )
 
     rule_runner.write_files(
