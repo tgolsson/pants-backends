@@ -1,7 +1,7 @@
 from pants.engine.rules import collect_rules
 from pants_backend_odin import dependency_inference
 from pants_backend_odin import target_types as targets
-from pants_backend_odin.goals import lint, tailor
+from pants_backend_odin.goals import lint, package, tailor
 
 
 def target_types():
@@ -16,5 +16,6 @@ def rules():
         *targets.rules(),
         *dependency_inference.rules(),
         *lint.rules(),
+        *package.rules(),
         *tailor.rules(),
     ]
