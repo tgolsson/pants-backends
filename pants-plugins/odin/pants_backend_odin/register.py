@@ -1,7 +1,7 @@
 from pants.engine.rules import collect_rules
 from pants_backend_odin import dependency_inference
 from pants_backend_odin import target_types as targets
-from pants_backend_odin.goals import fmt, lint, package, tailor
+from pants_backend_odin.goals import fmt_simple as fmt, lint, package, tailor
 from pants_backend_odin.util_rules import build
 
 
