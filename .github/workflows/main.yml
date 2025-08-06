@@ -102,7 +102,7 @@ jobs:
           3.11
 
     - name: Set up Xcode version
-      if: runner.os == "macOS"
+      if: runner.os == 'macOS'
       run: sudo xcode-select -s /Applications/Xcode_15.1.app/Contents/Developer
 
     - name: Initialize Pants
