@@ -3,6 +3,7 @@ from __future__ import annotations
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
 from pants.option.option_types import BoolOption
+from pants.option.subsystem import Subsystem
 from pants.util.strutil import softwrap
 
 PLATFORM_MAPPING = {
@@ -42,3 +43,13 @@ class OdinTool(ExternalTool):
     def generate_exe(self, plat: Platform) -> str:
         plat_str = PLATFORM_MAPPING[plat.value]
         return f"odin-{plat_str}-{self.version}/odin"
+
+
+class OdinfmtTool(Subsystem):
+    options_scope = "odinfmt"
+    help = "Wrapper for odinfmt formatter from OLS repository."
+
+    skip = BoolOption(
+        default=False,
+        help=softwrap("""If true, don't use odinfmt when running `pants fmt`."""),
+    )
