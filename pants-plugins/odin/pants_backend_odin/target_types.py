@@ -122,11 +122,34 @@ class InferOdinPackageDependenciesRequest(InferDependenciesRequest):
     infer_from = OdinPackageDependenciesInferenceFieldSet
 
 
+class OdinTestTarget(Target):
+    alias = "odin_test"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        OdinDependenciesField,
+        OdinDefinesField,
+    )
+    help = softwrap("""
+        An Odin test target that represents test files in a directory.
+
+        This target automatically depends on all odin_source targets in its directory,
+        builds them with test mode, and runs the resulting test executable.
+
+        Example BUILD file:
+
+            odin_test(
+                name="mytest",
+                defines=["DEBUG=true"],
+            )
+        """)
+
+
 def targets():
     return [
         OdinSourceTarget,
         OdinSourcesGeneratorTarget,
         OdinPackageTarget,
+        OdinTestTarget,
     ]
 
 
