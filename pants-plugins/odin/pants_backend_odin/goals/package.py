@@ -102,7 +102,7 @@ async def build_odin_package(
 
     # Add mode if not default
     if request.mode != "exe":
-        argv.append(f"-mode:{request.mode}")
+        argv.append(f"-build-mode:{request.mode}")
 
     # Add defines to the command line
     for define in request.defines:
