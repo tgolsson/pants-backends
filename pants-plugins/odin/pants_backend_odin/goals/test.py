@@ -45,8 +45,12 @@ async def run_odin_tests(
     system_binaries_environment: SystemBinariesSubsystem.EnvironmentAware,
 ) -> TestResult:
     """Run Odin tests by building with test mode and executing the test binary."""
+    
+    # Debug output to confirm the rule is being called
+    print(f"DEBUG: OdinTestFieldSet rule called for {field_set.address}")
 
     if odin.skip:
+        print(f"DEBUG: Odin is configured to skip, returning skip result")
         return TestResult.skip(field_set.address)
 
     # Get the dependencies of the odin_test target to find the source files

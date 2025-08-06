@@ -3,9 +3,9 @@ odin_package(
     defines=["DEBUG=true", "VERSION=1.0.0"],
 )
 
+odin_sources(name="sources")
+
 odin_test(
     name="tests",
-    dependencies=[":odin_sources"],
+    dependencies=[":sources"],
 )
-
-odin_sources()
