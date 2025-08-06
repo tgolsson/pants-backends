@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from pants.core.goals.test import (
     TestFieldSet,
-    TestRequest,
     TestResult,
     TestSubsystem,
     ShowOutput,
@@ -37,14 +36,9 @@ class OdinTestFieldSet(TestFieldSet):
     defines: OdinDefinesField
 
 
-class OdinTestRequest(TestRequest):
-    tool_subsystem = OdinTool
-    field_set_type = OdinTestFieldSet
-
-
 @rule(level=LogLevel.DEBUG, desc="Run Odin tests")
 async def run_odin_tests(
-    request: OdinTestRequest,
+    field_set: OdinTestFieldSet,
     odin: OdinTool,
     platform: Platform,
     test_subsystem: TestSubsystem,
@@ -53,10 +47,10 @@ async def run_odin_tests(
     """Run Odin tests by building with test mode and executing the test binary."""
 
     if odin.skip:
-        return TestResult.skip(request.field_set.address)
+        return TestResult.skip(field_set.address)
 
     # Get the dependencies of the odin_test target to find the source files
-    dependencies = await Get(Targets, DependenciesRequest, DependenciesRequest(request.field_set.dependencies))
+    dependencies = await Get(Targets, DependenciesRequest, DependenciesRequest(field_set.dependencies))
 
     # Collect all source files from the dependencies
     source_field_sets = []
@@ -68,9 +62,9 @@ async def run_odin_tests(
     if not source_field_sets:
         # No source files found, this could be a configuration error
         return TestResult.error(
-            request.field_set.address,
+            field_set.address,
             stdout="",
-            stderr=f"No Odin source files found for test {request.field_set.address}. "
+            stderr=f"No Odin source files found for test {field_set.address}. "
                    f"Make sure the odin_test target has dependencies on odin_source targets.",
         )
 
@@ -78,24 +72,24 @@ async def run_odin_tests(
     sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
 
     # Extract directory from the field_set address
-    directory = request.field_set.address.spec_path or "."
+    directory = field_set.address.spec_path or "."
 
     # Validate directory path for security
     if ".." in directory or directory.startswith("/"):
         return TestResult.error(
-            request.field_set.address,
+            field_set.address,
             stdout="",
             stderr=f"Invalid directory path: {directory}",
         )
 
     # Create test executable name
-    test_executable = f"{request.field_set.address.target_name}_test"
+    test_executable = f"{field_set.address.target_name}_test"
 
     # Create build request for test mode
     build_request = OdinBuildRequest(
-        address=str(request.field_set.address),
+        address=str(field_set.address),
         sources_digest=sources_digest.snapshot.digest,
-        defines=tuple(request.field_set.defines.value or ()),
+        defines=tuple(field_set.defines.value or ()),
         directory=directory,
         output_path=test_executable,
         mode="test",
@@ -106,9 +100,9 @@ async def run_odin_tests(
 
     if not build_result.success:
         return TestResult.error(
-            request.field_set.address,
+            field_set.address,
             stdout="",
-            stderr=f"Failed to build Odin test {request.field_set.address}",
+            stderr=f"Failed to build Odin test {field_set.address}",
         )
 
     # Get system binaries for running the test
@@ -143,7 +137,7 @@ async def run_odin_tests(
 
     if process_result.exit_code != 0:
         return TestResult.error(
-            request.field_set.address,
+            field_set.address,
             stdout=process_result.stdout.decode("utf-8"),
             stderr=process_result.stderr.decode("utf-8"),
         )
@@ -154,7 +148,7 @@ async def run_odin_tests(
         Process(
             argv=[f"./{test_executable}"],
             input_digest=process_result.output_digest,
-            description=f"Run Odin test {request.field_set.address}",
+            description=f"Run Odin test {field_set.address}",
         ),
     )
 
@@ -162,7 +156,7 @@ async def run_odin_tests(
         exit_code=test_result.exit_code,
         stdout=test_result.stdout.decode("utf-8"),
         stderr=test_result.stderr.decode("utf-8"),
-        address=request.field_set.address,
+        address=field_set.address,
         output_setting=ShowOutput.ALL if test_result.exit_code != 0 else ShowOutput.FAILED,
     )
 
@@ -171,5 +165,4 @@ def rules():
     return [
         *collect_rules(),
         UnionRule(TestFieldSet, OdinTestFieldSet),
-        UnionRule(TestRequest, OdinTestRequest),
     ]
