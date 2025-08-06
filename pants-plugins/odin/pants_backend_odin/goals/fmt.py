@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 from pants.core.goals.fmt import FmtResult, FmtTargetsRequest
 from pants.core.util_rules.partitions import Partition, PartitionerType, Partitions
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.engine.addresses import Address
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process
+from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.util.logging import LogLevel
@@ -49,14 +49,9 @@ async def partition_odin_sources(
 
     partitions = []
     for field_set in request.field_sets:
-        source_files = await Get(
-            SourceFiles,
-            SourceFilesRequest([field_set.source]),
-        )
-
         partitions.append(
             Partition(
-                frozenset([f for f in source_files.files if f.endswith("odin")]),
+                frozenset([field_set.source.file_path]),
                 PackageMetadata(
                     address=field_set.address,
                 ),
@@ -66,44 +61,38 @@ async def partition_odin_sources(
     return Partitions(partitions)
 
 
-@rule(level=LogLevel.DEBUG, desc="Format Odin source files with odinfmt")
+@rule
 async def odin_source_fmt(
     request: OdinSourceFmtRequest.Batch[OdinSourceFmtFieldSet],
     odinfmt: OdinfmtTool,
     platform: Platform,
 ) -> FmtResult:
-    print("yy")
     build_odinfmt_result = await Get(BuildOdinfmtResult, BuildOdinfmtRequest, BuildOdinfmtRequest(platform))
-
-    print(request.elements)
-    # Get the source files to format
-
-    source_files = await Get(SourceFiles, SourceFilesRequest([field_set for field_set in request.elements]))
 
     input_digest = await Get(
         Digest,
         MergeDigests(
             [
                 build_odinfmt_result.digest,
-                source_files.snapshot.digest,
+                request.snapshot.digest,
             ]
         ),
     )
 
     # Run odinfmt on the files
-    argv = [build_odinfmt_result.exe_path] + list(source_files.snapshot.files)
+    argv = [build_odinfmt_result.exe_path, "-w"] + list(request.files)
 
     process_result = await Get(
-        FallibleProcessResult,
+        ProcessResult,
         Process(
             argv=argv,
             input_digest=input_digest,
-            description=f"Format Odin files with odinfmt",
-            output_files=source_files.snapshot.files,
+            description="Format Odin files with odinfmt",
+            output_files=request.files,
         ),
     )
 
-    return FmtResult.create(request, process_result, source_files.snapshot.files, [])
+    return await FmtResult.create(request, process_result)
 
 
 def rules():
