@@ -66,7 +66,7 @@ async def build_odin_package(
 
     extra_shims = tuple()
     if platform.value in ("macos_x86_64", "macos_arm64"):
-        extra_shims = ("m", "xcrun")
+        extra_shims = ("xcrun",)
     binary_shims = await Get(
         BinaryShims,
         BinaryShimsRequest.for_binaries(
