@@ -3,4 +3,4 @@ odin_package(
     defines=["DEBUG=true", "VERSION=1.0.0"],
 )
 
-odin_sources()
+odin_sources(name="sources")

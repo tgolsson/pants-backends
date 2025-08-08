@@ -65,12 +65,31 @@ def test_odin_build_request_creation():
         defines=("DEBUG=true", "VERSION=1.0.0"),
         directory="src",
         output_path="src/main",
+        mode="exe",
     )
 
     assert request.address == "src:main"
     assert request.sources_digest == EMPTY_DIGEST
     assert request.defines == ("DEBUG=true", "VERSION=1.0.0")
     assert request.directory == "src"
+    assert request.mode == "exe"
+
+
+def test_odin_build_request_test_mode():
+    """Test that OdinBuildRequest can be created with test mode."""
+    from pants.engine.fs import EMPTY_DIGEST
+
+    request = OdinBuildRequest(
+        address="src:test",
+        sources_digest=EMPTY_DIGEST,
+        defines=("DEBUG=true",),
+        directory="src",
+        output_path="src/test",
+        mode="test",
+    )
+
+    assert request.address == "src:test"
+    assert request.mode == "test"
 
 
 def test_odin_build_result_creation():

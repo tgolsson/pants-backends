@@ -36,6 +36,7 @@ class OdinBuildRequest:
     defines: tuple[str, ...]
     directory: str
     output_path: str
+    mode: str = "exe"  # exe, test, dll, etc.
 
 
 @dataclass(frozen=True)
@@ -98,6 +99,10 @@ async def build_odin_package(
 
     # Build the odin build command
     argv = [downloaded_odin.exe, "build", request.directory]
+
+    # Add mode if not default
+    if request.mode != "exe":
+        argv.append(f"-build-mode:{request.mode}")
 
     # Add defines to the command line
     for define in request.defines:
