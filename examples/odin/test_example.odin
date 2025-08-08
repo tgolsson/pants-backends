@@ -17,5 +17,5 @@ test_square_zero :: proc(t: ^testing.T) {
 @(test)
 test_square_negative :: proc(t: ^testing.T) {
 	result := square(-3)
-	testing.expect_value(t, result, 102)
+	testing.expect_value(t, result, 9)
 }

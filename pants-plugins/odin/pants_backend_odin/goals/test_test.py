@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pants.core.goals.test import rules as core_test_rules
 from pants.core.util_rules import config_files, external_tool, source_files
 from pants.engine.addresses import Address
 from pants.engine.internals import graph
@@ -21,7 +20,6 @@ def test_odin_test_field_set():
     """Test that OdinTestFieldSet is properly created from target."""
     rule_runner = RuleRunner(
         rules=[
-            *core_test_rules(),
             *odin_test_rules(),
             *odin_package_rules(),
             *odin_target_types.rules(),
@@ -74,7 +72,6 @@ def test_odin_test_field_set_no_defines():
     """Test OdinTestFieldSet works without defines field."""
     rule_runner = RuleRunner(
         rules=[
-            *core_test_rules(),
             *odin_test_rules(),
             *odin_package_rules(),
             *odin_target_types.rules(),

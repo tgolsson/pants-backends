@@ -2,21 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.goals.test import ShowOutput, TestFieldSet, TestRequest, TestResult, TestSubsystem
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.goals.test import ShowOutput, TestRequest, TestResult, TestSubsystem
 from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.core.util_rules.system_binaries import (
-    BinaryShims,
-    BinaryShimsRequest,
-    SystemBinariesSubsystem,
-)
-from pants.engine.fs import Digest, MergeDigests
+from pants.core.util_rules.system_binaries import SystemBinariesSubsystem
 from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Targets
-from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants_backend_odin.goals.package import OdinBuildRequest, OdinBuildResult
 from pants_backend_odin.subsystem import OdinTool
