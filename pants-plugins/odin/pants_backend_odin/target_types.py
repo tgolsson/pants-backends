@@ -59,6 +59,7 @@ class OdinSourceTarget(Target):
     alias = "odin_source"
     core_fields = (
         *COMMON_TARGET_FIELDS,
+        OdinDependenciesField,
         OdinSourceField,
     )
     help = softwrap("""
@@ -120,6 +121,18 @@ class OdinPackageDependenciesInferenceFieldSet(FieldSet):
 
 class InferOdinPackageDependenciesRequest(InferDependenciesRequest):
     infer_from = OdinPackageDependenciesInferenceFieldSet
+
+
+@dataclass(frozen=True)
+class OdinSourceDependenciesInferenceFieldSet(FieldSet):
+    required_fields = (OdinDependenciesField, OdinSourceField)
+
+    dependencies: OdinDependenciesField
+    source: OdinSourceField
+
+
+class InferOdinSourceDependenciesRequest(InferDependenciesRequest):
+    infer_from = OdinSourceDependenciesInferenceFieldSet
 
 
 class OdinTestTarget(Target):
