@@ -1,4 +1,6 @@
 import pytest
+from pants.core.util_rules import source_files
+from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Address
 from pants.engine.rules import QueryRule
 from pants.engine.target import InferredDependencies
@@ -97,6 +99,7 @@ def rule_runner() -> RuleRunner:
     return RuleRunner(
         rules=[
             *dependency_inference_rules(),
+            *source_files.rules(),
             QueryRule(InferredDependencies, [InferOdinSourceDependenciesRequest]),
         ],
         target_types=[OdinSourceTarget, OdinSourcesGeneratorTarget],

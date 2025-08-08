@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from pants.engine.fs import DigestContents, GetDigest, PathGlobs
+from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.engine.fs import Digest, DigestContents
 from pants.engine.rules import Get, collect_rules, rule
 from pants.engine.target import AllTargets, InferDependenciesRequest, InferredDependencies
 from pants.engine.unions import UnionRule
@@ -79,10 +80,14 @@ async def infer_odin_source_dependencies(
     request: InferOdinSourceDependenciesRequest, all_targets: AllTargets
 ) -> InferredDependencies:
     """Infer dependencies for odin_source targets based on import statements."""
-    source_file = request.field_set.source
     
     # Get the content of the source file
-    digest_contents = await Get(DigestContents, GetDigest(PathGlobs([source_file.value])))
+    source_files = await Get(SourceFiles, SourceFilesRequest([request.field_set.source]))
+    
+    if not source_files.snapshot.files:
+        return InferredDependencies([])
+    
+    digest_contents = await Get(DigestContents, Digest, source_files.snapshot.digest)
     
     if not digest_contents:
         return InferredDependencies([])
@@ -97,7 +102,8 @@ async def infer_odin_source_dependencies(
     
     # Resolve imports to package paths and find corresponding targets
     inferred_deps = []
-    current_file_path = source_file.value
+    # Use the full address path, not just the source filename
+    current_file_path = f"{request.field_set.address.spec_path}/{request.field_set.source.value}"
     
     for import_path in imports:
         package_path = resolve_import_to_package_path(import_path, current_file_path)
