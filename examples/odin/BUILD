@@ -4,8 +4,3 @@ odin_package(
 )
 
 odin_sources(name="sources")
-
-# odin_test(
-#     name="tests",
-#     dependencies=[":sources"],
-# )
