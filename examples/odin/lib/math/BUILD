@@ -1,1 +1,2 @@
-odin_sources(name="math")
+odin_sources(name="sources")
+odin_package(name="math")

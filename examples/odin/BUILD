@@ -4,3 +4,4 @@ odin_package(
 )
 
 odin_sources(name="sources")
+odin_binary(name="pack")

@@ -1,1 +1,2 @@
-odin_sources(name="utils")
+odin_sources(name="sources")
+odin_package(name="utils")

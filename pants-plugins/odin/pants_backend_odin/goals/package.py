@@ -20,7 +20,12 @@ from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import DependenciesRequest, Targets
+from pants.engine.target import (
+    DependenciesRequest,
+    Targets,
+    TransitiveTargets,
+    TransitiveTargetsRequest,
+)
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
@@ -136,11 +141,11 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
     """Package an Odin application by building it with the Odin compiler."""
 
     # Get the dependencies of the odin_package target to find the source files
-    dependencies = await Get(Targets, DependenciesRequest, DependenciesRequest(field_set.dependencies))
+    dependencies = await Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
 
     # Collect all source files from the dependencies
     source_field_sets = []
-    for target in dependencies:
+    for target in dependencies.closure:
         if not target.has_field(OdinSourceField):
             continue
         source_field_sets.append(target[OdinSourceField])
@@ -176,6 +181,7 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
 
     if not build_result.success:
         raise Exception(f"Failed to build Odin package {field_set.address}")
+
     artifact = BuiltPackageArtifact(relpath=str(build_request.output_path))
     return BuiltPackage(build_result.digest, (artifact,))
 
