@@ -11,6 +11,7 @@ from pants.engine.target import (
     InferDependenciesRequest,
     MultipleSourcesField,
     SingleSourceField,
+    StringField,
     StringSequenceField,
     Target,
     TargetFilesGenerator,
@@ -55,6 +56,15 @@ class OdinDefinesField(StringSequenceField):
         """)
 
 
+class _OdinPackageMarkerField(StringField):
+    """Build-time defines for Odin compilation."""
+
+    alias = "_marker"
+    help = softwrap("""
+    marker to define a package
+        """)
+
+
 class OdinSourceTarget(Target):
     alias = "odin_source"
     core_fields = (
@@ -93,7 +103,7 @@ class OdinPackageTarget(Target):
         *COMMON_TARGET_FIELDS,
         OdinDependenciesField,
         OdinDefinesField,
-        OutputPathField,
+        _OdinPackageMarkerField,
     )
     help = softwrap("""
         An Odin package target that represents all .odin files in a directory.
@@ -113,13 +123,34 @@ class OdinPackageTarget(Target):
 
 @dataclass(frozen=True)
 class OdinPackageDependenciesInferenceFieldSet(FieldSet):
-    required_fields = (OdinDependenciesField,)
+    required_fields = (OdinDependenciesField, _OdinPackageMarkerField)
 
     dependencies: OdinDependenciesField
 
 
 class InferOdinPackageDependenciesRequest(InferDependenciesRequest):
     infer_from = OdinPackageDependenciesInferenceFieldSet
+
+
+@dataclass(frozen=True)
+class OdinSourceDependenciesInferenceFieldSet(FieldSet):
+    required_fields = (OdinSourceField,)
+    source: OdinSourceField
+
+
+class InferOdinSourceDependenciesRequest(InferDependenciesRequest):
+    infer_from = OdinSourceDependenciesInferenceFieldSet
+
+
+@dataclass(frozen=True)
+class OdinBinaryDependenciesInferenceFieldSet(FieldSet):
+    required_fields = (OutputPathField,)
+
+    dependencies: OdinDependenciesField
+
+
+class InferOdinBinaryDependenciesRequest(InferDependenciesRequest):
+    infer_from = OdinBinaryDependenciesInferenceFieldSet
 
 
 class OdinTestTarget(Target):
@@ -144,12 +175,38 @@ class OdinTestTarget(Target):
         """)
 
 
+class OdinBinaryTarget(Target):
+    alias = "odin_binary"
+
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        OdinDependenciesField,
+        OdinDefinesField,
+        OutputPathField,
+    )
+
+    help = softwrap("""
+        An Odin binary target that represents a compiled executable.
+
+        This target automatically depends on all odin_source targets in its directory,
+        builds them with binary mode, and produces an executable.
+        Example BUILD file:
+
+            odin_binary(
+                name="mybinary",
+                output_path="bin/mybinary",
+                defines=["DEBUG=true"],
+            )
+        """)
+
+
 def targets():
     return [
         OdinSourceTarget,
         OdinSourcesGeneratorTarget,
         OdinPackageTarget,
         OdinTestTarget,
+        OdinBinaryTarget,
     ]
 
 

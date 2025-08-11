@@ -10,6 +10,7 @@ from pants_backend_odin.goals.package import OdinBuildRequest, OdinBuildResult, 
 from pants_backend_odin.goals.package import rules as odin_package_rules
 from pants_backend_odin.subsystem import OdinTool
 from pants_backend_odin.target_types import (
+    OdinBinaryTarget,
     OdinPackageTarget,
     OdinSourcesGeneratorTarget,
     OdinSourceTarget,
@@ -29,7 +30,7 @@ def test_odin_package_field_set():
             *graph.rules(),
             *OdinTool.rules(),
         ],
-        target_types=[OdinPackageTarget, OdinSourceTarget, OdinSourcesGeneratorTarget],
+        target_types=[OdinPackageTarget, OdinSourceTarget, OdinSourcesGeneratorTarget, OdinBinaryTarget],
     )
 
     rule_runner.write_files(
@@ -37,10 +38,10 @@ def test_odin_package_field_set():
             "src/BUILD": """
 odin_sources(name="sources")
 odin_package(
-    name="main",
-    defines=["DEBUG=true", "VERSION=1.0.0"],
+    name="xx",
     dependencies=[":sources"]
 )
+odin_binary(name="main",     defines=["DEBUG=true", "VERSION=1.0.0"],)
 """,
             "src/main.odin": "package main\n\nmain :: proc() {\n}",
         }
@@ -118,7 +119,12 @@ def test_odin_package_field_set_no_defines():
             *graph.rules(),
             *OdinTool.rules(),
         ],
-        target_types=[OdinPackageTarget, OdinSourceTarget, OdinSourcesGeneratorTarget],
+        target_types=[
+            OdinPackageTarget,
+            OdinSourceTarget,
+            OdinSourcesGeneratorTarget,
+            OdinBinaryTarget,
+        ],
     )
 
     rule_runner.write_files(
@@ -126,9 +132,10 @@ def test_odin_package_field_set_no_defines():
             "src/BUILD": """
 odin_sources(name="sources")
 odin_package(
-    name="main",
+    name="src",
     dependencies=[":sources"]
 )
+odin_binary(name="main")
 """,
             "src/main.odin": "package main\n\nmain :: proc() {\n}",
         }

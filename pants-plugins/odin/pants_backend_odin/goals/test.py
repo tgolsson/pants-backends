@@ -9,7 +9,7 @@ from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import DependenciesRequest, FieldSet, Targets
+from pants.engine.target import FieldSet, TransitiveTargets, TransitiveTargetsRequest
 from pants.util.logging import LogLevel
 from pants_backend_odin.goals.package import OdinBuildRequest, OdinBuildResult
 from pants_backend_odin.subsystem import OdinTool
@@ -45,22 +45,20 @@ async def run_odin_tests(
         return TestResult.skip(field_set.address)
 
     # Get the dependencies of the odin_test target to find the source files
-    dependencies = await Get(Targets, DependenciesRequest, DependenciesRequest(field_set.dependencies))
+    dependencies = await Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
 
     # Collect all source files from the dependencies
     source_field_sets = []
-    for target in dependencies:
+    for target in dependencies.closure:
         if not target.has_field(OdinSourceField):
             continue
         source_field_sets.append(target[OdinSourceField])
 
     if not source_field_sets:
         # No source files found, this could be a configuration error
-        return TestResult.error(
+        return TestResult.no_tests_found(
             field_set.address,
-            stdout="",
-            stderr=f"No Odin source files found for test {field_set.address}. "
-            f"Make sure the odin_test target has dependencies on odin_source targets.",
+            output_setting=ShowOutput.ALL,
         )
 
     # Get the source files
@@ -71,6 +69,7 @@ async def run_odin_tests(
 
     # Validate directory path for security
     if ".." in directory or directory.startswith("/"):
+        print("xxxxxx")
         return TestResult.error(
             field_set.address,
             stdout="",
