@@ -2,7 +2,7 @@ from pants.engine.rules import collect_rules
 from pants_backend_odin import dependency_inference
 from pants_backend_odin import target_types as targets
 from pants_backend_odin.goals import fmt, lint, package, run, tailor, test
-from pants_backend_odin.util_rules import build
+from pants_backend_odin.util_rules import build, sandbox
 
 
 def target_types():
@@ -17,6 +17,7 @@ def rules():
         *targets.rules(),
         *dependency_inference.rules(),
         *build.rules(),
+        *sandbox.rules(),
         *fmt.rules(),
         *lint.rules(),
         *package.rules(),

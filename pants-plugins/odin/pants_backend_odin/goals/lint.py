@@ -5,20 +5,19 @@ from dataclasses import dataclass
 from pants.core.goals.lint import LintResult, LintTargetsRequest
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
 from pants.core.util_rules.partitions import Partition, Partitions
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get, MultiGet
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import FieldSet, TransitiveTargets, TransitiveTargetsRequest
+from pants.engine.target import FieldSet
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
 from pants_backend_odin.target_types import (
     OdinDependenciesField,
-    OdinSourceField,
     _OdinPackageMarkerField,
 )
+from pants_backend_odin.util_rules.sandbox import PrepareOdinSandboxRequest, PrepareOdinSandboxResult
 
 
 @dataclass(frozen=True)
@@ -68,39 +67,28 @@ async def odin_package_lint(
 ) -> LintResult:
     download_odin_get = Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request(platform))
 
-    # Get the dependencies of the odin_package targets to find the source files
-    dependencies_gets = [
-        Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
+    # Prepare sandboxes for all field sets
+    sandbox_gets = [
+        Get(PrepareOdinSandboxResult, PrepareOdinSandboxRequest(field_set.address))
         for field_set in request.elements
     ]
 
-    downloaded_odin, *all_dependencies = await MultiGet(download_odin_get, *dependencies_gets)
+    downloaded_odin, *all_sandbox_results = await MultiGet(download_odin_get, *sandbox_gets)
 
-    # Collect all source files from the dependencies
-    source_field_sets = []
-    for dependencies in all_dependencies:
-        for target in dependencies.closure:
-            if not target.has_field(OdinSourceField):
-                continue
+    # Check if we have any source files across all sandboxes
+    total_source_files = []
+    for sandbox_result in all_sandbox_results:
+        total_source_files.extend(sandbox_result.source_files)
 
-            source_field_sets.append(target[OdinSourceField])
-
-    if not source_field_sets:
+    if not total_source_files:
         # No source files found, nothing to lint
         return LintResult.create(request, FallibleProcessResult((), 0, b"", b""))
 
-    # Get the source files
-    sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
-
-    input_digest = await Get(
-        Digest,
-        MergeDigests(
-            [
-                downloaded_odin.digest,
-                sources_digest.snapshot.digest,
-            ]
-        ),
-    )
+    # Merge all sandbox digests and the Odin tool digest
+    all_digests = [downloaded_odin.digest]
+    all_digests.extend(sandbox_result.digest for sandbox_result in all_sandbox_results)
+    
+    input_digest = await Get(Digest, MergeDigests(all_digests))
 
     process_result = await Get(
         FallibleProcessResult,

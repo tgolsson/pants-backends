@@ -9,7 +9,6 @@ from pants.core.goals.package import (
     PackageFieldSet,
 )
 from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.core.util_rules.system_binaries import (
     BinaryShims,
     BinaryShimsRequest,
@@ -20,11 +19,11 @@ from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import TransitiveTargets, TransitiveTargetsRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinDefinesField, OdinDependenciesField, OdinSourceField
+from pants_backend_odin.target_types import OdinDefinesField, OdinDependenciesField
+from pants_backend_odin.util_rules.sandbox import PrepareOdinSandboxRequest, PrepareOdinSandboxResult
 
 
 @dataclass(frozen=True)
@@ -135,39 +134,22 @@ async def build_odin_package(
 async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPackage:
     """Package an Odin application by building it with the Odin compiler."""
 
-    # Get the dependencies of the odin_package target to find the source files
-    dependencies = await Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
+    # Prepare the sandbox with sources and resources
+    sandbox_result = await Get(PrepareOdinSandboxResult, PrepareOdinSandboxRequest(field_set.address))
 
-    # Collect all source files from the dependencies
-    source_field_sets = []
-    for target in dependencies.closure:
-        if not target.has_field(OdinSourceField):
-            continue
-        source_field_sets.append(target[OdinSourceField])
-
-    if not source_field_sets:
+    if not sandbox_result.source_files:
         # No source files found, this could be a configuration error
         raise Exception(
             f"No Odin source files found for package {field_set.address}. "
             f"Make sure the odin_package target has dependencies on odin_source targets."
         )
 
-    # Get the source files
-    sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
-
-    # Extract directory from the field_set address
-    directory = field_set.address.spec_path or "."
-
-    # Validate directory path for security
-    if ".." in directory or directory.startswith("/"):
-        raise Exception(f"Invalid directory path: {directory}")
-
     # Create build request
     build_request = OdinBuildRequest(
         address=field_set.address,
-        sources_digest=sources_digest.snapshot.digest,
+        sources_digest=sandbox_result.digest,
         defines=tuple(field_set.defines.value or ()),
-        directory=directory,
+        directory=sandbox_result.directory,
         output_path=field_set.output_path.value_or_default(file_ending=""),
     )
 
