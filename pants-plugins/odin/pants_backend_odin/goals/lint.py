@@ -11,15 +11,19 @@ from pants.engine.internals.selectors import Get, MultiGet
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import DependenciesRequest, FieldSet, Targets
+from pants.engine.target import FieldSet, TransitiveTargets, TransitiveTargetsRequest
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
-from pants_backend_odin.target_types import OdinDependenciesField, OdinSourceField
+from pants_backend_odin.target_types import (
+    OdinDependenciesField,
+    OdinSourceField,
+    _OdinPackageMarkerField,
+)
 
 
 @dataclass(frozen=True)
 class OdinPackageFieldSet(FieldSet):
-    required_fields = (OdinDependenciesField,)
+    required_fields = (OdinDependenciesField, _OdinPackageMarkerField)
 
     dependencies: OdinDependenciesField
 
@@ -66,7 +70,7 @@ async def odin_package_lint(
 
     # Get the dependencies of the odin_package targets to find the source files
     dependencies_gets = [
-        Get(Targets, DependenciesRequest, DependenciesRequest(field_set.dependencies))
+        Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
         for field_set in request.elements
     ]
 
@@ -75,7 +79,7 @@ async def odin_package_lint(
     # Collect all source files from the dependencies
     source_field_sets = []
     for dependencies in all_dependencies:
-        for target in dependencies:
+        for target in dependencies.closure:
             if not target.has_field(OdinSourceField):
                 continue
 
@@ -101,7 +105,12 @@ async def odin_package_lint(
     process_result = await Get(
         FallibleProcessResult,
         Process(
-            argv=[downloaded_odin.exe, "check", request.partition_metadata.directory],
+            argv=[
+                downloaded_odin.exe,
+                "check",
+                request.partition_metadata.directory,
+                "-no-entry-point",
+            ],
             input_digest=input_digest,
             description=f"Run odin check on {request.partition_metadata.directory}",
         ),

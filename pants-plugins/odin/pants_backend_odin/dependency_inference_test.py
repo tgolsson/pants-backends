@@ -1,6 +1,5 @@
 import pytest
 from pants.core.util_rules import source_files
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
 from pants.engine.addresses import Address
 from pants.engine.rules import QueryRule
 from pants.engine.target import InferredDependencies
@@ -13,6 +12,7 @@ from pants_backend_odin.dependency_inference import (
 from pants_backend_odin.dependency_inference import rules as dependency_inference_rules
 from pants_backend_odin.target_types import (
     OdinBinaryTarget,
+    OdinPackageTarget,
     OdinSourcesGeneratorTarget,
     OdinSourceTarget,
 )
@@ -106,7 +106,12 @@ def rule_runner() -> RuleRunner:
             *source_files.rules(),
             QueryRule(InferredDependencies, [InferOdinSourceDependenciesRequest]),
         ],
-        target_types=[OdinSourceTarget, OdinSourcesGeneratorTarget, OdinBinaryTarget],
+        target_types=[
+            OdinSourceTarget,
+            OdinSourcesGeneratorTarget,
+            OdinBinaryTarget,
+            OdinPackageTarget,
+        ],
     )
 
 
@@ -139,12 +144,15 @@ add :: proc(a, b: int) -> int {
 """,
             "src/main/BUILD": """
 odin_source(name="main", source="main.odin")
+
 """,
             "src/utils/BUILD": """
-odin_sources()
+odin_sources(name="sources")
+odin_package()
 """,
             "lib/math/BUILD": """
-odin_sources()
+odin_sources(name="sources")
+odin_package()
 """,
         }
     )

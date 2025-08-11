@@ -20,12 +20,7 @@ from pants.engine.internals.selectors import Get
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import collect_rules, rule
-from pants.engine.target import (
-    DependenciesRequest,
-    Targets,
-    TransitiveTargets,
-    TransitiveTargetsRequest,
-)
+from pants.engine.target import TransitiveTargets, TransitiveTargetsRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
