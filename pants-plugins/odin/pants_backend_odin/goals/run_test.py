@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from pants.core.goals.run import rules as run_rules
 from pants.core.goals.package import rules as package_rules
+from pants.core.goals.run import rules as run_rules
 from pants.core.util_rules import config_files, external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.internals import graph
 from pants.testutil.rule_runner import RuleRunner
-
 from pants_backend_odin import target_types as odin_target_types
 from pants_backend_odin.goals.package import rules as odin_package_rules
 from pants_backend_odin.goals.run import OdinBinaryRunFieldSet
@@ -117,8 +116,8 @@ odin_binary(name="main")
 
 def test_odin_binary_target_has_required_fields():
     """Test that OdinBinaryTarget has all required fields for run support."""
-    from pants_backend_odin.target_types import OdinDefinesField, OdinDependenciesField
     from pants.core.goals.package import OutputPathField
+    from pants_backend_odin.target_types import OdinDefinesField, OdinDependenciesField
 
     assert OdinDependenciesField in OdinBinaryTarget.core_fields
     assert OdinDefinesField in OdinBinaryTarget.core_fields
@@ -127,10 +126,10 @@ def test_odin_binary_target_has_required_fields():
 
 def test_odin_binary_run_field_set_requirements():
     """Test that OdinBinaryRunFieldSet has correct required fields."""
-    from pants_backend_odin.target_types import OdinDependenciesField
     from pants.core.goals.package import OutputPathField
+    from pants_backend_odin.target_types import OdinDependenciesField
 
     required_fields = OdinBinaryRunFieldSet.required_fields
-    
+
     assert OdinDependenciesField in required_fields
     assert OutputPathField in required_fields
