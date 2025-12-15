@@ -5,16 +5,16 @@ from dataclasses import dataclass
 from pants.core.goals.fmt import FmtResult, FmtTargetsRequest
 from pants.core.util_rules.partitions import Partition, PartitionerType, Partitions
 from pants.engine.addresses import Address
-from pants.engine.fs import Digest, MergeDigests
-from pants.engine.internals.selectors import Get
+from pants.engine.fs import MergeDigests
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import collect_rules, rule
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinfmtTool
 from pants_backend_odin.target_types import OdinSourceField
-from pants_backend_odin.util_rules.build import BuildOdinfmtRequest, BuildOdinfmtResult
+from pants_backend_odin.util_rules.build import BuildOdinfmtRequest, build_odinfmt
 
 
 @dataclass(frozen=True)
@@ -67,29 +67,29 @@ async def odin_source_fmt(
     odinfmt: OdinfmtTool,
     platform: Platform,
 ) -> FmtResult:
-    build_odinfmt_result = await Get(BuildOdinfmtResult, BuildOdinfmtRequest, BuildOdinfmtRequest(platform))
+    build_odinfmt_result = await build_odinfmt(BuildOdinfmtRequest(platform))
 
-    input_digest = await Get(
-        Digest,
+    input_digest = await merge_digests(
         MergeDigests(
             [
                 build_odinfmt_result.digest,
                 request.snapshot.digest,
             ]
-        ),
+        )
     )
 
     # Run odinfmt on the files
     argv = [build_odinfmt_result.exe_path, "-w"] + list(request.files)
 
-    process_result = await Get(
-        ProcessResult,
-        Process(
-            argv=argv,
-            input_digest=input_digest,
-            description="Format Odin files with odinfmt",
-            output_files=request.files,
-        ),
+    process_result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                argv=argv,
+                input_digest=input_digest,
+                description="Format Odin files with odinfmt",
+                output_files=request.files,
+            )
+        )
     )
 
     return await FmtResult.create(request, process_result)

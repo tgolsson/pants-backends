@@ -4,8 +4,9 @@ from pants.core.util_rules.system_binaries import (
     BinaryShims,
     BinaryShimsRequest,
     SystemBinariesSubsystem,
+    create_binary_shims,
 )
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.rules import collect_rules, rule
 
 _TOOLS = [
     "newuidmap",
@@ -38,7 +39,7 @@ async def get_binary_shims(
         **kwargs,
     )
 
-    return await Get(BinaryShims, BinaryShimsRequest, binary_shims)
+    return await create_binary_shims(binary_shims)
 
 
 def rules():

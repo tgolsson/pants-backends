@@ -7,14 +7,14 @@ from pants.core.goals.publish import (
     PublishProcesses,
     PublishRequest,
 )
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.env_vars import EnvironmentVars as Environment
+from pants.core.util_rules.env_vars import environment_vars_subset
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
-from pants.engine.fs import Digest, MergeDigests
-from pants.engine.internals.selectors import Get
+from pants.engine.fs import MergeDigests
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import InteractiveProcess, Process
-from pants.engine.rules import collect_rules, rule
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
@@ -67,13 +67,11 @@ class OciMirrorProcessRequest:
 async def oci_mirror_process(
     request: OciMirrorProcessRequest, skopeo: SkopeoTool, platform: Platform
 ) -> Process:
-    skopeo = await Get(
-        DownloadedExternalTool,
-        ExternalToolRequest,
-        skopeo.get_request(platform),
+    skopeo = await download_external_tool(skopeo.get_request(platform))
+    sandbox_input = await merge_digests(MergeDigests([skopeo.digest]))
+    relevant_env = await environment_vars_subset(
+        EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]), **implicitly()
     )
-    sandbox_input = await Get(Digest, MergeDigests([skopeo.digest]))
-    relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
 
     destination = f"docker://{request.destination}"
     if request.tag:
@@ -102,14 +100,14 @@ async def oci_mirror_process(
 async def mirror_oci_image(request: MirrorImageRequest) -> PublishProcesses:
     field_set = request.field_set
 
-    process = await Get(
-        Process,
+    process = await oci_mirror_process(
         OciMirrorProcessRequest(
             destination=field_set.destination.value,
             source=field_set.source.value,
             tag=field_set.tag.value,
             digest=field_set.digest.value,
         ),
+        **implicitly(),
     )
 
     return PublishProcesses(

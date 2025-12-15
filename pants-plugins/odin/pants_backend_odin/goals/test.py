@@ -3,15 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pants.core.goals.test import ShowOutput, TestRequest, TestResult, TestSubsystem
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.core.util_rules.system_binaries import SystemBinariesSubsystem
-from pants.engine.internals.selectors import Get
+from pants.engine.internals.graph import transitive_targets
+from pants.engine.intrinsics import execute_process
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process
-from pants.engine.rules import collect_rules, rule
-from pants.engine.target import FieldSet, TransitiveTargets, TransitiveTargetsRequest
+from pants.engine.process import Process
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import FieldSet, TransitiveTargetsRequest
 from pants.util.logging import LogLevel
-from pants_backend_odin.goals.package import OdinBuildRequest, OdinBuildResult
+from pants_backend_odin.goals.package import OdinBuildRequest, build_odin_package
 from pants_backend_odin.subsystem import OdinTool
 from pants_backend_odin.target_types import OdinDefinesField, OdinDependenciesField, OdinSourceField
 
@@ -45,7 +46,7 @@ async def run_odin_tests(
         return TestResult.skip(field_set.address)
 
     # Get the dependencies of the odin_test target to find the source files
-    dependencies = await Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
+    dependencies = await transitive_targets(TransitiveTargetsRequest([field_set.address]), **implicitly())
 
     # Collect all source files from the dependencies
     source_field_sets = []
@@ -62,7 +63,7 @@ async def run_odin_tests(
         )
 
     # Get the source files
-    sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
+    sources_digest = await determine_source_files(SourceFilesRequest(source_field_sets))
 
     # Extract directory from the field_set address
     directory = field_set.address.spec_path or "."
@@ -90,7 +91,7 @@ async def run_odin_tests(
     )
 
     # Build the test
-    build_result = await Get(OdinBuildResult, OdinBuildRequest, build_request)
+    build_result = await build_odin_package(build_request)
 
     if not build_result.success:
         return TestResult.error(
@@ -100,13 +101,13 @@ async def run_odin_tests(
         )
 
     # Run the test
-    test_result = await Get(
-        FallibleProcessResult,
+    test_result = await execute_process(
         Process(
             argv=[f"./{test_executable}"],
             input_digest=build_result.digest,
             description=f"Run Odin test {field_set.address}",
         ),
+        **implicitly(),
     )
 
     return TestResult.from_fallible_process_result(

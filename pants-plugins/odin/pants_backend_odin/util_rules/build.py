@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.system_binaries import (
     BinaryShims,
     BinaryShimsRequest,
@@ -10,9 +10,10 @@ from pants.core.util_rules.system_binaries import (
 )
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import collect_rules, rule
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
 
@@ -59,28 +60,25 @@ async def build_odinfmt(
     )
 
     # Get the Odin compiler
-    downloaded_odin = await Get(
-        DownloadedExternalTool, ExternalToolRequest, odin.get_request(request.platform)
-    )
+    downloaded_odin = await download_external_tool(odin.get_request(request.platform))
 
-    input_digest = await Get(
-        Digest,
+    input_digest = await merge_digests(
         MergeDigests(
             [
                 downloaded_odin.digest,
                 binary_shims.digest,
             ]
-        ),
+        )
     )
 
     # Clone the OLS repository and build odinfmt
-    process_result = await Get(
-        ProcessResult,
-        Process(
-            argv=[
-                "bash",
-                "-c",
-                f"""
+    process_result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                argv=[
+                    "bash",
+                    "-c",
+                    f"""
                 set -e
                 DIR=$(pwd)
                 export PATH="$DIR/$(dirname "{downloaded_odin.exe}"):$PATH"
@@ -90,15 +88,16 @@ async def build_odinfmt(
                 cp odinfmt ..
                 popd
                 """,
-            ],
-            input_digest=input_digest,
-            description="Clone OLS and build odinfmt",
-            output_files=("./odinfmt",),
-            env={"PATH": f"{binary_shims.path_component}"},
-            immutable_input_digests={
-                **binary_shims.immutable_input_digests,
-            },
-        ),
+                ],
+                input_digest=input_digest,
+                description="Clone OLS and build odinfmt",
+                output_files=("./odinfmt",),
+                env={"PATH": f"{binary_shims.path_component}"},
+                immutable_input_digests={
+                    **binary_shims.immutable_input_digests,
+                },
+            )
+        )
     )
 
     return BuildOdinfmtResult(

@@ -5,12 +5,17 @@ import os
 from dataclasses import dataclass
 
 from pants.core.util_rules.adhoc_binaries import GunzipBinary
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.fs import Digest, MergeDigests
+from pants.core.util_rules.external_tool import download_external_tool
+from pants.engine.fs import MergeDigests
+from pants.engine.internals.graph import (
+    resolve_target,
+    resolve_targets,
+    resolve_unparsed_address_inputs,
+)
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import Get, MultiGet, collect_rules, rule
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
     Dependencies,
@@ -18,8 +23,6 @@ from pants.engine.target import (
     FieldSet,
     StringField,
     Target,
-    Targets,
-    WrappedTarget,
     WrappedTargetRequest,
 )
 from pants.engine.unions import UnionRule
@@ -31,12 +34,12 @@ from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    FallibleImageBundleRequestWrap,
     ImageBundle,
     ImageBundleRequest,
+    ibr_to_fibr,
 )
-from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
-from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
+from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
+from pants_backend_oci.util_rules.oci_sha import OciShaRequest, extract_build_info_sha
 
 
 class PythonMain(StringField):
@@ -86,30 +89,25 @@ async def build_python_image(
     platform: Platform,
     gunzip: GunzipBinary,
 ) -> FallibleImageBundle:
-    umoci_request = Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
-    base = await Get(
-        Addresses,
-        UnparsedAddressInputs,
-        request.target.base.to_unparsed_address_inputs(),
-    )
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
+    umoci_request = download_external_tool(umoci.get_request(platform))
+    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
     )
 
     target = wrapped_target.target
-    bundle_request, dependencies = await MultiGet(
-        Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target)),
-        Get(Targets, DependenciesRequest(request.target.dependencies)),
+    bundle_request, dependencies = await concurrently(
+        ibr_to_fibr(ImageBundleRequest(target), **implicitly()),
+        resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
     )
 
     base_image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
 
     layers = []
     for dependency in dependencies:
-        layers.append(Get(ImageLayer, ImageLayerRequest(dependency)))
+        layers.append(build_image_layer(ImageLayerRequest(dependency)))
 
-    base_image, umoci, *layers = await MultiGet(
+    base_image, umoci, *layers = await concurrently(
         base_image,
         umoci_request,
         *layers,
@@ -126,7 +124,7 @@ async def build_python_image(
                 if ep.endswith(".pex"):
                     pex = ep
 
-        input_digest = await Get(Digest, MergeDigests([umoci.digest, digest, layer.digest]))
+        input_digest = await merge_digests(MergeDigests([umoci.digest, digest, layer.digest]))
         layer_processes = (
             Process(
                 (umoci.exe, *layer.layer_command[:-1], layer.layer_command[-1].rstrip(".gz")),
@@ -149,42 +147,44 @@ async def build_python_image(
                 ),
                 *layer_processes,
             )
-        image = await Get(
-            ProcessResult,
-            FusedProcess(
-                layer_processes,
-            ),
+        image = await fallible_to_exec_result_or_raise(
+            **implicitly(
+                FusedProcess(
+                    layer_processes,
+                )
+            )
         )
 
         digest = image.output_digest
 
-    input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
+    input_digest = await merge_digests(MergeDigests([umoci.digest, digest]))
     timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
 
     if pex is not None:
-        image_with_layer = await Get(
-            ProcessResult,
-            Process(
-                (
-                    umoci.exe,
-                    "config",
-                    "--image",
-                    "build:build",
-                    "--config.entrypoint",
-                    "python",
-                    "--config.entrypoint",
-                    pex,
-                    f"--history.created={timestamp}",
-                ),
-                input_digest=input_digest,
-                description=f"Package OCI Image Bundle: {layer.address}",
-                output_directories=("build/",),
-            ),
+        image_with_layer = await fallible_to_exec_result_or_raise(
+            **implicitly(
+                Process(
+                    (
+                        umoci.exe,
+                        "config",
+                        "--image",
+                        "build:build",
+                        "--config.entrypoint",
+                        "python",
+                        "--config.entrypoint",
+                        pex,
+                        f"--history.created={timestamp}",
+                    ),
+                    input_digest=input_digest,
+                    description=f"Package OCI Image Bundle: {layer.address}",
+                    output_directories=("build/",),
+                )
+            )
         )
     else:
         image_with_layer = image
 
-    image_digest = await Get(OciSha, OciShaRequest(image_with_layer.output_digest))
+    image_digest = await extract_build_info_sha(OciShaRequest(image_with_layer.output_digest))
     output = ImageBundle(
         digest=image_with_layer.output_digest,
         image_sha=image_digest.image_digest,

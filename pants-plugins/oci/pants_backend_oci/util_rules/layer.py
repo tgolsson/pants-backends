@@ -8,21 +8,21 @@ from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, BuiltPackageArtifact, PackageFieldSet
 from pants.core.target_types import FileSourceField
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
-from pants.engine.fs import Digest, MergeDigests, Snapshot
-from pants.engine.rules import Get, MultiGet, collect_rules, rule
+from pants.engine.fs import Digest, MergeDigests
+from pants.engine.internals.graph import find_valid_field_sets, resolve_targets
+from pants.engine.intrinsics import digest_to_snapshot
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     Dependencies,
     DependenciesRequest,
-    FieldSetsPerTarget,
     FieldSetsPerTargetRequest,
     SourcesField,
     Target,
-    Targets,
 )
 
-from pants_backend_oci.util_rules.archive import CreateDeterministicTar
+from pants_backend_oci.util_rules.archive import CreateDeterministicTar, create_archive
 
 
 class BuiltLayerArtifact(BuiltPackageArtifact):
@@ -56,27 +56,27 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     else:
         if request.target.has_field(Dependencies):
-            root_dependencies = await Get(Targets, DependenciesRequest(request.target[Dependencies]))
+            root_dependencies = await resolve_targets(
+                **implicitly(DependenciesRequest(request.target[Dependencies]))
+            )
         else:
             root_dependencies = []
 
     # Get all file sources from the root dependencies. That includes any non-file sources that can
     # be "codegen"ed into a file source.
-    sources_request = Get(
-        SourceFiles,
+    sources_request = determine_source_files(
         SourceFilesRequest(
             sources_fields=[tgt.get(SourcesField) for tgt in root_dependencies],
             for_sources_types=(FileSourceField,),
             enable_codegen=True,
-        ),
+        )
     )
 
-    embedded_pkgs_per_target_request = Get(
-        FieldSetsPerTarget,
-        FieldSetsPerTargetRequest(PackageFieldSet, root_dependencies),
+    embedded_pkgs_per_target_request = find_valid_field_sets(
+        FieldSetsPerTargetRequest(PackageFieldSet, root_dependencies), **implicitly()
     )
 
-    sources, embedded_pkgs_per_target = await MultiGet(
+    sources, embedded_pkgs_per_target = await concurrently(
         sources_request,
         embedded_pkgs_per_target_request,
     )
@@ -88,7 +88,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         logger.info("Did not build any files for OCI image")
 
     # Package binary dependencies for build context.
-    embedded_pkgs = await MultiGet(
+    embedded_pkgs = await concurrently(
         Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
     )
 
@@ -120,12 +120,11 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     real_layers = []
 
     if all_digests:
-        snapshot = await Get(
-            Snapshot,
-            MergeDigests(all_digests),
-        )
+        snapshot = await digest_to_snapshot(**implicitly(MergeDigests(all_digests)))
 
-        raw_layer_digest = await Get(Digest, CreateDeterministicTar(snapshot, "layers/image_bundle.tar"))
+        raw_layer_digest = await create_archive(
+            CreateDeterministicTar(snapshot, "layers/image_bundle.tar"), **implicitly()
+        )
         layer_name = "layers/image_bundle.tar"
         real_layers.append(
             (
@@ -135,10 +134,7 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         )
 
     for layer in layer_artifacts:
-        snapshot = await Get(
-            Snapshot,
-            MergeDigests([layer.digest]),
-        )
+        snapshot = await digest_to_snapshot(**implicitly(MergeDigests([layer.digest])))
 
         real_layers.append(
             (

@@ -3,15 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pants.core.goals.lint import LintResult, LintTargetsRequest
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.partitions import Partition, Partitions
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.engine.fs import Digest, MergeDigests
-from pants.engine.internals.selectors import Get, MultiGet
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
+from pants.engine.fs import MergeDigests
+from pants.engine.internals.graph import transitive_targets
+from pants.engine.internals.selectors import concurrently
+from pants.engine.intrinsics import execute_process, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
-from pants.engine.rules import collect_rules, rule
-from pants.engine.target import FieldSet, TransitiveTargets, TransitiveTargetsRequest
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import FieldSet, TransitiveTargetsRequest
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
 from pants_backend_odin.target_types import (
@@ -66,15 +68,15 @@ async def odin_package_lint(
     odin: OdinTool,
     platform: Platform,
 ) -> LintResult:
-    download_odin_get = Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request(platform))
+    download_odin_get = download_external_tool(odin.get_request(platform))
 
     # Get the dependencies of the odin_package targets to find the source files
     dependencies_gets = [
-        Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
+        transitive_targets(TransitiveTargetsRequest([field_set.address]), **implicitly())
         for field_set in request.elements
     ]
 
-    downloaded_odin, *all_dependencies = await MultiGet(download_odin_get, *dependencies_gets)
+    downloaded_odin, *all_dependencies = await concurrently(download_odin_get, *dependencies_gets)
 
     # Collect all source files from the dependencies
     source_field_sets = []
@@ -90,20 +92,18 @@ async def odin_package_lint(
         return LintResult.create(request, FallibleProcessResult((), 0, b"", b""))
 
     # Get the source files
-    sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
+    sources_digest = await determine_source_files(SourceFilesRequest(source_field_sets))
 
-    input_digest = await Get(
-        Digest,
+    input_digest = await merge_digests(
         MergeDigests(
             [
                 downloaded_odin.digest,
                 sources_digest.snapshot.digest,
             ]
-        ),
+        )
     )
 
-    process_result = await Get(
-        FallibleProcessResult,
+    process_result = await execute_process(
         Process(
             argv=[
                 downloaded_odin.exe,
@@ -114,6 +114,7 @@ async def odin_package_lint(
             input_digest=input_digest,
             description=f"Run odin check on {request.partition_metadata.directory}",
         ),
+        **implicitly(),
     )
 
     return LintResult.create(

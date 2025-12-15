@@ -6,20 +6,18 @@ import os
 from dataclasses import dataclass
 
 from pants.core.util_rules.adhoc_binaries import GunzipBinary
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.fs import Digest, MergeDigests
-from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process, ProcessResult
-from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    DependenciesRequest,
-    FieldSet,
-    Target,
-    Targets,
-    WrappedTarget,
-    WrappedTargetRequest,
+from pants.core.util_rules.external_tool import download_external_tool
+from pants.engine.fs import MergeDigests
+from pants.engine.internals.graph import (
+    resolve_target,
+    resolve_targets,
+    resolve_unparsed_address_inputs,
 )
+from pants.engine.intrinsics import execute_process, merge_digests
+from pants.engine.platform import Platform
+from pants.engine.process import Process
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
@@ -37,13 +35,13 @@ from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    FallibleImageBundleRequestWrap,
     ImageBundle,
     ImageBundleRequest,
+    ibr_to_fibr,
 )
-from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
-from pants_backend_oci.util_rules.oci_sha import OciSha, OciShaRequest
-from pants_backend_oci.util_rules.run import RunContainerRequest
+from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
+from pants_backend_oci.util_rules.oci_sha import OciShaRequest, extract_build_info_sha
+from pants_backend_oci.util_rules.run import RunContainerRequest, run_in_container
 
 
 @dataclass(frozen=True)
@@ -74,36 +72,33 @@ async def build_oci_bundle_package(
     platform: Platform,
     gunzip: GunzipBinary,
 ) -> FallibleImageBundle:
-    base = await Get(
-        Addresses,
-        UnparsedAddressInputs,
-        request.target.base.to_unparsed_address_inputs(),
+    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
     )
 
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
-    )
-
-    build_request, umoci = await MultiGet(
-        Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target)),
-        Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform)),
+    build_request, umoci = await concurrently(
+        ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly()),
+        download_external_tool(umoci.get_request(platform)),
     )
 
     layer_requests = []
     if request.target.layers:
-        layer_dependencies = await Get(Targets, DependenciesRequest(request.target.layers))
+        layer_dependencies = await resolve_targets(**implicitly(DependenciesRequest(request.target.layers)))
 
         for dependency in layer_dependencies:
-            layer_requests.append(Get(ImageLayer, ImageLayerRequest(dependency, old_style=False)))
+            layer_requests.append(build_image_layer(ImageLayerRequest(dependency, old_style=False)))
 
     if request.target.dependencies:
-        root_dependencies = await Get(Targets, DependenciesRequest(request.target.dependencies))
+        root_dependencies = await resolve_targets(
+            **implicitly(DependenciesRequest(request.target.dependencies))
+        )
 
         for dependency in root_dependencies:
-            layer_requests.append(Get(ImageLayer, ImageLayerRequest(dependency)))
+            layer_requests.append(build_image_layer(ImageLayerRequest(dependency)))
 
-    maybe_built_base, *layers = await MultiGet(
+    maybe_built_base, *layers = await concurrently(
         Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request),
         *layer_requests,
     )
@@ -115,7 +110,7 @@ async def build_oci_bundle_package(
     output_digest = base.digest
 
     for layer in layers:
-        input_digest = await Get(Digest, MergeDigests([umoci.digest, output_digest, layer.digest]))
+        input_digest = await merge_digests(MergeDigests([umoci.digest, output_digest, layer.digest]))
 
         layer_processes = (
             Process(
@@ -139,11 +134,12 @@ async def build_oci_bundle_package(
                 ),
                 *layer_processes,
             )
-        image = await Get(
-            FallibleProcessResult,
-            FusedProcess(
-                layer_processes,
-            ),
+        image = await execute_process(
+            **implicitly(
+                FusedProcess(
+                    layer_processes,
+                )
+            )
         )
 
         if image.exit_code != 0:
@@ -159,8 +155,8 @@ async def build_oci_bundle_package(
     if request.target.commands.value:
         bundle = ImageBundle(output_digest, "", True)
 
-        modified_image = await Get(
-            ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
+        modified_image = await run_in_container(
+            RunContainerRequest(bundle, request.target.commands.value, True), **implicitly()
         )
 
         output_digest = modified_image.output_digest
@@ -188,10 +184,9 @@ async def build_oci_bundle_package(
         config.extend(["--config.entrypoint", request.target.entrypoint.value])
 
     if config:
-        input_digest = await Get(Digest, MergeDigests([umoci.digest, output_digest]))
+        input_digest = await merge_digests(MergeDigests([umoci.digest, output_digest]))
 
-        compile_result = await Get(
-            FallibleProcessResult,
+        compile_result = await execute_process(
             Process(
                 argv=(
                     umoci.exe,
@@ -204,6 +199,7 @@ async def build_oci_bundle_package(
                 description="Configure OCI environment",
                 output_directories=("build/",),
             ),
+            **implicitly(),
         )
 
         if compile_result.exit_code != 0:
@@ -216,7 +212,7 @@ async def build_oci_bundle_package(
 
         output_digest = compile_result.output_digest
 
-    image_digest = await Get(OciSha, OciShaRequest(output_digest))
+    image_digest = await extract_build_info_sha(OciShaRequest(output_digest))
     output = ImageBundle(digest=output_digest, image_sha=image_digest.image_digest, is_local=True)
 
     return FallibleImageBundle(output)

@@ -4,10 +4,9 @@
 from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
-from pants.engine.internals.selectors import Get
-from pants.engine.process import ProcessResult
-from pants.engine.rules import collect_rules, rule
-from pants.engine.target import WrappedTarget, WrappedTargetRequest
+from pants.engine.internals.graph import resolve_target
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
@@ -22,6 +21,8 @@ from pants_backend_oci.target_types import (
 from pants_backend_oci.util_rules.build_image_artifact import (
     ImageArtifactBuildRequest,
     ImageArtifactExtractRequest,
+    build_image_artifact,
+    extract_image_artifact,
 )
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
 
@@ -51,16 +52,14 @@ class ImageExtractPackageFieldSet(PackageFieldSet):
 
 @rule(desc="Package OCI Image", level=LogLevel.DEBUG)
 async def package_oci_layer(field_set: ImageLayerPackageFieldSet) -> BuiltPackage:
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(field_set.address, description_of_origin="Package OCI layer"),
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(field_set.address, description_of_origin="Package OCI layer"), **implicitly()
     )
 
     target = wrapped_target.target
 
-    output = await Get(
-        ProcessResult,
-        ImageArtifactBuildRequest(ImageArtifactBuildRequest.field_set_type.create(target)),
+    output = await build_image_artifact(
+        ImageArtifactBuildRequest(ImageArtifactBuildRequest.field_set_type.create(target)), **implicitly()
     )
 
     artifact = BuiltLayerArtifact(
@@ -73,16 +72,14 @@ async def package_oci_layer(field_set: ImageLayerPackageFieldSet) -> BuiltPackag
 
 @rule(desc="Package OCI Image", level=LogLevel.DEBUG)
 async def package_oci_layer_extract(field_set: ImageExtractPackageFieldSet) -> BuiltPackage:
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(field_set.address, description_of_origin="Package OCI layer"),
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(field_set.address, description_of_origin="Package OCI layer"), **implicitly()
     )
 
     target = wrapped_target.target
 
-    output = await Get(
-        ProcessResult,
-        ImageArtifactExtractRequest(ImageArtifactExtractRequest.field_set_type.create(target)),
+    output = await extract_image_artifact(
+        ImageArtifactExtractRequest(ImageArtifactExtractRequest.field_set_type.create(target)), **implicitly()
     )
 
     artifact = BuiltLayerArtifact(

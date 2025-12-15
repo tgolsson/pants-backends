@@ -6,11 +6,11 @@ from dataclasses import dataclass
 
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
 
 from pants_backend_mdbook.subsystem import MdBookTool
-from pants_backend_mdbook.util_rules.prepare import MdBookAnalysis, MdBookAnalysisRequest
+from pants_backend_mdbook.util_rules.prepare import MdBookAnalysisRequest, prepare_md_book_ctx
 
 
 @dataclass(frozen=True)
@@ -35,15 +35,16 @@ async def build_mdbook(
     request: MdbookBuildRequest,
     mdbook: MdBookTool,
 ) -> FallibleMdBookBuildOutput:
-    analysis = await Get(MdBookAnalysis, MdBookAnalysisRequest(request.address))
-    result = await Get(
-        ProcessResult,
-        Process(
-            input_digest=analysis.digest,
-            argv=(analysis.tool_exe, "build", analysis.build_root),
-            description=f"Building mdbook: {request.address}",
-            output_directories=(f"{analysis.build_root}/book",),
-        ),
+    analysis = await prepare_md_book_ctx(MdBookAnalysisRequest(request.address), **implicitly())
+    result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                input_digest=analysis.digest,
+                argv=(analysis.tool_exe, "build", analysis.build_root),
+                description=f"Building mdbook: {request.address}",
+                output_directories=(f"{analysis.build_root}/book",),
+            )
+        )
     )
 
     return FallibleMdBookBuildOutput(

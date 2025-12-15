@@ -8,13 +8,15 @@ from pants.core.goals.package import (
     OutputPathField,
     PackageFieldSet,
 )
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.fs import Digest, MergeDigests
+from pants.engine.internals.graph import resolve_target
 from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import collect_rules, rule
-from pants.engine.target import InvalidTargetException, WrappedTarget, WrappedTargetRequest
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import InvalidTargetException, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
@@ -23,8 +25,8 @@ from pants_backend_oci.target_types import ImageBuildOutputs, ImageDigest, Image
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    FallibleImageBundleRequestWrap,
     ImageBundleRequest,
+    ibr_to_fibr,
 )
 
 
@@ -66,13 +68,9 @@ class BuiltOciArchive(BuiltPackage):
 
 @rule(desc="Convert OCI Image to Archive", level=LogLevel.DEBUG)
 async def package_oci_archive(request: OciArchiveRequest, skopeo: SkopeoTool, platform: Platform) -> Process:
-    skopeo = await Get(
-        DownloadedExternalTool,
-        ExternalToolRequest,
-        skopeo.get_request(platform),
-    )
+    skopeo = await download_external_tool(skopeo.get_request(platform))
 
-    sandbox_input = await Get(Digest, MergeDigests([skopeo.digest, request.input_digest]))
+    sandbox_input = await merge_digests(MergeDigests([skopeo.digest, request.input_digest]))
     return Process(
         input_digest=sandbox_input,
         argv=(
@@ -109,9 +107,8 @@ class BuiltOciImage(BuiltPackageArtifact):
 
 @rule(desc="Package OCI Image", level=LogLevel.DEBUG)
 async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(field_set.address, description_of_origin="package_oci_image"),
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(field_set.address, description_of_origin="package_oci_image"), **implicitly()
     )
     target = wrapped_target.target
     if field_set.tag.value is not None and field_set.digest.value is not None:
@@ -120,7 +117,7 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
             f" `tag` but not both: {field_set.tag} {field_set.digest}."
         )
 
-    request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(target))
+    request = await ibr_to_fibr(ImageBundleRequest(target), **implicitly())
     image = await Get(FallibleImageBundle, FallibleImageBundleRequest, request.request)
     if image.exit_code != 0 or image.dependency_failed:
         raise Exception(
@@ -130,20 +127,16 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
     image_digest = image.output.digest
 
     suffix = field_set.tag.value if field_set.tag.value else field_set.digest.value
-    archive_process = await Get(
-        Process,
+    archive_process = await package_oci_archive(
         OciArchiveRequest(
             input_digest=image_digest,
             output_filename=field_set.output_path.value_or_default(file_ending="d"),
             description=f"Package OCI Image {field_set.address} -> {field_set.repository.value}:{suffix}",
         ),
+        **implicitly(),
     )
 
-    result = await Get(
-        ProcessResult,
-        Process,
-        archive_process,
-    )
+    result = await fallible_to_exec_result_or_raise(**implicitly(archive_process))
 
     return BuiltPackage(
         digest=result.output_digest,

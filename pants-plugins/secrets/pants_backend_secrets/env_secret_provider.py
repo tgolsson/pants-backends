@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
+from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.engine.env_vars import EnvironmentVars as EnvironmentVars
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentVarsRequest
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
 
@@ -38,7 +39,9 @@ class FallibleEnvironmentSecretsRequest(FallibleSecretsRequest):
 async def get_environment_key(
     request: FallibleEnvironmentSecretsRequest,
 ) -> FallibleSecretsResponse:
-    relevant_env = await Get(EnvironmentVars, EnvironmentVarsRequest([request.target.key.value]))
+    relevant_env = await environment_vars_subset(
+        EnvironmentVarsRequest([request.target.key.value]), **implicitly()
+    )
 
     if request.target.key.value not in relevant_env:
         return FallibleSecretsResponse(
@@ -69,7 +72,7 @@ class DecryptEnvironmentFieldSet(DecryptFieldSet):
 
 @rule
 async def decrypt_environment(request: DecryptEnvironmentVarsRequest) -> DecryptResponse:
-    response = await Get(FallibleSecretsResponse, FallibleEnvironmentSecretsRequest(request.field_set))
+    response = await get_environment_key(FallibleEnvironmentSecretsRequest(request.field_set))
 
     if response.exit_code != 0:
         raise MissingSecret(f"failed retrieving environment secret: {response.stdout}")

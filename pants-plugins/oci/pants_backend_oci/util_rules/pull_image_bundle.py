@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.env_vars import environment_vars_subset
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.env_vars import EnvironmentVars as Environment
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
+from pants.engine.intrinsics import execute_process
 from pants.engine.platform import Platform
-from pants.engine.process import FallibleProcessResult, Process
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.process import Process
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionRule
 
@@ -49,11 +51,7 @@ class ImageBundlePullRequest(FallibleImageBundleRequest):
 async def pull_oci_image(
     request: ImageBundlePullRequest, skopeo_tool: SkopeoTool, platform: Platform
 ) -> FallibleImageBundle:
-    skopeo = await Get(
-        DownloadedExternalTool,
-        ExternalToolRequest,
-        skopeo_tool.get_request(platform),
-    )
+    skopeo = await download_external_tool(skopeo_tool.get_request(platform))
 
     args = [
         skopeo.exe,
@@ -75,7 +73,9 @@ async def pull_oci_image(
         args.append("--src-no-creds")
 
     else:
-        relevant_env = await Get(Environment, EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]))
+        relevant_env = await environment_vars_subset(
+            EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]), **implicitly()
+        )
 
     args.extend(
         [
@@ -94,11 +94,7 @@ async def pull_oci_image(
         env=relevant_env,
     )
 
-    result = await Get(
-        FallibleProcessResult,
-        Process,
-        p,
-    )
+    result = await execute_process(p)
 
     if result.exit_code != 0:
         return FallibleImageBundle(

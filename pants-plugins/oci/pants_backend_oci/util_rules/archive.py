@@ -14,15 +14,17 @@ from dataclasses import dataclass
 
 from pants.core.util_rules.system_binaries import (
     BinaryPathRequest,
-    BinaryPaths,
     BinaryPathTest,
     SystemBinariesSubsystem,
     TarBinary,
+    find_binary,
+    find_tar,
 )
 from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests, Snapshot
+from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
@@ -58,7 +60,7 @@ async def find_gtar(
         search_path=system_binaries.system_binary_paths,
         test=BinaryPathTest(args=["--version"]),
     )
-    paths = await Get(BinaryPaths, BinaryPathRequest, request)
+    paths = await find_binary(request)
     first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
     return GTarBinary(first_path.path, first_path.fingerprint, platform)
 
@@ -91,10 +93,10 @@ async def tar_directory_process(
     request: CreateDeterministicDirectoryTar, env: TarEnvironment, platform: Platform
 ) -> Process:
     if platform in (Platform.macos_arm64, Platform.macos_x86_64):
-        tar_binary = await Get(GTarBinary)
+        tar_binary = await find_gtar(**implicitly(**implicitly()))
 
     else:
-        tar_binary = await Get(TarBinary)
+        tar_binary = await find_tar(**implicitly(**implicitly()))
 
     argv = [
         tar_binary.path,
@@ -123,7 +125,7 @@ async def tar_directory_process(
     output_dir = os.path.dirname(request.output_filename)
     input_digest = None
     if output_dir != "":
-        input_digest = await Get(Digest, CreateDigest([Directory(output_dir)]))
+        input_digest = await create_digest(CreateDigest([Directory(output_dir)]))
 
     return Process(
         argv=argv,
@@ -140,16 +142,16 @@ async def create_archive(
     request: CreateDeterministicTar, env: TarEnvironment, oci_subsystem: OciSubsystem, platform: Platform
 ) -> Digest:
     if platform in (Platform.macos_arm64, Platform.macos_x86_64):
-        tar_binary = await Get(GTarBinary)
+        tar_binary = await find_gtar(**implicitly(**implicitly()))
 
     else:
-        tar_binary = await Get(TarBinary)
+        tar_binary = await find_tar(**implicitly(**implicitly()))
 
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.
     # passing a list of filenames into the utilities fixes this.
     FILE_LIST_FILENAME = "__pants_archive_filelist__"
     file_list_file = FileContent(FILE_LIST_FILENAME, "\n".join(request.snapshot.files).encode("utf-8"))
-    file_list_file_digest = await Get(Digest, CreateDigest([file_list_file]))
+    file_list_file_digest = await create_digest(CreateDigest([file_list_file]))
     files_digests = [file_list_file_digest, request.snapshot.digest]
     input_digests = []
 
@@ -180,21 +182,22 @@ async def create_archive(
     # We have to guard this path as the Rust code will crash if we give it empty paths.
     output_dir = os.path.dirname(request.output_filename)
     if output_dir != "":
-        output_dir_digest = await Get(Digest, CreateDigest([Directory(output_dir)]))
+        output_dir_digest = await create_digest(CreateDigest([Directory(output_dir)]))
         input_digests.append(output_dir_digest)
 
-    input_digest = await Get(Digest, MergeDigests([*files_digests, *input_digests]))
+    input_digest = await merge_digests(MergeDigests([*files_digests, *input_digests]))
 
-    result = await Get(
-        ProcessResult,
-        Process(
-            argv=argv,
-            env=env,
-            input_digest=input_digest,
-            description=f"Create {request.output_filename}",
-            level=LogLevel.DEBUG,
-            output_files=(request.output_filename,),
-        ),
+    result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                argv=argv,
+                env=env,
+                input_digest=input_digest,
+                description=f"Create {request.output_filename}",
+                level=LogLevel.DEBUG,
+                output_files=(request.output_filename,),
+            )
+        )
     )
     return result.output_digest
 
