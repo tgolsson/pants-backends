@@ -6,8 +6,9 @@ from pants.core.util_rules.system_binaries import (
     BinaryPaths,
     BinaryPathTest,
     SystemBinariesSubsystem,
+    find_binary,
 )
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.rules import collect_rules, rule
 
 
 class NewUidMapBinary(BinaryPath):
@@ -35,7 +36,7 @@ async def find_newuidmap(
         search_path=system_binaries_subsystem,
         test=BinaryPathTest(args=["--version"]),
     )
-    paths = await Get(BinaryPaths, BinaryPathRequest, request)
+    paths = await find_binary(request)
     first_path = paths.first_path_or_raise(request, rationale="work with `json` data")
     return NewUidMapBinary(first_path.path, first_path.fingerprint)
 

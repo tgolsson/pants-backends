@@ -135,7 +135,7 @@ async def twine_upload_with_secret(
         )
 
     twine_pex, packages_digest, config_files = await concurrently(
-        create_venv_pex(**implicitly(twine_subsystem.to_pex_request())),
+        create_venv_pex(twine_subsystem.to_pex_request(), **implicitly()),
         merge_digests(MergeDigests(pkg.digest for pkg in request.packages)),
         find_config_file(twine_subsystem.config_request()),
     )

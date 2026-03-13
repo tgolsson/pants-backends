@@ -16,7 +16,8 @@ from pants.engine.internals.graph import (
 from pants.engine.intrinsics import execute_process, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.internals.selectors import Get
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel

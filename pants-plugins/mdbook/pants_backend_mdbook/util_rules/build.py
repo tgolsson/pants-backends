@@ -43,8 +43,8 @@ async def build_mdbook(
                 argv=(analysis.tool_exe, "build", analysis.build_root),
                 description=f"Building mdbook: {request.address}",
                 output_directories=(f"{analysis.build_root}/book",),
-            )
-        )
+            ),
+        ),
     )
 
     return FallibleMdBookBuildOutput(

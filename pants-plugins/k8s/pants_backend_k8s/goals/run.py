@@ -17,12 +17,12 @@ from pants.engine.internals.graph import (
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.internals.selectors import Get
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     DependenciesRequest,
     SourcesField,
     Target,
-    Targets,
     WrappedTargetRequest,
 )
 from pants.engine.unions import UnionMembership
@@ -70,7 +70,9 @@ async def compute_command_line(
     kubernetes_command = request.target
     download_kubernetes_get = download_external_tool(tool.get_request(platform))
 
-    deps = await Get(Targets, DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]))
+    deps = await resolve_targets(
+        DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]), **implicitly()
+    )
     (sources, tool) = await concurrently(
         determine_source_files(
             SourceFilesRequest(

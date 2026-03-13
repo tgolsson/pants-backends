@@ -37,9 +37,13 @@ class MdBookAnalysisRequest:
 async def prepare_md_book_ctx(
     request: MdBookAnalysisRequest, mdbook: MdBookTool, platform: Platform
 ) -> MdBookAnalysis:
-    target = await resolve_targets(**implicitly(Addresses([request.address])))
+    target = await resolve_targets(
+        **implicitly(
+            Addresses([request.address]),
+        )
+    )
     target = target[0]
-    dependencies = await resolve_targets(**implicitly(DependenciesRequest(target[Dependencies])))
+    dependencies = await resolve_targets(DependenciesRequest(target[Dependencies]), **implicitly())
 
     (sources, codegened, tool) = await concurrently(
         determine_source_files(

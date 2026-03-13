@@ -93,10 +93,10 @@ async def tar_directory_process(
     request: CreateDeterministicDirectoryTar, env: TarEnvironment, platform: Platform
 ) -> Process:
     if platform in (Platform.macos_arm64, Platform.macos_x86_64):
-        tar_binary = await find_gtar(**implicitly(**implicitly()))
+        tar_binary = await find_gtar(**implicitly())
 
     else:
-        tar_binary = await find_tar(**implicitly(**implicitly()))
+        tar_binary = await find_tar(**implicitly())
 
     argv = [
         tar_binary.path,
@@ -142,10 +142,10 @@ async def create_archive(
     request: CreateDeterministicTar, env: TarEnvironment, oci_subsystem: OciSubsystem, platform: Platform
 ) -> Digest:
     if platform in (Platform.macos_arm64, Platform.macos_x86_64):
-        tar_binary = await find_gtar(**implicitly(**implicitly()))
+        tar_binary = await find_gtar(**implicitly())
 
     else:
-        tar_binary = await find_tar(**implicitly(**implicitly()))
+        tar_binary = await find_tar(**implicitly())
 
     # #16091 -- if an arg list is really long, archive utilities tend to get upset.
     # passing a list of filenames into the utilities fixes this.
