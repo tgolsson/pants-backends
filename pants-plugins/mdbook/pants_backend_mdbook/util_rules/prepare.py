@@ -43,7 +43,11 @@ async def prepare_md_book_ctx(
         )
     )
     target = target[0]
-    dependencies = await resolve_targets(DependenciesRequest(target[Dependencies]), **implicitly())
+    dependencies = await resolve_targets(
+        **implicitly(
+            DependenciesRequest(target[Dependencies]),
+        )
+    )
 
     (sources, codegened, tool) = await concurrently(
         determine_source_files(

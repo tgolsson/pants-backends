@@ -66,7 +66,9 @@ async def compute_command_line(
     download_kubernetes_get = download_external_tool(tool.get_request(platform))
 
     deps = await resolve_targets(
-        DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]), **implicitly()
+        **implicitly(
+            DependenciesRequest(kubernetes_command[KubernetesTemplateDependency]),
+        )
     )
     (sources, tool) = await concurrently(
         determine_source_files(
