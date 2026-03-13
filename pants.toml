@@ -27,7 +27,6 @@ backend_packages = [
   "pants_backend_oci.utility.mirror",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
-  "pants_backend_odin",
 
   "pants.backend.shell",
   "pants.backend.experimental.python.lint.ruff.check",
@@ -40,6 +39,7 @@ pants_ignore = [
     "/dist/",
     "__pycache__",
     "**/pdm_build.py",
+    "/examples/odin/"
 ]
 
 [source]

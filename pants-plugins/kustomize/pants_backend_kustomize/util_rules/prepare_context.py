@@ -5,8 +5,8 @@ from pants.core.goals.package import BuiltPackage, PackageFieldSet
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.fs import CreateDigest, Digest, FileContent, MergeDigests
 from pants.engine.internals.graph import find_valid_field_sets, resolve_targets
-from pants.engine.intrinsics import create_digest, get_digest_contents, merge_digests
 from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import create_digest, get_digest_contents, merge_digests
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSetsPerTargetRequest, Target
 

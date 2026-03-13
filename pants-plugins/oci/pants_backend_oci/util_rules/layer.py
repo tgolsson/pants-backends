@@ -12,8 +12,8 @@ from pants.core.util_rules.source_files import SourceFilesRequest, determine_sou
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.graph import find_valid_field_sets, resolve_targets
-from pants.engine.intrinsics import digest_to_snapshot
 from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import digest_to_snapshot
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     Dependencies,

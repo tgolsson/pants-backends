@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from pants.core.util_rules.system_binaries import (
     BinaryPath,
     BinaryPathRequest,
-    BinaryPaths,
     BinaryPathTest,
     SystemBinariesSubsystem,
     find_binary,
