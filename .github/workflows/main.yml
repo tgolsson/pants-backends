@@ -13,28 +13,18 @@ jobs:
   test:
     runs-on: ubuntu-22.04
 
-    strategy:
-      matrix:
-        pants-version: ["2.23.0", "2.24.0"]
-
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9 and 3.11
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: |
-          3.9
-          3.11
-
-    - name: Tell Pants to use Python 3.11
-      run: |
-        echo "PANTS_VERSION=${{ matrix.pants-version }}" >> $GITHUB_ENV
+        python-version: "3.11"
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-test-py3.11-pants${{ matrix.pants-version }}
+        gha-cache-key: cache1-test-py3.11-pants2.30.0
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Test everything
@@ -47,28 +37,18 @@ jobs:
   package:
     runs-on: ubuntu-22.04
 
-    strategy:
-      matrix:
-        pants-version: ["2.23.0", "2.24.0"]
-
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9 and 3.11
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: |
-          3.9
-          3.11
-
-    - name: Tell Pants to use Python 3.11
-      run: |
-        echo "PANTS_VERSION=${{ matrix.pants-version }}" >> $GITHUB_ENV
+        python-version: "3.11"
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-package-py3.11-pants${{ matrix.pants-version }}
+        gha-cache-key: cache1-package-py3.11-pants2.30.0
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Package all targets
@@ -94,12 +74,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9 and 3.11
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: |
-          3.9
-          3.11
+        python-version: "3.11"
 
     - name: Set up Xcode version
       if: runner.os == 'macOS'
@@ -109,7 +87,7 @@ jobs:
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-package-py3.11-pants2.19.0
+        gha-cache-key: cache1-package-py3.11-pants2.30.0
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Package all targets
@@ -132,12 +110,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9 and 3.11
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: |
-          3.9
-          3.11
+        python-version: "3.11"
 
     - name: Run linters on all targets
       run: |
@@ -149,12 +125,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.9 and 3.11
+    - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
-        python-version: |
-          3.9
-          3.11
+        python-version: "3.11"
 
     - name: Validate that tailor files are up to date
       run: |
