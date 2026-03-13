@@ -4,7 +4,7 @@ python_distribution_with_secret(
     name="package",
     dependencies=[
         ":package_data",
-        "./pants_backend_odin:sources@resolve=pants-plugins",
+        "./pants_backend_odin:sources",
     ],
     provides=python_artifact(
         name="pants_backend_odin",
