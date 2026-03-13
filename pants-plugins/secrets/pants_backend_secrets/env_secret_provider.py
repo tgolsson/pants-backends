@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 
 from pants.core.util_rules.env_vars import environment_vars_subset
-from pants.engine.env_vars import EnvironmentVars as EnvironmentVars
-from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentVarsRequest
+from pants.engine.env_vars import EnvironmentVarsRequest
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import UnionRule
