@@ -19,19 +19,25 @@ from pants.backend.python.target_types import (
     WheelConfigSettingsField,
     WheelField,
 )
-from pants.backend.python.util_rules.pex import PexRequest, VenvPex, VenvPexProcess
+from pants.backend.python.util_rules.pex import (
+    VenvPexProcess,
+    create_venv_pex,
+    setup_venv_pex_process,
+)
 from pants.core.goals.publish import (
     PublishFieldSet,
     PublishOutputData,
     PublishPackages,
     PublishProcesses,
 )
-from pants.core.util_rules.config_files import ConfigFiles, ConfigFilesRequest
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.fs import CreateDigest, Digest, MergeDigests, Snapshot
-from pants.engine.process import InteractiveProcess, Process
-from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTarget, WrappedTargetRequest
+from pants.core.util_rules.config_files import find_config_file
+from pants.engine.addresses import UnparsedAddressInputs
+from pants.engine.fs import CreateDigest, MergeDigests, Snapshot
+from pants.engine.internals.graph import resolve_target, resolve_unparsed_address_inputs
+from pants.engine.intrinsics import merge_digests
+from pants.engine.process import InteractiveProcess
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTargetRequest
 from pants.option.global_options import GlobalOptions
 from pants.util.docutil import doc_url
 from pants.util.strutil import softwrap
@@ -42,7 +48,7 @@ from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
     FallibleSecretsResponse,
     SecretsRequestRequest,
-    SecretsRequestWrap,
+    secrets_request_request,
 )
 
 
@@ -92,7 +98,7 @@ class PythonDistributionWithSecret(Target):
     )
     help = softwrap(f"""
         A publishable Python setuptools distribution (e.g. an sdist or wheel).
-        See {doc_url('python-distributions')}.
+        See {doc_url("python-distributions")}.
         """)
 
 
@@ -128,18 +134,20 @@ async def twine_upload_with_secret(
             ]
         )
 
-    twine_pex, packages_digest, config_files = await MultiGet(
-        Get(VenvPex, PexRequest, twine_subsystem.to_pex_request()),
-        Get(Digest, MergeDigests(pkg.digest for pkg in request.packages)),
-        Get(ConfigFiles, ConfigFilesRequest, twine_subsystem.config_request()),
+    twine_pex, packages_digest, config_files = await concurrently(
+        create_venv_pex(twine_subsystem.to_pex_request(), **implicitly()),
+        merge_digests(MergeDigests(pkg.digest for pkg in request.packages)),
+        find_config_file(twine_subsystem.config_request()),
     )
 
     ca_cert_request = twine_subsystem.ca_certs_digest_request(global_options.ca_certs_path)
-    ca_cert = await Get(Snapshot, CreateDigest, ca_cert_request) if ca_cert_request else None
-    ca_cert_digest = (ca_cert.digest,) if ca_cert else ()
+    ca_cert = (
+        await Get(Snapshot, CreateDigest, ca_cert_request) if ca_cert_request else None
+    )  # TODO: Needs to migrate this.
+    ca_cert_digest = (ca_cert.digest) if ca_cert else ()
 
-    input_digest = await Get(
-        Digest, MergeDigests((packages_digest, config_files.snapshot.digest, *ca_cert_digest))
+    input_digest = await merge_digests(
+        MergeDigests((packages_digest, config_files.snapshot.digest, *ca_cert_digest))
     )
     pex_proc_requests = []
     secret_requests = []
@@ -147,20 +155,22 @@ async def twine_upload_with_secret(
     repositories = []
     for repo, secret in request.field_set.repositories.value.items():
         repositories.append(repo)
-        secret_address = await Get(
-            Addresses,
+        secret_address = await resolve_unparsed_address_inputs(
             UnparsedAddressInputs(
                 [secret],
                 owning_address=request.field_set.address,
                 description_of_origin=f"the `{secret}` from the target {request.field_set.repositories}",
             ),
+            **implicitly(),
         )
-        wrapped_target = await Get(
-            WrappedTarget,
+        wrapped_target = await resolve_target(
             WrappedTargetRequest(secret_address[0], description_of_origin="twine_upload_with_secret"),
+            **implicitly(),
         )
 
-        secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
+        secret_request = await secrets_request_request(
+            SecretsRequestRequest(wrapped_target.target), **implicitly()
+        )
         if secret_request.request is None:
             raise NoDecrypterException(
                 f"No valid decrypter found for secret: `{secret_address[0]}` of "
@@ -169,7 +179,7 @@ async def twine_upload_with_secret(
 
         secret_requests.append(Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request))
 
-    fallible_secrets = await MultiGet(*secret_requests)
+    fallible_secrets = await concurrently(*secret_requests)
     secrets = []
     for repo, maybe_secret in zip(repositories, fallible_secrets):
         if maybe_secret.exit_code != 0:
@@ -196,7 +206,7 @@ async def twine_upload_with_secret(
             )
         )
 
-    processes = await MultiGet(Get(Process, VenvPexProcess, request) for request in pex_proc_requests)
+    processes = await concurrently(setup_venv_pex_process(request) for request in pex_proc_requests)
 
     return PublishProcesses(
         PublishPackages(

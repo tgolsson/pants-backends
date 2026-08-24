@@ -3,8 +3,9 @@
 import json
 from dataclasses import dataclass
 
-from pants.engine.fs import Digest, DigestContents, DigestSubset, PathGlobs
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.fs import Digest, DigestSubset, PathGlobs
+from pants.engine.intrinsics import digest_subset_to_digest, get_digest_contents
+from pants.engine.rules import collect_rules, rule
 
 
 class MissingRequiredFile(Exception):
@@ -23,8 +24,10 @@ class OciShaRequest:
 
 @rule
 async def extract_build_info_sha(request: OciShaRequest) -> OciSha:
-    digest = await Get(Digest, DigestSubset(request.bundle_digest, PathGlobs(["build/index.json"])))
-    digest_contents = await Get(DigestContents, Digest, digest)
+    digest = await digest_subset_to_digest(
+        DigestSubset(request.bundle_digest, PathGlobs(["build/index.json"]))
+    )
+    digest_contents = await get_digest_contents(digest)
 
     if not digest_contents:
         raise MissingRequiredFile("did not find `build/index.json` in OCI build context")

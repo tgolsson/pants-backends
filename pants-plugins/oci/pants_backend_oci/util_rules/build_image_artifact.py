@@ -7,21 +7,20 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.core.goals.package import OutputPathField, PackageFieldSet
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
-from pants.engine.fs import Digest, MergeDigests
-from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import Get, MultiGet, collect_rules, rule
-from pants.engine.target import (
-    DependenciesRequest,
-    FieldSet,
-    Target,
-    Targets,
-    WrappedTarget,
-    WrappedTargetRequest,
+from pants.engine.fs import MergeDigests
+from pants.engine.internals.graph import (
+    resolve_target,
+    resolve_targets,
+    resolve_unparsed_address_inputs,
 )
+from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import merge_digests
+from pants.engine.platform import Platform
+from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
+from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import RuncTool, UmociTool
@@ -34,16 +33,16 @@ from pants_backend_oci.target_types import (
     ImageEnvironment,
     ImageExtractMarker,
 )
-from pants_backend_oci.util_rules.copy import CopyFromRequest
+from pants_backend_oci.util_rules.copy import CopyFromRequest, copy_from_container
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    FallibleImageBundleRequestWrap,
     ImageBundle,
     ImageBundleRequest,
+    ibr_to_fibr,
 )
-from pants_backend_oci.util_rules.layer import ImageLayer, ImageLayerRequest
-from pants_backend_oci.util_rules.run import RunContainerRequest
+from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
+from pants_backend_oci.util_rules.run import RunContainerRequest, run_in_container
 
 
 @dataclass(frozen=True)
@@ -96,64 +95,61 @@ async def build_image_artifact(
     cp: CpBinary,
     mkdir: MkdirBinary,
 ) -> ProcessResult:
-    base = await Get(
-        Addresses,
-        UnparsedAddressInputs,
-        request.target.base.to_unparsed_address_inputs(),
+    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
     )
 
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
-    )
-
-    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    build_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
     maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
 
-    umoci_request = Get(DownloadedExternalTool, ExternalToolRequest, umoci.get_request(platform))
+    umoci_request = download_external_tool(umoci.get_request(platform))
     base = maybe_built_base.output
     base_digest = base.digest
 
     if request.target.dependencies.value:
-        dependencies = await MultiGet(
-            Get(Targets, DependenciesRequest(request.target.dependencies)),
+        dependencies = await concurrently(
+            resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
         )
 
         layers = []
         for dependency in dependencies:
-            layers.append(Get(ImageLayer, ImageLayerRequest(dependency[0])))
+            layers.append(build_image_layer(ImageLayerRequest(dependency[0])))
 
-        umoci, *layers = await MultiGet(
+        umoci, *layers = await concurrently(
             umoci_request,
             *layers,
         )
 
         for layer in layers:
-            input_digest = await Get(Digest, MergeDigests([umoci.digest, base_digest, layer.digest]))
+            input_digest = await merge_digests(MergeDigests([umoci.digest, base_digest, layer.digest]))
 
-            image_with_layer = await Get(
-                ProcessResult,
-                Process(
-                    (umoci.exe, *layer.layer_command),
-                    input_digest=input_digest,
-                    description=f"Package OCI Layer Artifact: {layer.address}",
-                    output_directories=("build/",),
-                ),
+            image_with_layer = await fallible_to_exec_result_or_raise(
+                **implicitly(
+                    Process(
+                        (umoci.exe, *layer.layer_command),
+                        input_digest=input_digest,
+                        description=f"Package OCI Layer Artifact: {layer.address}",
+                        output_directories=("build/",),
+                    )
+                )
             )
 
             digest = image_with_layer.output_digest
-            input_digest = await Get(Digest, MergeDigests([umoci.digest, digest]))
-            image_with_config = await Get(
-                ProcessResult,
-                Process(
-                    (umoci.exe, *layer.config_command),
-                    input_digest=input_digest,
-                    description=f"Configure OCI Layer Artifact: {layer.address}",
-                    output_directories=("build/",),
-                ),
+            input_digest = await merge_digests(MergeDigests([umoci.digest, digest]))
+            image_with_config = await fallible_to_exec_result_or_raise(
+                **implicitly(
+                    Process(
+                        (umoci.exe, *layer.config_command),
+                        input_digest=input_digest,
+                        description=f"Configure OCI Layer Artifact: {layer.address}",
+                        output_directories=("build/",),
+                    )
+                )
             )
             base_digest = image_with_config.output_digest
 
@@ -167,20 +163,21 @@ async def build_image_artifact(
             )
 
         output_digest = base_digest
-        image_with_config = await Get(
-            ProcessResult,
-            Process(
-                (
-                    umoci.exe,
-                    "config",
-                    *config,
-                    "--image",
-                    "build:build",
-                ),
-                input_digest=input_digest,
-                description=f"Configure OCI Image Bundle: {layer.address}",
-                output_directories=("build/",),
-            ),
+        image_with_config = await fallible_to_exec_result_or_raise(
+            **implicitly(
+                Process(
+                    (
+                        umoci.exe,
+                        "config",
+                        *config,
+                        "--image",
+                        "build:build",
+                    ),
+                    input_digest=input_digest,
+                    description=f"Configure OCI Image Bundle: {layer.address}",
+                    output_directories=("build/",),
+                )
+            )
         )
 
         output_digest = image_with_config.output_digest
@@ -189,13 +186,12 @@ async def build_image_artifact(
 
     bundle = ImageBundle(output_digest, "", True)
 
-    modified_image = await Get(
-        ProcessResult, RunContainerRequest(bundle, request.target.commands.value, True)
+    modified_image = await run_in_container(
+        RunContainerRequest(bundle, request.target.commands.value, True), **implicitly()
     )
     bundle = ImageBundle(modified_image.output_digest, "", True)
 
-    artifacts = await Get(
-        ProcessResult,
+    artifacts = await copy_from_container(
         CopyFromRequest(
             request.target.output_path.value_or_default(file_ending="tar.gz"),
             bundle,
@@ -203,6 +199,7 @@ async def build_image_artifact(
             request.target.outputs.value,
             exclude_patterns=tuple(request.target.exclude.value or ()),
         ),
+        **implicitly(),
     )
 
     return artifacts
@@ -214,18 +211,13 @@ async def extract_image_artifact(
     umoci: UmociTool,
     platform: Platform,
 ) -> ProcessResult:
-    base = await Get(
-        Addresses,
-        UnparsedAddressInputs,
-        request.target.base.to_unparsed_address_inputs(),
+    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
     )
 
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(base[0], description_of_origin="package_oci_image"),
-    )
-
-    build_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    build_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
     maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
 
     if maybe_built_base.output is None:
@@ -235,8 +227,7 @@ async def extract_image_artifact(
 
     bundle = ImageBundle(base.digest, "", True)
 
-    artifacts = await Get(
-        ProcessResult,
+    artifacts = await copy_from_container(
         CopyFromRequest(
             request.target.output_path.value_or_default(file_ending="tar.gz"),
             bundle,
@@ -244,6 +235,7 @@ async def extract_image_artifact(
             request.target.outputs.value,
             exclude_patterns=tuple(request.target.exclude.value or ()),
         ),
+        **implicitly(),
     )
 
     return artifacts

@@ -3,18 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import Get, UnionRule, collect_rules, rule
-from pants.engine.target import FieldSet, Target, WrappedTarget, WrappedTargetRequest
+from pants.engine.internals.graph import resolve_target
+from pants.engine.process import fallible_to_exec_result_or_raise
+from pants.engine.rules import Get, UnionRule, collect_rules, implicitly, rule
+from pants.engine.target import FieldSet, Target, WrappedTargetRequest
 
 from pants_backend_kustomize.requests import KustomizeInjectData, KustomizeInjectRequest
-from pants_backend_oci.goals.publish import OciPublishProcessRequest
+from pants_backend_oci.goals.publish import OciPublishProcessRequest, publish_oci_process
 from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageTag
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    FallibleImageBundleRequestWrap,
     ImageBundleRequest,
+    ibr_to_fibr,
 )
 
 
@@ -37,11 +38,11 @@ class KustomizeInjectOciTagRequest(KustomizeInjectRequest):
 async def generate_oci_tag_injection(
     request: KustomizeInjectOciTagRequest,
 ) -> KustomizeInjectData:
-    wrapped_target = await Get(
-        WrappedTarget,
+    wrapped_target = await resolve_target(
         WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),
+        **implicitly(),
     )
-    image_request = await Get(FallibleImageBundleRequestWrap, ImageBundleRequest(wrapped_target.target))
+    image_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
     image = await Get(FallibleImageBundle, FallibleImageBundleRequest, image_request.request)
     if image.exit_code != 0 or image.dependency_failed:
         raise Exception(
@@ -51,8 +52,7 @@ async def generate_oci_tag_injection(
     image_digest = image.output.digest
     field_set = request.target
     if image.output.is_local:
-        process = await Get(
-            Process,
+        process = await publish_oci_process(
             OciPublishProcessRequest(
                 input_digest=image_digest,
                 repository=field_set.repository.value,
@@ -62,9 +62,10 @@ async def generate_oci_tag_injection(
                     f" {field_set.repository.value}:{field_set.tag.value}"
                 ),
             ),
+            **implicitly(),
         )
 
-        await Get(ProcessResult, Process, process)
+        await fallible_to_exec_result_or_raise(**implicitly(process))
 
     return KustomizeInjectData(request.target.address, image.output.image_sha)
 

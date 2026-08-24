@@ -6,12 +6,13 @@ from pathlib import Path
 from typing import ClassVar, Generic, Type, TypeVar
 
 from pants.core.target_types import FileSourceField
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
+from pants.engine.addresses import UnparsedAddressInputs
 from pants.engine.environment import EnvironmentName
 from pants.engine.fs import Digest
-from pants.engine.rules import Get, collect_rules, rule
-from pants.engine.target import FieldSet, SourcesField, Target, WrappedTarget, WrappedTargetRequest
+from pants.engine.internals.graph import resolve_target, resolve_unparsed_address_inputs
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import FieldSet, SourcesField, Target, WrappedTargetRequest
 from pants.engine.unions import UnionMembership, UnionRule, union
 from pants.util.strutil import bullet_list
 
@@ -166,7 +167,7 @@ HostKubeconfigRequest.field_set_type = HostKubeconfigFieldSet
 
 @rule(desc="Locating host kubeconfig file")
 async def get_kubeconfig_file(request: HostKubeconfigRequest) -> KubeconfigResponse:
-    result = await Get(ConfigurationFileResponse, ConfigurationFileRequest(("~/.kube",), "config"))
+    result = await _locate_configuration_file(ConfigurationFileRequest(("~/.kube",), "config"))
 
     if not result.found:
         raise ValueError("Failed to locate kubeconfig file on the host.")
@@ -205,33 +206,32 @@ FileKubeconfigRequest.field_set_type = FileKubeconfigFieldSet
 async def load_kubconfig_file(request: FileKubeconfigRequest) -> KubeconfigResponse:
     source_files_request = [request.target.source]
     if request.target.generator.value:
-        kubeconfig_address = await Get(
-            Addresses,
+        kubeconfig_address = await resolve_unparsed_address_inputs(
             UnparsedAddressInputs(
                 request.target.generator.value,
                 owning_address=request.target.address,
                 description_of_origin="asd",
             ),
+            **implicitly(),
         )
 
-        targets = await Get(
-            WrappedTarget,
+        targets = await resolve_target(
             WrappedTargetRequest(
                 kubeconfig_address[0],
                 description_of_origin="kubectl run",
             ),
+            **implicitly(),
         )
 
         if targets.target.has_field(SourcesField):
             source_files_request.append(targets.target[SourcesField])
 
-    sources = await Get(
-        SourceFiles,
+    sources = await determine_source_files(
         SourceFilesRequest(
             source_files_request,
             enable_codegen=True,
             for_sources_types=(FileSourceField, KubeconfigSourceField),
-        ),
+        )
     )
 
     if len(sources.snapshot.files) > 1:

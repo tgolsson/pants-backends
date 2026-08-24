@@ -1,5 +1,5 @@
 [GLOBAL]
-pants_version = "2.24.0"
+pants_version = "2.30.0"
 build_file_prelude_globs = ["examples/macros.py"]
 
 pythonpath = [
@@ -27,7 +27,6 @@ backend_packages = [
   "pants_backend_oci.utility.mirror",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
-  "pants_backend_odin",
 
   "pants.backend.shell",
   "pants.backend.experimental.python.lint.ruff.check",
@@ -40,6 +39,7 @@ pants_ignore = [
     "/dist/",
     "__pycache__",
     "**/pdm_build.py",
+    "/examples/odin/"
 ]
 
 [source]
@@ -56,16 +56,13 @@ repo_id = "e32e6905-7a7d-405f-82b1-86d2723b0c4d"
 
 [python]
 tailor_pex_binary_targets = true
-interpreter_constraints = [">=3.9,<3.12"]
+interpreter_constraints = [">=3.11,<3.12"]
 enable_resolves = true
 default_resolve = "pants-plugins"
 
 
 [python.resolves]
 pants-plugins = "pants-plugins/pants.lock"
-pants-previous = "pants-plugins/previous.lock"
-pants-current = "pants-plugins/current.lock"
-# pants-next = "pants-plugins/next.lock"
 example-1 = "locks/example-1.lock"
 
 twine = "locks/tools/twine.lock"
@@ -76,10 +73,7 @@ black = "locks/tools/black.lock"
 
 
 [python.resolves_to_interpreter_constraints]
-pants-plugins = [">=3.9,<3.12"]
-pants-previous = [">=3.9,<3.12"]
-pants-current = [">=3.9,<3.12"]
-# pants-next = [">=3.9,<3.12"]
+pants-plugins = [">=3.11,<3.12"]
 pytest = [">=3.9,<3.12"]
 twine = [">=3.9,<3.12"]
 black = [">=3.9,<3.10"]
@@ -90,7 +84,7 @@ use_rust_parser = true
 
 [black]
 install_from_resolve = "black"
-interpreter_constraints = ["==3.9.*"]
+interpreter_constraints = ["==3.11.*"]
 
 [ipython]
 install_from_resolve = "ipython"
@@ -98,7 +92,7 @@ install_from_resolve = "ipython"
 [isort]
 install_from_resolve = "isort"
 args = '--resolve-all-configs'
-interpreter_constraints = ["==3.9.*"]
+interpreter_constraints = ["==3.11.*"]
 config = "['pyproject.toml']"
 
 [pytest]

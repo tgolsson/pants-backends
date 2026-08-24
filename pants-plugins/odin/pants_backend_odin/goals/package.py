@@ -8,19 +8,21 @@ from pants.core.goals.package import (
     OutputPathField,
     PackageFieldSet,
 )
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
+from pants.core.util_rules.external_tool import download_external_tool
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.core.util_rules.system_binaries import (
     BinaryShims,
     BinaryShimsRequest,
     SystemBinariesSubsystem,
 )
 from pants.engine.fs import Digest, MergeDigests
+from pants.engine.internals.graph import transitive_targets
 from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import collect_rules, rule
-from pants.engine.target import TransitiveTargets, TransitiveTargetsRequest
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import TransitiveTargetsRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool
@@ -84,17 +86,16 @@ async def build_odin_package(
         ),
     )
 
-    downloaded_odin = await Get(DownloadedExternalTool, ExternalToolRequest, odin.get_request(platform))
+    downloaded_odin = await download_external_tool(odin.get_request(platform))
 
-    input_digest = await Get(
-        Digest,
+    input_digest = await merge_digests(
         MergeDigests(
             [
                 downloaded_odin.digest,
                 request.sources_digest,
                 binary_shims.digest,
             ]
-        ),
+        )
     )
 
     # Build the odin build command
@@ -111,18 +112,19 @@ async def build_odin_package(
     # Add output flag to build binary in current directory
     argv.append(f"-out:{request.output_path}")
 
-    process_result = await Get(
-        ProcessResult,
-        Process(
-            argv=argv,
-            input_digest=input_digest,
-            description=f"Build Odin package {request.address}",
-            output_files=(request.output_path,),
-            env={"PATH": f"{binary_shims.path_component}"},
-            immutable_input_digests={
-                **binary_shims.immutable_input_digests,
-            },
-        ),
+    process_result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                argv=argv,
+                input_digest=input_digest,
+                description=f"Build Odin package {request.address}",
+                output_files=(request.output_path,),
+                env={"PATH": f"{binary_shims.path_component}"},
+                immutable_input_digests={
+                    **binary_shims.immutable_input_digests,
+                },
+            )
+        )
     )
 
     return OdinBuildResult(
@@ -136,7 +138,7 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
     """Package an Odin application by building it with the Odin compiler."""
 
     # Get the dependencies of the odin_package target to find the source files
-    dependencies = await Get(TransitiveTargets, TransitiveTargetsRequest([field_set.address]))
+    dependencies = await transitive_targets(TransitiveTargetsRequest([field_set.address]), **implicitly())
 
     # Collect all source files from the dependencies
     source_field_sets = []
@@ -153,7 +155,7 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
         )
 
     # Get the source files
-    sources_digest = await Get(SourceFiles, SourceFilesRequest(source_field_sets))
+    sources_digest = await determine_source_files(SourceFilesRequest(source_field_sets))
 
     # Extract directory from the field_set address
     directory = field_set.address.spec_path or "."
@@ -172,7 +174,7 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
     )
 
     # Build the package
-    build_result = await Get(OdinBuildResult, OdinBuildRequest, build_request)
+    build_result = await build_odin_package(build_request)
 
     if not build_result.success:
         raise Exception(f"Failed to build Odin package {field_set.address}")

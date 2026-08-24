@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.rules import collect_rules, rule
 
 from pants_backend_oci.subsystem import OciSubsystem, UmociTool
 
@@ -19,7 +19,7 @@ class SetCmdProcessRequest:
 async def set_args(
     request: SetCmdProcessRequest, tool: UmociTool, platform: Platform, oci: OciSubsystem
 ) -> Process:
-    umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    umoci = await download_external_tool(tool.get_request(platform))
 
     command = [
         rf"""

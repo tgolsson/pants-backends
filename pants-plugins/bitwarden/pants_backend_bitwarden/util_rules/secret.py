@@ -4,13 +4,16 @@ import json
 import os
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
-from pants.engine.addresses import Addresses, UnparsedAddressInputs
+from pants.core.util_rules.env_vars import environment_vars_subset
+from pants.core.util_rules.external_tool import download_external_tool
+from pants.engine.addresses import UnparsedAddressInputs
 from pants.engine.env_vars import EnvironmentVars, EnvironmentVarsRequest
+from pants.engine.internals.graph import resolve_target, resolve_unparsed_address_inputs
+from pants.engine.intrinsics import execute_process
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process, ProcessCacheScope
-from pants.engine.rules import Get, collect_rules, rule
-from pants.engine.target import FieldSet, WrappedTarget, WrappedTargetRequest
+from pants.engine.rules import Get, collect_rules, implicitly, rule
+from pants.engine.target import FieldSet, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 
 from pants_backend_bitwarden.subsystem import BitwardenTool
@@ -26,9 +29,9 @@ from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
     FallibleSecretsResponse,
     SecretsRequestRequest,
-    SecretsRequestWrap,
     SecretsResponse,
     SecretValue,
+    secrets_request_request,
 )
 
 
@@ -62,20 +65,22 @@ class NoVaultKeyError(Exception):
 @rule
 async def get_bitwarden_session_secret(request: BitWardenSessionKeyRequest) -> SecretsResponse:
     secret = request.item[BitWardenSessionSecret].value
-    secret_address = await Get(
-        Addresses,
+    secret_address = await resolve_unparsed_address_inputs(
         UnparsedAddressInputs(
             [secret],
             owning_address=request.item.address,
             description_of_origin=f"the `{secret}` from the target {request.item}",
         ),
+        **implicitly(),
     )
-    wrapped_target = await Get(
-        WrappedTarget,
+    wrapped_target = await resolve_target(
         WrappedTargetRequest(secret_address[0], description_of_origin="twine_upload_with_secret"),
+        **implicitly(),
     )
 
-    secret_request = await Get(SecretsRequestWrap, SecretsRequestRequest(wrapped_target.target))
+    secret_request = await secrets_request_request(
+        SecretsRequestRequest(wrapped_target.target), **implicitly()
+    )
     if secret_request.request is None:
         raise NoDecrypterException(
             f"No valid decrypter found for secret: `{secret_address[0]}` of type"
@@ -93,30 +98,28 @@ async def get_bitwarden_session_secret(request: BitWardenSessionKeyRequest) -> S
 async def get_bitwarden_key(
     request: FallibleBitWardenSecretsRequest, tool: BitwardenTool, platform: Platform
 ) -> FallibleSecretsResponse:
-    bw_tool = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
-    item = await Get(
-        Addresses,
-        UnparsedAddressInputs,
-        request.target.item.to_unparsed_address_inputs(),
-    )
+    bw_tool = await download_external_tool(tool.get_request(platform))
+    item = await resolve_unparsed_address_inputs(request.target.item.to_unparsed_address_inputs())
 
-    wrapped_target = await Get(
-        WrappedTarget,
+    wrapped_target = await resolve_target(
         WrappedTargetRequest(
             item[0],
             description_of_origin="Resolve BitWarden ID",
         ),
+        **implicitly(),
     )
 
     env_request = ["HOME"]
     extra_env = EnvironmentVars()
     if wrapped_target.target[BitWardenSessionSecret].value is not None:
-        bw_session_secret = await Get(SecretsResponse, BitWardenSessionKeyRequest(wrapped_target.target))
+        bw_session_secret = await get_bitwarden_session_secret(
+            BitWardenSessionKeyRequest(wrapped_target.target)
+        )
         extra_env = EnvironmentVars(**{"BW_SESSION": bw_session_secret.value.value})
     else:
         env_request.append("BW_SESSION")
 
-    relevant_env = await Get(EnvironmentVars, EnvironmentVarsRequest(env_request))
+    relevant_env = await environment_vars_subset(EnvironmentVarsRequest(env_request), **implicitly())
     command_env = EnvironmentVars(**relevant_env, **extra_env)
 
     if request.target.field.value:
@@ -128,8 +131,7 @@ async def get_bitwarden_key(
             f"{wrapped_target.target[BitWardenId].value}",
         ]
 
-        result: FallibleProcessResult = await Get(
-            FallibleProcessResult,
+        result: FallibleProcessResult = await execute_process(
             Process(
                 command,
                 description=f"Decrypting {request.target.address}",
@@ -137,6 +139,7 @@ async def get_bitwarden_key(
                 env=command_env,
                 cache_scope=ProcessCacheScope.PER_SESSION,
             ),
+            **implicitly(),
         )
 
         if result.exit_code != 0:
@@ -176,8 +179,7 @@ async def get_bitwarden_key(
         f"{wrapped_target.target[BitWardenId].value}",
     ]
 
-    result: FallibleProcessResult = await Get(
-        FallibleProcessResult,
+    result: FallibleProcessResult = await execute_process(
         Process(
             command,
             description=f"Decrypting {request.target.address}",
@@ -185,6 +187,7 @@ async def get_bitwarden_key(
             env=command_env,
             cache_scope=ProcessCacheScope.PER_SESSION,
         ),
+        **implicitly(),
     )
 
     if result.exit_code != 0:
