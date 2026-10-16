@@ -1,18 +1,18 @@
 import os
 from dataclasses import dataclass
 
-from pants.core.goals.package import BuiltPackage, PackageFieldSet
+from pants.core.goals.package import PackageFieldSet, build_package
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.fs import CreateDigest, Digest, FileContent, MergeDigests
 from pants.engine.internals.graph import find_valid_field_sets, resolve_targets
 from pants.engine.intrinsics import create_digest, get_digest_contents, merge_digests
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSetsPerTargetRequest, Target
 
 from pants_backend_kustomize.requests import (
-    KustomizeInjectData,
     KustomizeInjectRequest,
     KustomizeInjectRequestQuery,
+    generate_injection,
     kirr_to_kir,
 )
 from pants_backend_kustomize.target_types import (
@@ -53,7 +53,7 @@ async def prepare_build_context(
         if isinstance(dependency, KustomizeTarget):
             root_contexts_get.append(prepare_build_context(KustomizationContextRequest(target=dependency)))
         elif kir.valid:
-            query = await Get(KustomizeInjectData, KustomizeInjectRequest, kir.request)
+            query = await generate_injection(**implicitly({kir.request: KustomizeInjectRequest}))
             inject_data_queries.append(query)
         else:
             other_deps.append(dependency)
@@ -71,7 +71,8 @@ async def prepare_build_context(
 
     # Package binary dependencies for build context.
     embedded_pkgs = await concurrently(
-        Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
+        build_package(**implicitly({field_set: PackageFieldSet}))
+        for field_set in embedded_pkgs_per_target.field_sets
     )
 
     root_contents = await get_digest_contents(root.snapshot.digest)

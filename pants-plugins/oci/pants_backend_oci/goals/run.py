@@ -14,7 +14,7 @@ from pants.engine.internals.graph import resolve_target
 from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 
@@ -23,10 +23,10 @@ from pants_backend_oci.target_types import ImageRepository, ImageRunTty
 from pants_backend_oci.tools.process import FusedProcess, fuse_process
 from pants_backend_oci.util_rules.configure import SetCmdProcessRequest, set_args
 from pants_backend_oci.util_rules.image_bundle import (
-    FallibleImageBundle,
     FallibleImageBundleRequest,
     ImageBundleRequest,
     ibr_to_fibr,
+    resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.tools import RuncToolsRequest, get_binary_shims
 from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest, make_unpack_process
@@ -64,7 +64,7 @@ async def prepare_run_image_bundle(
     )
     target = wrapped_target.target
     bundle_request = await ibr_to_fibr(ImageBundleRequest(target), **implicitly())
-    image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
+    image = resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
 
     tool, image, rundir, shims = await concurrently(
         download_runc_tool,

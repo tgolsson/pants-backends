@@ -5,17 +5,17 @@ from typing import ClassVar
 
 from pants.engine.internals.graph import resolve_target
 from pants.engine.process import fallible_to_exec_result_or_raise
-from pants.engine.rules import Get, UnionRule, collect_rules, implicitly, rule
+from pants.engine.rules import UnionRule, collect_rules, implicitly, rule
 from pants.engine.target import FieldSet, Target, WrappedTargetRequest
 
 from pants_backend_kustomize.requests import KustomizeInjectData, KustomizeInjectRequest
 from pants_backend_oci.goals.publish import OciPublishProcessRequest, publish_oci_process
 from pants_backend_oci.target_types import ImageDigest, ImageRepository, ImageTag
 from pants_backend_oci.util_rules.image_bundle import (
-    FallibleImageBundle,
     FallibleImageBundleRequest,
     ImageBundleRequest,
     ibr_to_fibr,
+    resolve_image_bundle,
 )
 
 
@@ -43,7 +43,7 @@ async def generate_oci_tag_injection(
         **implicitly(),
     )
     image_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
-    image = await Get(FallibleImageBundle, FallibleImageBundleRequest, image_request.request)
+    image = await resolve_image_bundle(**implicitly({image_request.request: FallibleImageBundleRequest}))
     if image.exit_code != 0 or image.dependency_failed:
         raise Exception(
             f"Failed packaging image:\n{image.stderr}",

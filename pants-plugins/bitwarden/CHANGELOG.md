@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Target Pants `2.31.0`.
+- Replace remaining union-dispatched `Get` calls with polymorphic call-by-name rules.
+
 - Default to Bitwarden CLI `2026.10.0` and retain `2026.9.1` and existing historical
   versions.
 - Add native Linux ARM64 and macOS ARM64 binaries for both `2026.10.0` and `2026.9.1`.

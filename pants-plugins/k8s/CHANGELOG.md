@@ -6,6 +6,9 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## Unreleased
 
+- Target Pants `2.31.0`.
+- Replace remaining union-dispatched `Get` calls with polymorphic call-by-name rules.
+
 - Default to kubectl `v1.37.1`; include the latest patches of maintained minors
   `v1.36.5`, `v1.35.9`, and `v1.34.12`, and remove EOL `v1.25.2`.
 - Include Linux ARM64 binaries alongside Linux x86-64 and both macOS architectures.

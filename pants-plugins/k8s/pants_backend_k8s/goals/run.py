@@ -17,7 +17,7 @@ from pants.engine.internals.graph import (
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, SourcesField, Target, WrappedTargetRequest
 from pants.engine.unions import UnionMembership
 
@@ -37,8 +37,8 @@ from pants_backend_k8s.target_types import (
 from pants_backend_k8s.util.kubeconfig import (
     KubeconfigRequest,
     KubeconfigRequestRequest,
-    KubeconfigResponse,
     kubeconfig_request_request,
+    resolve_kubeconfig,
 )
 
 
@@ -148,9 +148,8 @@ async def prepare_kubernetes_command_process(
                 enable_codegen=True,
             )
         ),
-        Get(
-            KubeconfigResponse,
-            {kubeconfig_request.request: KubeconfigRequest, environment_name: EnvironmentName},
+        resolve_kubeconfig(
+            **implicitly({kubeconfig_request.request: KubeconfigRequest, environment_name: EnvironmentName})
         ),
         download_external_tool(tool.get_request(platform)),
     )

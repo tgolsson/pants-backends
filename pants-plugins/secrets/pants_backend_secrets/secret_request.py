@@ -122,6 +122,13 @@ def unwrap_fallible_secret(fallible: FallibleSecretsResponse) -> SecretsResponse
     return fallible.response
 
 
+@rule(polymorphic=True)
+async def resolve_secret(
+    request: FallibleSecretsRequest, environment_name: EnvironmentName
+) -> FallibleSecretsResponse:
+    raise NotImplementedError()
+
+
 def rules():
     return [
         *collect_rules(),

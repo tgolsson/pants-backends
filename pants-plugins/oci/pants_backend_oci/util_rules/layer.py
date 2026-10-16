@@ -6,14 +6,14 @@ import datetime
 import logging
 from dataclasses import dataclass
 
-from pants.core.goals.package import BuiltPackage, BuiltPackageArtifact, PackageFieldSet
+from pants.core.goals.package import BuiltPackageArtifact, PackageFieldSet, build_package
 from pants.core.target_types import FileSourceField
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.graph import find_valid_field_sets, resolve_targets
 from pants.engine.intrinsics import digest_to_snapshot
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     Dependencies,
     DependenciesRequest,
@@ -89,7 +89,8 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
 
     # Package binary dependencies for build context.
     embedded_pkgs = await concurrently(
-        Get(BuiltPackage, PackageFieldSet, field_set) for field_set in embedded_pkgs_per_target.field_sets
+        build_package(**implicitly({field_set: PackageFieldSet}))
+        for field_set in embedded_pkgs_per_target.field_sets
     )
 
     packages_str = ", ".join(a.relpath for p in embedded_pkgs for a in p.artifacts if a.relpath)

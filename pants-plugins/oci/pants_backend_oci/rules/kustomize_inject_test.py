@@ -4,7 +4,7 @@ import pytest
 from pants.engine.addresses import Address
 from pants.engine.fs import EMPTY_DIGEST
 from pants.engine.process import Process
-from pants.testutil.rule_runner import MockGet, run_rule_with_mocks
+from pants.testutil.rule_runner import run_rule_with_mocks
 
 from pants_backend_kustomize.requests import KustomizeInjectData
 from pants_backend_oci.rules.kustomize_inject import (
@@ -38,14 +38,9 @@ def test_image_tag_injection_publishes_local_layout(tag, is_local):
     result = run_rule_with_mocks(
         generate_oci_tag_injection,
         rule_args=[KustomizeInjectOciTagRequest(field_set)],
-        mock_gets=[
-            MockGet(
-                FallibleImageBundle,
-                (FallibleImageBundleRequest,),
-                lambda request: FallibleImageBundle(image),
-            ),
-        ],
         mock_calls={
+            "pants_backend_oci.util_rules.image_bundle.resolve_image_bundle": lambda request,
+            **kwargs: FallibleImageBundle(image),
             "pants.engine.internals.graph.resolve_target": lambda request, **kwargs: SimpleNamespace(
                 target=target
             ),

@@ -37,7 +37,7 @@ from pants.engine.fs import CreateDigest, MergeDigests
 from pants.engine.internals.graph import resolve_target, resolve_unparsed_address_inputs
 from pants.engine.intrinsics import digest_to_snapshot, merge_digests
 from pants.engine.process import InteractiveProcess
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTargetRequest
 from pants.option.global_options import GlobalOptions
 from pants.util.docutil import doc_url
@@ -47,8 +47,8 @@ from pants_backend_secrets.exception import FailedDecryptException, NoDecrypterE
 from pants_backend_secrets.secret import SecretsField
 from pants_backend_secrets.secret_request import (
     FallibleSecretsRequest,
-    FallibleSecretsResponse,
     SecretsRequestRequest,
+    resolve_secret,
     secrets_request_request,
 )
 
@@ -180,7 +180,7 @@ async def twine_upload_with_secret(
                 f"type `{wrapped_target.target.alias}`"
             )
 
-        secret_requests.append(Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request))
+        secret_requests.append(resolve_secret(**implicitly({secret_request.request: FallibleSecretsRequest})))
 
     fallible_secrets = await concurrently(*secret_requests)
     secrets = []

@@ -247,6 +247,13 @@ async def load_kubconfig_file(request: FileKubeconfigRequest) -> KubeconfigRespo
     )
 
 
+@rule(polymorphic=True)
+async def resolve_kubeconfig(
+    request: KubeconfigRequest, environment_name: EnvironmentName
+) -> KubeconfigResponse:
+    raise NotImplementedError()
+
+
 def rules():
     return [
         *collect_rules(),

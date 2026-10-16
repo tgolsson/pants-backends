@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Target Pants `2.31.0`.
+- Replace remaining union-dispatched `Get` calls with polymorphic call-by-name rules.
+
 - Default to Kustomize `v5.8.3`; backfill `v5.7.1` and `v5.0.3`, and retain the final
   4.x release, `v4.5.7`, for all four Linux/macOS architectures.
 - Add download checks for every recorded version/platform pair.

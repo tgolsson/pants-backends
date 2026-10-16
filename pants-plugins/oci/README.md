@@ -1,5 +1,7 @@
 # OCI backend for Pants
 
+The unreleased development version targets Pants **2.31.0**.
+
 This release targets Pants **2.30.0**. Install it with
 `pants-backend-oci==0.9.0` in `[GLOBAL].plugins` in `pants.toml`.
 

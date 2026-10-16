@@ -6,6 +6,8 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## Unreleased
 
+- Target Pants `2.31.0`.
+
 - Default to mdBook `v0.5.4`; add the latest 0.4 release, `v0.4.52`, while retaining
   existing historical versions.
 - Use native Apple Silicon archives for the new versions, preserving the Rosetta

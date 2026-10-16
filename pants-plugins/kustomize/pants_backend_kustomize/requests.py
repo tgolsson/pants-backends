@@ -72,6 +72,13 @@ def kirr_to_kir(
     return KustomizeInjectRequestWrap(True, first_concrete)
 
 
+@rule(polymorphic=True)
+async def generate_injection(
+    request: KustomizeInjectRequest, environment_name: EnvironmentName
+) -> KustomizeInjectData:
+    raise NotImplementedError()
+
+
 def rules():
     return [
         *collect_rules(),

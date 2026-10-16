@@ -1,5 +1,3 @@
-""" """
-
 import json
 import os
 from dataclasses import dataclass
@@ -12,7 +10,7 @@ from pants.engine.internals.graph import resolve_target, resolve_unparsed_addres
 from pants.engine.intrinsics import execute_process
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process, ProcessCacheScope
-from pants.engine.rules import Get, collect_rules, implicitly, rule
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 
@@ -31,6 +29,7 @@ from pants_backend_secrets.secret_request import (
     SecretsRequestRequest,
     SecretsResponse,
     SecretValue,
+    resolve_secret,
     secrets_request_request,
 )
 
@@ -87,7 +86,7 @@ async def get_bitwarden_session_secret(request: BitWardenSessionKeyRequest) -> S
             f" `{wrapped_target.target.alias}`"
         )
 
-    response = await Get(FallibleSecretsResponse, FallibleSecretsRequest, secret_request.request)
+    response = await resolve_secret(**implicitly({secret_request.request: FallibleSecretsRequest}))
     if response.exit_code != 0:
         raise NoVaultKeyError(response.stdout)
 

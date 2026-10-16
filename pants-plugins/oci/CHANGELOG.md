@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Target Pants `2.31.0`.
+- Replace remaining union-dispatched `Get` calls with polymorphic call-by-name rules.
+
 - Default to umoci `v0.6.0`, using official Linux x86-64/ARM64 binaries and refreshed
   macOS x86-64/ARM64 builds from `tgolsson/umoci-binary`. Retain the existing pinned
   nightly and `v0.4.7` entries; CI examples now use the stable default.
