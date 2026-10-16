@@ -1,13 +1,13 @@
 [project]
 name = "pants_backend_bitwarden"
 description = "A Bitwarden plugin for the Pants build system"
-version = "0.6.1"
+version = "0.7.0"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
 
 dependencies = [
-    "pants_backend_secrets>=0.6.1"
+    "pants_backend_secrets>=0.7.0"
 ]
 
 readme = "README.md"

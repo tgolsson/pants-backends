@@ -1,9 +1,7 @@
 # OCI backend for Pants
 
-The unreleased development version targets Pants **2.31.0**.
-
-This release targets Pants **2.30.0**. Install it with
-`pants-backend-oci==0.9.0` in `[GLOBAL].plugins` in `pants.toml`.
+This release targets Pants **2.31.0**. Install it with
+`pants-backend-oci==0.10.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-oci?label=Latest%20release)
 
@@ -16,9 +14,9 @@ This is a backend implementing support for building OCI images in pants; running
 * [runc](https://github.com/opencontainers/runc) for exeuction
 * [skopeo](https://github.com/containers/skopeo) for pulling and pushing images
 
-## Unreleased tool updates
+## Tool versions
 
-The unreleased defaults are umoci `v0.6.0`, Skopeo `v1.24.1`, and runc `v1.5.2`.
+The defaults are umoci `v0.6.0`, Skopeo `v1.24.1`, and runc `v1.5.2`.
 umoci uses official Linux binaries and matching macOS builds from
 [tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary/releases/tag/v0.6.0).
 Skopeo binaries come from [lework/skopeo-binary](https://github.com/lework/skopeo-binary),

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
-## Unreleased
+## 0.7.0 - 2026-10-17
 
 - Target Pants `2.31.0`.
 - Replace remaining union-dispatched `Get` calls with polymorphic call-by-name rules.

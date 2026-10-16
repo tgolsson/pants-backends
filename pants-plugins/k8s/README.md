@@ -1,9 +1,7 @@
 # Kubernetes backend for Pants
 
-The unreleased development version targets Pants **2.31.0**.
-
-This release targets Pants **2.30.0**. Install it with
-`pants-backend-k8s==0.6.1` in `[GLOBAL].plugins` in `pants.toml`.
+This release targets Pants **2.31.0**. Install it with
+`pants-backend-k8s==0.7.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-k8s?label=Latest%20release)
 
@@ -14,9 +12,9 @@ This backends implements targets for working with Kubernetes clusters using raw 
 
 * [kubectl](https://github.com/kubernetes/kubectl) for cluster operations
 
-## Unreleased tool updates
+## Tool versions
 
-The unreleased default is kubectl `v1.37.1`, with `v1.36.5`, `v1.35.9`, and
+The default is kubectl `v1.37.1`, with `v1.36.5`, `v1.35.9`, and
 `v1.34.12` also recorded for Linux/macOS on x86-64 and ARM64. Select a version with
 `--kubectl-tool-version=v1.35.9` or `[kubectl-tool].version` in `pants.toml`.
 Follow the [Kubernetes release/EOL dates](https://kubernetes.io/releases/) when
