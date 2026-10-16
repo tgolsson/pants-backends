@@ -13,11 +13,10 @@ from pants.engine.internals.graph import (
     resolve_targets,
     resolve_unparsed_address_inputs,
 )
-from pants.engine.internals.selectors import Get
 from pants.engine.intrinsics import execute_process, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
@@ -73,7 +72,9 @@ async def build_oci_bundle_package(
     platform: Platform,
     gunzip: GunzipBinary,
 ) -> FallibleImageBundle:
-    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+    base = await resolve_unparsed_address_inputs(
+        request.target.base.to_unparsed_address_inputs(), **implicitly()
+    )
 
     wrapped_target = await resolve_target(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()

@@ -60,7 +60,7 @@ async def find_gtar(
         search_path=system_binaries.system_binary_paths,
         test=BinaryPathTest(args=["--version"]),
     )
-    paths = await find_binary(request)
+    paths = await find_binary(request, **implicitly())
     first_path = paths.first_path_or_raise(request, rationale="download the tools Pants needs to run")
     return GTarBinary(first_path.path, first_path.fingerprint, platform)
 

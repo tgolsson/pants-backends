@@ -11,11 +11,10 @@ from pants.core.goals.package import (
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.graph import resolve_target
-from pants.engine.internals.selectors import Get
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
-from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.rules import Get, collect_rules, implicitly, rule
 from pants.engine.target import InvalidTargetException, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel

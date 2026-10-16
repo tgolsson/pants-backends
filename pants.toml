@@ -76,7 +76,7 @@ black = "locks/tools/black.lock"
 pants-plugins = [">=3.11,<3.12"]
 pytest = [">=3.9,<3.12"]
 twine = [">=3.9,<3.12"]
-black = [">=3.9,<3.10"]
+black = [">=3.11,<3.12"]
 example-1 = [">=3.11,<3.12"]
 
 [python-infer]

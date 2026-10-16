@@ -11,13 +11,12 @@ from pants.core.goals.package import (
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.core.util_rules.system_binaries import (
-    BinaryShims,
     BinaryShimsRequest,
     SystemBinariesSubsystem,
+    create_binary_shims,
 )
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.graph import transitive_targets
-from pants.engine.internals.selectors import Get
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
@@ -70,8 +69,7 @@ async def build_odin_package(
     extra_shims = tuple()
     if platform.value in ("macos_x86_64", "macos_arm64"):
         extra_shims = ("xcrun",)
-    binary_shims = await Get(
-        BinaryShims,
+    binary_shims = await create_binary_shims(
         BinaryShimsRequest.for_binaries(
             "cp",
             "cc",
@@ -84,6 +82,7 @@ async def build_odin_package(
             rationale="Odin",
             search_path=system_binaries_environment.system_binary_paths,
         ),
+        **implicitly(),
     )
 
     downloaded_odin = await download_external_tool(odin.get_request(platform))
@@ -174,7 +173,7 @@ async def package_odin_application(field_set: OdinPackageFieldSet) -> BuiltPacka
     )
 
     # Build the package
-    build_result = await build_odin_package(build_request)
+    build_result = await build_odin_package(build_request, **implicitly())
 
     if not build_result.success:
         raise Exception(f"Failed to build Odin package {field_set.address}")

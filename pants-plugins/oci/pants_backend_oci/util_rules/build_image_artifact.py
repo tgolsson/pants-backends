@@ -15,11 +15,10 @@ from pants.engine.internals.graph import (
     resolve_targets,
     resolve_unparsed_address_inputs,
 )
-from pants.engine.internals.selectors import Get
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
-from pants.engine.rules import collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.util.logging import LogLevel
 
@@ -95,7 +94,9 @@ async def build_image_artifact(
     cp: CpBinary,
     mkdir: MkdirBinary,
 ) -> ProcessResult:
-    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+    base = await resolve_unparsed_address_inputs(
+        request.target.base.to_unparsed_address_inputs(), **implicitly()
+    )
 
     wrapped_target = await resolve_target(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
@@ -211,7 +212,9 @@ async def extract_image_artifact(
     umoci: UmociTool,
     platform: Platform,
 ) -> ProcessResult:
-    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+    base = await resolve_unparsed_address_inputs(
+        request.target.base.to_unparsed_address_inputs(), **implicitly()
+    )
 
     wrapped_target = await resolve_target(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()

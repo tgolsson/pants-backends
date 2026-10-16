@@ -94,7 +94,7 @@ async def pull_oci_image(
         env=relevant_env,
     )
 
-    result = await execute_process(p)
+    result = await execute_process(p, **implicitly())
 
     if result.exit_code != 0:
         return FallibleImageBundle(

@@ -32,9 +32,9 @@ from pants.core.goals.publish import (
 )
 from pants.core.util_rules.config_files import find_config_file
 from pants.engine.addresses import UnparsedAddressInputs
-from pants.engine.fs import CreateDigest, MergeDigests, Snapshot
+from pants.engine.fs import CreateDigest, MergeDigests
 from pants.engine.internals.graph import resolve_target, resolve_unparsed_address_inputs
-from pants.engine.intrinsics import merge_digests
+from pants.engine.intrinsics import digest_to_snapshot, merge_digests
 from pants.engine.process import InteractiveProcess
 from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
 from pants.engine.target import COMMON_TARGET_FIELDS, Target, WrappedTargetRequest
@@ -142,9 +142,9 @@ async def twine_upload_with_secret(
 
     ca_cert_request = twine_subsystem.ca_certs_digest_request(global_options.ca_certs_path)
     ca_cert = (
-        await Get(Snapshot, CreateDigest, ca_cert_request) if ca_cert_request else None
-    )  # TODO: Needs to migrate this.
-    ca_cert_digest = (ca_cert.digest) if ca_cert else ()
+        await digest_to_snapshot(**implicitly({ca_cert_request: CreateDigest})) if ca_cert_request else None
+    )
+    ca_cert_digest = (ca_cert.digest,) if ca_cert else ()
 
     input_digest = await merge_digests(
         MergeDigests((packages_digest, config_files.snapshot.digest, *ca_cert_digest))
@@ -206,7 +206,9 @@ async def twine_upload_with_secret(
             )
         )
 
-    processes = await concurrently(setup_venv_pex_process(request) for request in pex_proc_requests)
+    processes = await concurrently(
+        setup_venv_pex_process(request, **implicitly()) for request in pex_proc_requests
+    )
 
     return PublishProcesses(
         PublishPackages(

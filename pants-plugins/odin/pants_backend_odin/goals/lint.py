@@ -8,11 +8,10 @@ from pants.core.util_rules.partitions import Partition, Partitions
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.fs import MergeDigests
 from pants.engine.internals.graph import transitive_targets
-from pants.engine.internals.selectors import concurrently
 from pants.engine.intrinsics import execute_process, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import FallibleProcessResult, Process
-from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import FieldSet, TransitiveTargetsRequest
 from pants.util.logging import LogLevel
 from pants_backend_odin.subsystem import OdinTool

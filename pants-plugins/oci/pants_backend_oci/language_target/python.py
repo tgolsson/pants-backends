@@ -90,7 +90,9 @@ async def build_python_image(
     gunzip: GunzipBinary,
 ) -> FallibleImageBundle:
     umoci_request = download_external_tool(umoci.get_request(platform))
-    base = await resolve_unparsed_address_inputs(request.target.base.to_unparsed_address_inputs())
+    base = await resolve_unparsed_address_inputs(
+        request.target.base.to_unparsed_address_inputs(), **implicitly()
+    )
     wrapped_target = await resolve_target(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
     )

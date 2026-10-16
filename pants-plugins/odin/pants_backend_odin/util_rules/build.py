@@ -4,12 +4,11 @@ from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.system_binaries import (
-    BinaryShims,
     BinaryShimsRequest,
     SystemBinariesSubsystem,
+    create_binary_shims,
 )
 from pants.engine.fs import Digest, MergeDigests
-from pants.engine.internals.selectors import Get
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
@@ -42,8 +41,7 @@ async def build_odinfmt(
     """Build odinfmt from the OLS repository."""
 
     # Get required system binaries
-    binary_shims = await Get(
-        BinaryShims,
+    binary_shims = await create_binary_shims(
         BinaryShimsRequest.for_binaries(
             "git",
             "bash",
@@ -57,6 +55,7 @@ async def build_odinfmt(
             rationale="Building odinfmt from OLS",
             search_path=system_binaries_environment.system_binary_paths,
         ),
+        **implicitly(),
     )
 
     # Get the Odin compiler

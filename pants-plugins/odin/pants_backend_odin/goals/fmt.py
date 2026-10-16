@@ -67,7 +67,7 @@ async def odin_source_fmt(
     odinfmt: OdinfmtTool,
     platform: Platform,
 ) -> FmtResult:
-    build_odinfmt_result = await build_odinfmt(BuildOdinfmtRequest(platform))
+    build_odinfmt_result = await build_odinfmt(BuildOdinfmtRequest(platform), **implicitly())
 
     input_digest = await merge_digests(
         MergeDigests(

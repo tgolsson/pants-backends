@@ -99,7 +99,9 @@ async def get_bitwarden_key(
     request: FallibleBitWardenSecretsRequest, tool: BitwardenTool, platform: Platform
 ) -> FallibleSecretsResponse:
     bw_tool = await download_external_tool(tool.get_request(platform))
-    item = await resolve_unparsed_address_inputs(request.target.item.to_unparsed_address_inputs())
+    item = await resolve_unparsed_address_inputs(
+        request.target.item.to_unparsed_address_inputs(), **implicitly()
+    )
 
     wrapped_target = await resolve_target(
         WrappedTargetRequest(

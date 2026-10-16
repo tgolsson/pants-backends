@@ -14,11 +14,10 @@ from pants.engine.internals.graph import (
     resolve_targets,
     resolve_unparsed_address_inputs,
 )
-from pants.engine.internals.selectors import Get
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, SourcesField, Target, WrappedTargetRequest
 from pants.engine.unions import UnionMembership
 
@@ -134,7 +133,7 @@ async def prepare_kubernetes_command_process(
             ),
             **implicitly(),
         ),
-        resolve_environment_name(EnvironmentNameRequest.from_target(request.target)),
+        resolve_environment_name(EnvironmentNameRequest.from_target(request.target), **implicitly()),
     )
 
     kubeconfig_request = await kubeconfig_request_request(

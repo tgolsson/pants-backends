@@ -45,7 +45,7 @@ async def get_binary_shims(
         **kwargs,
     )
 
-    return await create_binary_shims(binary_shims)
+    return await create_binary_shims(binary_shims, **implicitly())
 
 
 class GenerateKubernetesFromKustomizeRequest(GenerateSourcesRequest):

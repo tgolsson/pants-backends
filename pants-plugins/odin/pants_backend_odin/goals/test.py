@@ -91,7 +91,7 @@ async def run_odin_tests(
     )
 
     # Build the test
-    build_result = await build_odin_package(build_request)
+    build_result = await build_odin_package(build_request, **implicitly())
 
     if not build_result.success:
         return TestResult.error(
