@@ -3,9 +3,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from pants.core.util_rules.source_files import SourceFiles, SourceFilesRequest
-from pants.engine.fs import Digest, DigestContents
-from pants.engine.rules import Get, collect_rules, rule
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
+from pants.engine.intrinsics import get_digest_contents
+from pants.engine.rules import collect_rules, rule
 from pants.engine.target import AllTargets, InferDependenciesRequest, InferredDependencies
 from pants.engine.unions import UnionRule
 from pants_backend_odin.target_types import (
@@ -88,12 +88,12 @@ async def infer_odin_source_dependencies(
     """Infer dependencies for odin_source targets based on import statements."""
 
     # Get the content of the source file
-    source_files = await Get(SourceFiles, SourceFilesRequest([request.field_set.source]))
+    source_files = await determine_source_files(SourceFilesRequest([request.field_set.source]))
 
     if not source_files.snapshot.files:
         return InferredDependencies([])
 
-    digest_contents = await Get(DigestContents, Digest, source_files.snapshot.digest)
+    digest_contents = await get_digest_contents(source_files.snapshot.digest)
 
     if not digest_contents:
         return InferredDependencies([])

@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.core.goals.package import BuiltPackage, OutputPathField
+from pants.core.goals.package import OutputPathField
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
-from pants.engine.rules import Get, collect_rules, rule
-from pants.engine.target import WrappedTarget, WrappedTargetRequest
+from pants.engine.internals.graph import resolve_target
+from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import WrappedTargetRequest
 from pants.engine.unions import UnionRule
-from pants_backend_odin.goals.package import OdinPackageFieldSet
+from pants_backend_odin.goals.package import OdinPackageFieldSet, package_odin_application
 from pants_backend_odin.target_types import OdinDefinesField, OdinDependenciesField
 
 
@@ -26,16 +27,15 @@ async def run_odin_binary(request: OdinBinaryRunFieldSet) -> RunRequest:
     """Run an Odin binary by first building it, then executing it."""
 
     # Wrap the target for package building
-    wrapped_target = await Get(
-        WrappedTarget,
-        WrappedTargetRequest(request.address, description_of_origin="run odin binary"),
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(request.address, description_of_origin="run odin binary"), **implicitly()
     )
 
     # Create a package field set from the target to reuse existing build logic
     package_field_set = OdinPackageFieldSet.create(wrapped_target.target)
 
     # Build the binary using existing package infrastructure
-    built_package = await Get(BuiltPackage, OdinPackageFieldSet, package_field_set)
+    built_package = await package_odin_application(package_field_set)
 
     # The built package should contain exactly one artifact (the binary)
     if len(built_package.artifacts) != 1:

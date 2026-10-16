@@ -1,11 +1,12 @@
 import datetime
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.fs import CreateDigest, Digest, Directory, MergeDigests
+from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.rules import collect_rules, rule
 
 from pants_backend_oci.subsystem import OciSubsystem, UmociTool
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
@@ -30,9 +31,9 @@ class UnpackedImageBundle:
 async def make_unpack_process(
     request: UnpackedImageBundleRequest, tool: UmociTool, platform: Platform, oci: OciSubsystem
 ) -> Process:
-    umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
-    output_dir = await Get(Digest, CreateDigest([Directory("unpacked_image")]))
-    input_digest = await Get(Digest, MergeDigests([request.bundle, umoci.digest, output_dir]))
+    umoci = await download_external_tool(tool.get_request(platform))
+    output_dir = await create_digest(CreateDigest([Directory("unpacked_image")]))
+    input_digest = await merge_digests(MergeDigests([request.bundle, umoci.digest, output_dir]))
 
     command = [
         f"{{chroot}}/{umoci.exe}",
@@ -64,7 +65,7 @@ async def make_unpack_process(
 async def make_repack_process(
     request: RepackedImageBundleRequest, tool: UmociTool, platform: Platform
 ) -> Process:
-    umoci = await Get(DownloadedExternalTool, ExternalToolRequest, tool.get_request(platform))
+    umoci = await download_external_tool(tool.get_request(platform))
 
     timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
 

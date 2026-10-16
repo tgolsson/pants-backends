@@ -8,9 +8,10 @@ import shlex
 from dataclasses import dataclass
 
 from pants.core.util_rules.system_binaries import BashBinary
-from pants.engine.fs import Digest, MergeDigests
+from pants.engine.fs import MergeDigests
+from pants.engine.intrinsics import merge_digests
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, rule
+from pants.engine.rules import collect_rules, rule
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ async def fuse_process(request: FusedProcess, bash: BashBinary) -> Process:
     common_digest_input = list(set([p.input_digest for p in request.processes if p.input_digest]))
     common_description = " | ".join(p.description for p in request.processes)
 
-    common_digest = await Get(Digest, MergeDigests(common_digest_input))
+    common_digest = await merge_digests(MergeDigests(common_digest_input))
 
     env = {}
     for p in request.processes:

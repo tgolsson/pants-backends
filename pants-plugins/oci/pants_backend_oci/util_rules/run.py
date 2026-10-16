@@ -3,28 +3,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 from textwrap import dedent
 
-from pants.core.util_rules.external_tool import DownloadedExternalTool, ExternalToolRequest
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.system_binaries import (
     BashBinary,
-    BinaryShims,
     CatBinary,
     CpBinary,
     MkdirBinary,
     MvBinary,
 )
-from pants.engine.fs import CreateDigest, Digest, Directory, FileContent, MergeDigests
+from pants.engine.fs import CreateDigest, Directory, FileContent, MergeDigests
+from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult
-from pants.engine.rules import Get, MultiGet, collect_rules, rule
+from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 
 from pants_backend_oci.subsystem import OciSubsystem, RuncTool, UmociTool
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
-from pants_backend_oci.util_rules.jq import JqBinary, JqBinaryRequest
-from pants_backend_oci.util_rules.tools import RuncToolsRequest
+from pants_backend_oci.util_rules.jq import JqBinaryRequest, find_jq_wrapper
+from pants_backend_oci.util_rules.tools import RuncToolsRequest, get_binary_shims
 from pants_backend_oci.util_rules.unpack import (
     RepackedImageBundleRequest,
     UnpackedImageBundleRequest,
+    make_repack_process,
+    make_unpack_process,
 )
 
 
@@ -49,15 +51,12 @@ async def run_in_container(
     mkdir: MkdirBinary,
     mv: MvBinary,
 ) -> ProcessResult:
-    tool, rundir, jq, shims, packed_image_process = await MultiGet(
-        Get(DownloadedExternalTool, ExternalToolRequest, runc.get_request(platform)),
-        Get(Digest, CreateDigest([Directory("runspace")])),
-        Get(JqBinary, JqBinaryRequest()),
-        Get(
-            BinaryShims,
-            RuncToolsRequest(),
-        ),
-        Get(Process, UnpackedImageBundleRequest(request.bundle.digest)),
+    tool, rundir, jq, shims, packed_image_process = await concurrently(
+        download_external_tool(runc.get_request(platform)),
+        create_digest(CreateDigest([Directory("runspace")])),
+        find_jq_wrapper(JqBinaryRequest(), **implicitly()),
+        get_binary_shims(RuncToolsRequest(), **implicitly()),
+        make_unpack_process(UnpackedImageBundleRequest(request.bundle.digest), **implicitly()),
     )
 
     shell_command = [f'"{c}"' for c in oci.command_shell]
@@ -184,11 +183,11 @@ async def run_in_container(
         `pwd`/{tool.exe} --debug --root runspace --rootless {rootless} run -b unpacked_image {namespace} 0<&-
         cp $ROOT/unpacked_image/config.json.bak $ROOT/unpacked_image/config.json
     """)
-    script_digest = await Get(Digest, CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
+    script_digest = await create_digest(CreateDigest([FileContent("run.sh", script.encode("utf-8"))]))
 
     immutable_input_digests = shims.immutable_input_digests
     env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
-    input_digest = await Get(Digest, MergeDigests((rundir, tool.digest, script_digest)))
+    input_digest = await merge_digests(MergeDigests((rundir, tool.digest, script_digest)))
 
     steps = [
         packed_image_process,
@@ -205,12 +204,9 @@ async def run_in_container(
     ]
 
     if request.repack:
-        steps.append(await Get(Process, RepackedImageBundleRequest(request.command)))
+        steps.append(await make_repack_process(RepackedImageBundleRequest(request.command), **implicitly()))
 
-    res = await Get(
-        ProcessResult,
-        FusedProcess(tuple(steps)),
-    )
+    res = await fallible_to_exec_result_or_raise(**implicitly(FusedProcess(tuple(steps))))
     return res
 
 

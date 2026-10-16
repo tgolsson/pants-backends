@@ -8,8 +8,7 @@ from pants.core.goals.tailor import (
     PutativeTargets,
     PutativeTargetsRequest,
 )
-from pants.engine.fs import PathGlobs, Paths
-from pants.engine.internals.selectors import Get
+from pants.engine.intrinsics import path_globs_to_paths
 from pants.engine.rules import collect_rules, rule
 from pants.engine.unions import UnionRule
 from pants.util.dirutil import group_by_dir
@@ -33,7 +32,7 @@ async def find_putative_targets(
     if not kustomize.tailor:
         return PutativeTargets()
 
-    paths = await Get(Paths, PathGlobs, req.path_globs("kustomization.yaml"))
+    paths = await path_globs_to_paths(req.path_globs("kustomization.yaml"))
 
     unowned_files = set(paths.files) - set(all_owned_sources)
 

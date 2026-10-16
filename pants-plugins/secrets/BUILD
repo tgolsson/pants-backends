@@ -6,7 +6,7 @@ python_distribution_with_secret(
     name="package",
     dependencies=[
         ":package_data",
-        "./pants_backend_secrets:pants_backend_secrets@resolve=pants-plugins",
+        "./pants_backend_secrets:pants_backend_secrets",
     ],
     provides=python_artifact(
         name="pants_backend_secrets",

@@ -9,12 +9,12 @@ from typing import ClassVar, Generic, Type, TypeVar
 from pants.engine.console import Console
 from pants.engine.environment import EnvironmentName
 from pants.engine.goal import Goal, GoalSubsystem, Outputting
-from pants.engine.rules import Get, MultiGet, collect_rules, goal_rule
+from pants.engine.internals.specs_rules import find_valid_field_sets_for_target_roots
+from pants.engine.rules import Get, collect_rules, concurrently, goal_rule, implicitly
 from pants.engine.target import (
     FieldSet,
     ImmutableValue,
     NoApplicableTargetsBehavior,
-    TargetRootsToFieldSets,
     TargetRootsToFieldSetsRequest,
     Targets,
 )
@@ -93,13 +93,13 @@ async def decrypt(
     targets: Targets,
     unions: UnionMembership,
 ) -> Decrypt:
-    target_roots_to_decrypt_field_sets = await Get(
-        TargetRootsToFieldSets,
+    target_roots_to_decrypt_field_sets = await find_valid_field_sets_for_target_roots(
         TargetRootsToFieldSetsRequest(
             DecryptFieldSet,
             goal_description="Generate field sets",
             no_applicable_targets_behavior=NoApplicableTargetsBehavior.ignore,
         ),
+        **implicitly(),
     )
 
     gets = []
@@ -117,7 +117,7 @@ async def decrypt(
 
         gets.append(get)
 
-    responses = await MultiGet(*gets)
+    responses = await concurrently(*gets)
     with decrypt_subsystem.output(console) as write_stdout:
         for response in responses:
             secret = response.secret

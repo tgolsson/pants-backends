@@ -3,12 +3,11 @@
 from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, PackageFieldSet
-from pants.engine.internals.selectors import Get
-from pants.engine.rules import collect_rules, rule
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.unions import UnionRule
 
 from pants_backend_mdbook.targets import MdBookSources
-from pants_backend_mdbook.util_rules.build import FallibleMdBookBuildOutput, MdbookBuildRequest
+from pants_backend_mdbook.util_rules.build import MdbookBuildRequest, build_mdbook
 
 
 @dataclass(frozen=True)
@@ -20,7 +19,7 @@ class MdBookFieldSet(PackageFieldSet):
 
 @rule(desc="Package MDBOOK Image")
 async def package_mdbook_image(field_set: MdBookFieldSet) -> BuiltPackage:
-    build = await Get(FallibleMdBookBuildOutput, MdbookBuildRequest(field_set.address))
+    build = await build_mdbook(MdbookBuildRequest(field_set.address), **implicitly())
     if not build.success:
         raise Exception("Failed to build mdbook")
 
