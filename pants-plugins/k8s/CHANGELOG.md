@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## 0.6.1 - 2026-10-16
+
+- Replace `pdm-pep517` with `pdm-backend` to produce correctly normalized source archive names for PyPI.
+
 ## 0.6.0 - 2026-10-16
 
 - Now targets `pants` version `2.30`.

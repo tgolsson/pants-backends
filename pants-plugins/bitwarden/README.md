@@ -1,7 +1,7 @@
 # BitWarden backend for Pants
 
 This release targets Pants **2.30.0**. Install it with
-`pants-backend-bitwarden==0.6.0` in `[GLOBAL].plugins` in `pants.toml`.
+`pants-backend-bitwarden==0.6.1` in `[GLOBAL].plugins` in `pants.toml`.
 
 [![PyPI](https://img.shields.io/pypi/v/pants-backend-bitwarden?label=Latest%20release)](https://pypi.org/project/pants-backend-bitwarden)
 

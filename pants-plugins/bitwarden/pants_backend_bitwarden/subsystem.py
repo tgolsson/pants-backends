@@ -10,8 +10,10 @@ class BitwardenTool(ExternalTool):
     options_scope = "bitwarden"
     help = "Tool for bitwarden"
 
-    default_version = "2023.10.0"
+    default_version = "2026.9.1"
     default_known_versions = [
+        "2026.9.1|linux_x86_64|84289eaf59d691f04242605112f21b00e8dba65acdedbc60dde001a2860f2097|45654895",
+        "2026.9.1|macos_x86_64|7996558e562a7e5d1ef167f625e4dfde0230fe87246e01caf647aff5501ca658|43980370",
         "2023.10.0|linux_x86_64|25b3376c7b215b9850844a14a15daa8b88817445acd0af12f5f2942606ef108a|32871398",
         "2023.10.0|macos_x86_64|c129b1806bb00806676298198fb54d540561e2c06d66016f0836e31b1bd65e72|33786559",
         "2022.10.0|linux_x86_64|3a47014de6842264b7d0cdd134e54c7b7e8461e7d353814a8b36f1f4ffc9d997|26038342",
