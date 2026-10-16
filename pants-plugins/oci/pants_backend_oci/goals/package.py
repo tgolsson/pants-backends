@@ -14,7 +14,7 @@ from pants.engine.internals.graph import resolve_target
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
-from pants.engine.rules import Get, collect_rules, implicitly, rule
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import InvalidTargetException, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
@@ -22,10 +22,10 @@ from pants.util.logging import LogLevel
 from pants_backend_oci.subsystem import SkopeoTool
 from pants_backend_oci.target_types import ImageBuildOutputs, ImageDigest, ImageRepository, ImageTag
 from pants_backend_oci.util_rules.image_bundle import (
-    FallibleImageBundle,
     FallibleImageBundleRequest,
     ImageBundleRequest,
     ibr_to_fibr,
+    resolve_image_bundle,
 )
 
 
@@ -117,7 +117,7 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
         )
 
     request = await ibr_to_fibr(ImageBundleRequest(target), **implicitly())
-    image = await Get(FallibleImageBundle, FallibleImageBundleRequest, request.request)
+    image = await resolve_image_bundle(**implicitly({request.request: FallibleImageBundleRequest}))
     if image.exit_code != 0 or image.dependency_failed:
         raise Exception(
             f"Failed packaging image:\n{image.stderr}",

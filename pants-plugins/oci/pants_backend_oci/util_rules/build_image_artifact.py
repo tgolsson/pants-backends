@@ -18,7 +18,7 @@ from pants.engine.internals.graph import (
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.util.logging import LogLevel
 
@@ -34,11 +34,11 @@ from pants_backend_oci.target_types import (
 )
 from pants_backend_oci.util_rules.copy import CopyFromRequest, copy_from_container
 from pants_backend_oci.util_rules.image_bundle import (
-    FallibleImageBundle,
     FallibleImageBundleRequest,
     ImageBundle,
     ImageBundleRequest,
     ibr_to_fibr,
+    resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
 from pants_backend_oci.util_rules.run import RunContainerRequest, run_in_container
@@ -103,7 +103,9 @@ async def build_image_artifact(
     )
 
     build_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
-    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
+    maybe_built_base = await resolve_image_bundle(
+        **implicitly({build_request.request: FallibleImageBundleRequest})
+    )
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
@@ -221,7 +223,9 @@ async def extract_image_artifact(
     )
 
     build_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
-    maybe_built_base = await Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request)
+    maybe_built_base = await resolve_image_bundle(
+        **implicitly({build_request.request: FallibleImageBundleRequest})
+    )
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)

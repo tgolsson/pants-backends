@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## 0.8.0 - 2026-10-17
+
+- Target Pants `2.31.0`.
+
+- Default to mdBook `v0.5.4`; add the latest 0.4 release, `v0.4.52`, while retaining
+  existing historical versions.
+- Use native Apple Silicon archives for the new versions, preserving the Rosetta
+  mapping for retained older releases.
+- Check downloads for every recorded version/platform pair.
+- Remove the obsolete `[book].multilingual` setting from project documentation;
+  mdBook 0.5 rejects this setting, so existing books may need the same migration.
+
 ## 0.7.0 - 2026-10-16
 
 - Now targets `pants` version `2.30`.

@@ -1,5 +1,3 @@
-""" """
-
 import datetime
 import os
 from dataclasses import dataclass
@@ -15,7 +13,7 @@ from pants.engine.internals.graph import (
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
     Dependencies,
@@ -37,6 +35,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     ImageBundle,
     ImageBundleRequest,
     ibr_to_fibr,
+    resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
 from pants_backend_oci.util_rules.oci_sha import OciShaRequest, extract_build_info_sha
@@ -103,7 +102,7 @@ async def build_python_image(
         resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
     )
 
-    base_image = Get(FallibleImageBundle, FallibleImageBundleRequest, bundle_request.request)
+    base_image = resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
 
     layers = []
     for dependency in dependencies:

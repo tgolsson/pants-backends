@@ -1,7 +1,7 @@
 # OCI backend for Pants
 
-This release targets Pants **2.30.0**. Install it with
-`pants-backend-oci==0.9.0` in `[GLOBAL].plugins` in `pants.toml`.
+This release targets Pants **2.31.0**. Install it with
+`pants-backend-oci==0.10.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-oci?label=Latest%20release)
 
@@ -14,12 +14,27 @@ This is a backend implementing support for building OCI images in pants; running
 * [runc](https://github.com/opencontainers/runc) for exeuction
 * [skopeo](https://github.com/containers/skopeo) for pulling and pushing images
 
+## Tool versions
+
+The defaults are umoci `v0.6.0`, Skopeo `v1.24.1`, and runc `v1.5.2`.
+umoci uses official Linux binaries and matching macOS builds from
+[tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary/releases/tag/v0.6.0).
+Skopeo binaries come from [lework/skopeo-binary](https://github.com/lework/skopeo-binary),
+since the Skopeo project does not publish standalone binaries. Both tools cover
+Linux/macOS on x86-64 and ARM64. runc is Linux-only, with `v1.4.3`, `v1.3.6`, and
+`v1.2.9` also recorded. Use `[umoci].version`, `[skopeo].version`, or `[runc].version`
+to select another recorded version. Stable umoci now supports macOS without
+selecting the legacy pinned `nightly` version.
+
+Kustomize injection publishes locally built image dependencies to their configured
+registry before inserting their image digest. An omitted registry tag defaults
+to `latest`.
+
 # Planned and missing features
 
 * Currently there's no support for pulling tags, as that would break determinism
 * Multi-platform SHA/.sig is untested/unsupported
-* skopeo doesn't support MacOS, preventing pulling and pushing images.
-* No "in-container" build steps
+* Container execution and in-container build steps require Linux (runc).
 
 ## Targets
 

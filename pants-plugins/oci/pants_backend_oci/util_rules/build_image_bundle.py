@@ -16,7 +16,7 @@ from pants.engine.internals.graph import (
 from pants.engine.intrinsics import execute_process, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process
-from pants.engine.rules import Get, collect_rules, concurrently, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
@@ -38,6 +38,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     ImageBundle,
     ImageBundleRequest,
     ibr_to_fibr,
+    resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
 from pants_backend_oci.util_rules.oci_sha import OciShaRequest, extract_build_info_sha
@@ -101,7 +102,7 @@ async def build_oci_bundle_package(
             layer_requests.append(build_image_layer(ImageLayerRequest(dependency)))
 
     maybe_built_base, *layers = await concurrently(
-        Get(FallibleImageBundle, FallibleImageBundleRequest, build_request.request),
+        resolve_image_bundle(**implicitly({build_request.request: FallibleImageBundleRequest})),
         *layer_requests,
     )
 

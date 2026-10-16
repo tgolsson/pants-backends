@@ -1,7 +1,7 @@
 # Kustomize backend for Pants
 
-This release targets Pants **2.30.0**. Install it with
-`pants-backend-kustomize==0.6.0` in `[GLOBAL].plugins` in `pants.toml`.
+This release targets Pants **2.31.0**. Install it with
+`pants-backend-kustomize==0.7.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-kustomize?label=Latest%20release)
 
@@ -11,6 +11,15 @@ This release targets Pants **2.30.0**. Install it with
 This backends implements targets for kustomize templates.
 
 * [kustomize](https://github.com/kubernetes-sigs/kustomize) for overlaying state ontop of raw kubernetes files
+
+## Tool versions
+
+The default is standalone Kustomize `v5.8.3`. Versions `v5.7.1`,
+`v5.0.3`, and `v4.5.7` are also recorded for Linux/macOS on x86-64 and ARM64.
+Select one with `--kustomize-tool-version=v4.5.7` or `[kustomize-tool].version`.
+Standalone Kustomize versions are independent of the Kustomize embedded in
+kubectl; older entries provide compatibility choices rather than a promise of
+ongoing upstream maintenance.
 
 ## Planned and missing features
 

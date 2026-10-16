@@ -93,6 +93,13 @@ def ibr_to_fibr(
     return FallibleImageBundleRequestWrap(first_concrete)
 
 
+@rule(polymorphic=True)
+async def resolve_image_bundle(
+    request: FallibleImageBundleRequest, environment_name: EnvironmentName
+) -> FallibleImageBundle:
+    raise NotImplementedError()
+
+
 def rules():
     return [
         *collect_rules(),

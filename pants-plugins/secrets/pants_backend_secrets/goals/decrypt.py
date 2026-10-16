@@ -10,7 +10,7 @@ from pants.engine.console import Console
 from pants.engine.environment import EnvironmentName
 from pants.engine.goal import Goal, GoalSubsystem, Outputting
 from pants.engine.internals.specs_rules import find_valid_field_sets_for_target_roots
-from pants.engine.rules import Get, collect_rules, concurrently, goal_rule, implicitly
+from pants.engine.rules import collect_rules, concurrently, goal_rule, implicitly, rule
 from pants.engine.target import (
     FieldSet,
     ImmutableValue,
@@ -109,11 +109,7 @@ async def decrypt(
 
         mapping = target_roots_to_decrypt_field_sets.mapping[tgt]
 
-        get = Get(
-            DecryptResponse,
-            DecryptRequest,
-            mapping[0]._request(),
-        )
+        get = decrypt_secret(**implicitly({mapping[0]._request(): DecryptRequest}))
 
         gets.append(get)
 
@@ -124,6 +120,11 @@ async def decrypt(
             write_stdout(f"Secret {secret.name} from {secret.source}: {secret.value}\n")
 
     return Decrypt(exit_code=0)
+
+
+@rule(polymorphic=True)
+async def decrypt_secret(request: DecryptRequest, environment_name: EnvironmentName) -> DecryptResponse:
+    raise NotImplementedError()
 
 
 def rules():

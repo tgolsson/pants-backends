@@ -10,7 +10,7 @@ from pants_backend_oci.util_rules import empty_image_bundle, image_bundle, oci_s
 
 
 def test_empty_image_has_fixed_sha() -> None:
-    GOLDEN = "sha256:e0039d9a394788147eb854e5efe5429723352c288faa47de3bb1abbd53a7f7bb"
+    GOLDEN = "sha256:c27a72aa218913269e54720cfe086efbcdad4c6a38d417acabfac6d0a7302f6c"
     rule_runner = RuleRunner(
         target_types=[ImageEmpty],
         rules=[

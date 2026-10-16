@@ -80,8 +80,6 @@ def test_publish_with_no_repository_is_skipped(rule_runner) -> None:
 
 
 def test_publish_with_repository_has_process(rule_runner) -> None:
-    GOLDEN = "sha256:63435d69d8f2fb3d574bd379a5e83901e538621635992a9281c69d81da0feb6e"
-
     files = {"BUILD": "oci_image_build(name='empty_derived', base=[':empty'], repository='foobar')"}
 
     rule_runner.write_files(files)
@@ -97,4 +95,9 @@ def test_publish_with_repository_has_process(rule_runner) -> None:
 
     assert len(result) == 1
     assert result[0].description.startswith("foobar:latest")
-    assert result[0].names == (GOLDEN,)
+    artifact = built_package.artifacts[0]
+    assert result[0].names == (artifact.sha,)
+    assert result[0].process.process.argv[-2:] == (
+        f"oci:{artifact.relpath}",
+        "docker://foobar:latest",
+    )

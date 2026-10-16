@@ -61,8 +61,12 @@ class UmociTool(ExternalTool):
     options_scope = "umoci"
     help = "Umoci is used for manipulating OCI images."
 
-    default_version = "v0.4.7"
+    default_version = "v0.6.0"
     default_known_versions = [
+        "v0.6.0|macos_x86_64|01ddbeeb491409e18c5e909f9f50bbba545c5feba4ce3ca87e256e81a2bca201|8724016",
+        "v0.6.0|macos_arm64|5e85c642ebefcaa73eb035ebe319c7a62a83272a7d2b50c91c8b9315857b0f85|8181250",
+        "v0.6.0|linux_x86_64|b51c267ec394499e42c6fde47f240b7b7dba57ea49df0b5acd304378b82a3b71|7946424",
+        "v0.6.0|linux_arm64|5cfd17f2e7a4bcf9ed67ea1b955ca893d200349b9ce6a3d3707dba415f458a1f|7536824",
         "nightly|linux_x86_64|8f32e43001a062e0fac53fc4cf8b48d659740d64c60395ec62b5680914c3a43d|9198496",
         "nightly|linux_arm64|f14fbe90f0dc575318929cf9361dd77918ec926ef27b068c9951a278e1d61865|8928657",
         "nightly|macos_x86_64|b49ab8c09b776e3e432bc2d46f79380d13c4d8f2dc0ab3c33eed4b9caac93201|9033392",
@@ -79,65 +83,42 @@ class UmociTool(ExternalTool):
     nightly_commit = StrOption(
         default="c6c4428ce046b92a541f6e0c89b9e00f758d83bb",
         advanced=True,
-        help="The commit to use when running nighly releases.",
+        help="The commit to use when running nightly releases.",
     )
 
     def generate_url(self, plat: Platform) -> str:
         if self.version == "nightly":
             repo = "https://github.com/tgolsson/umoci-binary"
-            platform_mapping = {
-                "linux_x86_64": "linux-amd64",
-                "linux_arm64": "linux-arm64",
-                "macos_x86_64": "darwin-amd64",
-                "macos_arm64": "darwin-arm64",
-            }
-            plat_str = platform_mapping[plat.value]
-            binary = f"umoci-{plat_str}"
             version = f"commit-{self.nightly_commit}"
-
+        elif plat.value.startswith("macos_"):
+            # Upstream publishes Linux binaries only.
+            repo = "https://github.com/tgolsson/umoci-binary"
+            version = self.version
         else:
             repo = "https://github.com/opencontainers/umoci"
-            platform_mapping = {
-                "linux_x86_64": "amd64",
-            }
-            plat_str = platform_mapping[plat.value]
-            binary = f"umoci.{plat_str}"
             version = self.version
-
+        binary = self.generate_exe(plat).removeprefix("./")
         return f"{repo}/releases/download/{version}/{binary}"
 
     def generate_exe(self, plat: Platform) -> str:
-        if self.version == "nightly":
-            platform_mapping = {
-                "linux_x86_64": "linux-amd64",
-                "linux_arm64": "linux-arm64",
-                "macos_x86_64": "darwin-amd64",
-                "macos_arm64": "darwin-arm64",
-            }
-            plat_str = platform_mapping[plat.value]
-            return f"./umoci-{plat_str}"
-
-        platform_mapping = {
-            "linux_x86_64": "amd64",
-        }
-        plat_str = platform_mapping[plat.value]
-        return f"./umoci.{plat_str}"
+        arch = "arm64" if plat in {Platform.linux_arm64, Platform.macos_arm64} else "amd64"
+        if self.version == "nightly" or plat.value.startswith("macos_"):
+            os = "darwin" if plat.value.startswith("macos_") else "linux"
+            return f"./umoci-{os}-{arch}"
+        # The official release filename changed in 0.5.
+        return f"./umoci.{arch}" if self.version == "v0.4.7" else f"./umoci.linux.{arch}"
 
 
 class SkopeoTool(ExternalTool):
     options_scope = "skopeo"
     help = "Tool for moving containers."
 
-    default_version = "v1.13.3"
+    default_version = "v1.24.1"
     default_known_versions = [
-        "v1.13.3|linux_arm64|1f7726b020ff9bc931ce16caa13c29999738a231f1414028282cd8f8661eb747|35404961",
-        "v1.13.3|linux_x86_64|65707992885b1a4a446af6342874749478a1af7e17ab3f4df8fb89509e8b1966|34276600",
-        "v1.13.3|macos_x86_64|5433037c8f6d0db84cd9ff244320044654a7aa329cd7f0c0d04a68cffd89c836|33124304",
-        "v1.13.3|macos_arm64|f57337d1695f804bcd8fa752c9d2784e8a0a2a405863740b8587d598825ef53a|32484706",
-        "v1.9.2|linux_arm64 |1b7b4411c9723dbbdda4ae9dde23a33d8ab093b54c97d3323784b117d3e9413f|32542312",
-        "v1.9.2|linux_x86_64|5c82f8fc2bcb2502cf7cdf9239f54468d52f5a2a8072893c75408b78173c4ba6|30920360",
-        "v1.9.3|linux_arm64 |27c88183de036ebd4ffa5bc5211329666e3c40ac69c5d938bcdab9b9ec248fd4|30189956",
-        "v1.9.3|linux_x86_64|6e00cf4661c081fb1d010ce60904dccb880788a52bf10de16a40f32082415a87|29390800",
+        "v1.24.1|linux_x86_64|067d461564e606b4f54f30453a9f21a53aabc4f1bb0acd5193ffff5b1aececbc|43205536",
+        "v1.24.1|linux_arm64|a7e32a8f39110a55e0230e0f27bf50f1b2e4f36841793b07a7ba711877e63020|36859900",
+        "v1.24.1|macos_x86_64|44b1d962439819968ea4a9947627e9f49b2d3fed47d01ebeb2597bd88ad79512|35991728",
+        "v1.24.1|macos_arm64|ba11a5e3f96a120345ead3d74774c3258473db39bcf42cc684f2a0cac281a9f9|34040002",
     ]
 
     def generate_url(self, plat: Platform) -> str:
@@ -148,12 +129,7 @@ class SkopeoTool(ExternalTool):
             "macos_arm64": "darwin-arm64",
         }
         plat_str = platform_mapping[plat.value]
-        if self.version in {"1.9.2", "1.9.3"}:
-            return (
-                f"https://github.com/lework/skopeo-binary/releases/download/{self.version}/skopeo-{plat_str}"
-            )
-
-        return f"https://github.com/tgolsson/skopeo-binary/releases/download/{self.version}/skopeo-{plat_str}"
+        return f"https://github.com/lework/skopeo-binary/releases/download/{self.version}/skopeo-{plat_str}"
 
     def generate_exe(self, plat: Platform) -> str:
         platform_mapping = {
@@ -170,10 +146,16 @@ class RuncTool(ExternalTool):
     options_scope = "runc"
     help = "Tool for executing OCI containers."
 
-    default_version = "v1.1.4"
+    default_version = "v1.5.2"
     default_known_versions = [
-        "v1.1.4|linux_x86_64|db772be63147a4e747b4fe286c7c16a2edc4a8458bd3092ea46aaee77750e8ce|9431456",
-        "v1.1.4|linux_arm64 |dbb71e737eaef454a406ce21fd021bd8f1b35afb7635016745992bbd7c17a223|9061960",
+        "v1.5.2|linux_x86_64|599f6f94ff8c5057241eff0d54c3c74f95c34935b6457b33fe545defc61e9488|10866512",
+        "v1.5.2|linux_arm64|d10ecae898361832a059be2089bab92d158aec54661b18ed7346ed79628b46b0|10091904",
+        "v1.4.3|linux_x86_64|f6ae8efc0fa40079e1475e97cbe9d1bd3f106a28d6af78a11d9f1bd565515e60|12245392",
+        "v1.4.3|linux_arm64|633301e2e32f8a5ad54031aab4901eb00308bec677dd15faa2751e8f9dab5ca4|11499552",
+        "v1.3.6|linux_x86_64|3f3921dbbee7723e9868f97e88e51ffc910206e3ba55646e74d93d24ea76023c|13085848",
+        "v1.3.6|linux_arm64|6be27a061ef89bb14c6cb495405bba80f46cea213b8f79378a6086b1bac6b747|12126664",
+        "v1.2.9|linux_x86_64|b21fda1d5a1510b19c3f6fb43ecb3a92887654a9d0c2b64e84b8b08f24ff0e30|12702296",
+        "v1.2.9|linux_arm64|c155ae4716480be73a1c3bbedfa23df179800ba39ca83eb59f5b1b9b72a7ecbd|11862152",
     ]
 
     def generate_url(self, plat: Platform) -> str:
