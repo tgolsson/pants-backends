@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Default to umoci `v0.6.0`, using official Linux x86-64/ARM64 binaries and refreshed
+  macOS x86-64/ARM64 builds from `tgolsson/umoci-binary`. Retain the existing pinned
+  nightly and `v0.4.7` entries; CI examples now use the stable default.
+- Default to Skopeo `v1.24.1` from `lework/skopeo-binary` for all four platforms;
+  remove the old version entries and provider-routing branches.
+- Default to runc `v1.5.2`; include `v1.4.3`, `v1.3.6`, and `v1.2.9` for Linux
+  x86-64/ARM64, replacing the old `v1.1.4` entries.
+- Fix Kustomize OCI injection to supply the image layout/reference when publishing
+  local bundles and default an omitted registry tag to `latest`.
+- Check every recorded binary download and cover local/remote Kustomize injection
+  with regression tests that mock registry operations.
+
 ## 0.9.0 - 2026-10-16
 
 - Now targets `pants` version `2.30`.

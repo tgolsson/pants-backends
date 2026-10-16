@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Default to Kustomize `v5.8.3`; backfill `v5.7.1` and `v5.0.3`, and retain the final
+  4.x release, `v4.5.7`, for all four Linux/macOS architectures.
+- Add download checks for every recorded version/platform pair.
+
 ## 0.6.1 - 2026-10-16
 
 - Replace `pdm-pep517` with `pdm-backend` to produce correctly normalized source archive names for PyPI.

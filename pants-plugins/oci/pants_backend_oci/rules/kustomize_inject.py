@@ -56,7 +56,8 @@ async def generate_oci_tag_injection(
             OciPublishProcessRequest(
                 input_digest=image_digest,
                 repository=field_set.repository.value,
-                tag=field_set.tag.value,
+                tag=field_set.tag.value or "latest",
+                directory="build:build",
                 description=(
                     f"Publish OCI Image {field_set.address} ->"
                     f" {field_set.repository.value}:{field_set.tag.value}"

@@ -12,6 +12,15 @@ This backends implements targets for kustomize templates.
 
 * [kustomize](https://github.com/kubernetes-sigs/kustomize) for overlaying state ontop of raw kubernetes files
 
+## Unreleased tool updates
+
+The unreleased default is standalone Kustomize `v5.8.3`. Versions `v5.7.1`,
+`v5.0.3`, and `v4.5.7` are also recorded for Linux/macOS on x86-64 and ARM64.
+Select one with `--kustomize-tool-version=v4.5.7` or `[kustomize-tool].version`.
+Standalone Kustomize versions are independent of the Kustomize embedded in
+kubectl; older entries provide compatibility choices rather than a promise of
+ongoing upstream maintenance.
+
 ## Planned and missing features
 
 * Key/secret/... generation from built artifacts

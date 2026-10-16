@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Default to Bitwarden CLI `2026.10.0` and retain `2026.9.1` and existing historical
+  versions.
+- Add native Linux ARM64 and macOS ARM64 binaries for both `2026.10.0` and `2026.9.1`.
+- Check downloads for every recorded version/platform pair.
+
 ## 0.6.1 - 2026-10-16
 
 - Replace `pdm-pep517` with `pdm-backend` to produce correctly normalized source archive names for PyPI.

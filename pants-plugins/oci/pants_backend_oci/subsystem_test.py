@@ -24,64 +24,14 @@ def rule_runner() -> RuleRunner:
 
 
 @pytest.mark.parametrize(
-    "platform",
-    (
-        Platform.linux_arm64,
-        Platform.linux_x86_64,
-        Platform.macos_arm64,
-        Platform.macos_x86_64,
-    ),
+    "tool_type,version,platform",
+    [
+        (tool_type, row.split("|")[0], Platform(row.split("|")[1].strip()))
+        for tool_type in (SkopeoTool, UmociTool, RuncTool)
+        for row in tool_type.default_known_versions
+    ],
 )
-def test_platform_download_skopeo(
-    rule_runner,
-    platform,
-):
-    tool = rule_runner.request(SkopeoTool, [])
-    rule_runner.request(DownloadedExternalTool, [tool.get_request(platform)])
-
-
-@pytest.mark.parametrize(
-    "platform",
-    (Platform.linux_x86_64,),
-)
-def test_platform_download_umoci(
-    rule_runner,
-    platform,
-):
-    tool = rule_runner.request(UmociTool, [])
-    rule_runner.request(DownloadedExternalTool, [tool.get_request(platform)])
-
-
-@pytest.mark.parametrize(
-    "platform",
-    (
-        Platform.linux_arm64,
-        Platform.linux_x86_64,
-        Platform.macos_arm64,
-        Platform.macos_x86_64,
-    ),
-)
-def test_platform_download_umoci_nightly(
-    rule_runner,
-    platform,
-):
-    tool = rule_runner.request(UmociTool, [])
-    tool.version = "nightly"
-
-    rule_runner.request(DownloadedExternalTool, [tool.get_request(platform)])
-
-
-@pytest.mark.parametrize(
-    "platform",
-    (
-        Platform.linux_arm64,
-        Platform.linux_x86_64,
-    ),
-)
-def test_platform_download_runc(
-    rule_runner,
-    platform,
-):
-    tool = rule_runner.request(RuncTool, [])
-
+def test_platform_download(rule_runner, tool_type, version, platform):
+    rule_runner.set_options([f"--{tool_type.options_scope}-version={version}"])
+    tool = rule_runner.request(tool_type, [])
     rule_runner.request(DownloadedExternalTool, [tool.get_request(platform)])

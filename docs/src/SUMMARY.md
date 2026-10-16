@@ -2,6 +2,8 @@
 
 [Introduction](intro.md)
 
+- [Binary tool versions](binary-tools.md)
+
 
 # Kustomize
 

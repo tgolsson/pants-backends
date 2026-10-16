@@ -12,6 +12,13 @@ This backends implements targets for reading BitWarden secrets.
 
 * [bw](https://bitwarden.com/help/cli/) - the BitWarden CLI client
 
+## Unreleased tool updates
+
+The unreleased default is Bitwarden CLI `2026.10.0`. Version `2026.9.1` remains
+selectable with `--bitwarden-version=2026.9.1` or `[bitwarden].version`. Both
+versions include native Linux/macOS binaries for x86-64 and ARM64; historical
+versions retain their existing platform coverage.
+
 ## Planned and missing features
 
 * Setting and creating secrets via Pants

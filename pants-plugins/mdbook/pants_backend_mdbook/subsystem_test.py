@@ -22,17 +22,10 @@ def rule_runner() -> RuleRunner:
 
 
 @pytest.mark.parametrize(
-    "platform",
-    (
-        Platform.linux_arm64,
-        Platform.linux_x86_64,
-        #        Platform.macos_arm64,
-        Platform.macos_x86_64,
-    ),
+    "version,platform",
+    [(row.split("|")[0], Platform(row.split("|")[1].strip())) for row in MdBookTool.default_known_versions],
 )
-def test_platform_download_rustup(
-    rule_runner,
-    platform,
-):
-    mb = rule_runner.request(MdBookTool, [])
-    rule_runner.request(DownloadedExternalTool, [mb.get_request(platform)])
+def test_platform_download(rule_runner, version, platform):
+    rule_runner.set_options([f"--{MdBookTool.options_scope}-version={version}"])
+    tool = rule_runner.request(MdBookTool, [])
+    rule_runner.request(DownloadedExternalTool, [tool.get_request(platform)])

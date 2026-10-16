@@ -12,6 +12,15 @@ This backends implements targets for working with Kubernetes clusters using raw 
 
 * [kubectl](https://github.com/kubernetes/kubectl) for cluster operations
 
+## Unreleased tool updates
+
+The unreleased default is kubectl `v1.37.1`, with `v1.36.5`, `v1.35.9`, and
+`v1.34.12` also recorded for Linux/macOS on x86-64 and ARM64. Select a version with
+`--kubectl-tool-version=v1.35.9` or `[kubectl-tool].version` in `pants.toml`.
+Follow the [Kubernetes release/EOL dates](https://kubernetes.io/releases/) when
+choosing a minor; kubectl must be within one minor of the API server. The 1.34
+entries are due for removal after their 2026-10-27 EOL.
+
 ## Targets
 
 There's currently three targets for `pants-backend-k8s`:
