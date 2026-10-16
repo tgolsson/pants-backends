@@ -1,40 +1,54 @@
 "t: documentation":
-  - '**/README.md'
-  - 'README.md'
-  - 'examples/*'
-  - 'examples/**/'
-  - 'docs/*'
-  - 'docs/**/*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/README.md'
+      - 'README.md'
+      - 'examples/*'
+      - 'examples/**/'
+      - 'docs/*'
+      - 'docs/**/*'
 
 "t: tools":
-  - '.flake8'
-  - 'pants.toml'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.flake8'
+      - 'pants.toml'
 
 "t: ci":
-  - '.github/*'
-  - '.github/**/*'
-  - 'pants.ci.toml'
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/*'
+      - '.github/**/*'
+      - 'pants.ci.toml'
 
 "a: k8s":
-  - 'examples/k8s/*'
-  - 'examples/k8s/**/*'
-  - 'pants-plugins/k8s/*'
-  - 'pants-plugins/k8s/**/*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/k8s/*'
+      - 'examples/k8s/**/*'
+      - 'pants-plugins/k8s/*'
+      - 'pants-plugins/k8s/**/*'
 
 "a: kustomize":
-  - 'examples/kustomize/*'
-  - 'examples/kustomize/**/*'
-  - 'pants-plugins/kustomize/*'
-  - 'pants-plugins/kustomize/**/*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/kustomize/*'
+      - 'examples/kustomize/**/*'
+      - 'pants-plugins/kustomize/*'
+      - 'pants-plugins/kustomize/**/*'
 
 "a: oci":
-  - 'examples/oci/*'
-  - 'examples/oci/**/*'
-  - 'pants-plugins/oci/*'
-  - 'pants-plugins/oci/**/*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/oci/*'
+      - 'examples/oci/**/*'
+      - 'pants-plugins/oci/*'
+      - 'pants-plugins/oci/**/*'
 
 "a: mdbook":
-  - 'examples/mdbook/*'
-  - 'examples/mdbook/**/*'
-  - 'pants-plugins/mdbook/*'
-  - 'pants-plugins/mdbook/**/*'
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/mdbook/*'
+      - 'examples/mdbook/**/*'
+      - 'pants-plugins/mdbook/*'
+      - 'pants-plugins/mdbook/**/*'
