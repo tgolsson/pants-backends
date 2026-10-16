@@ -2,6 +2,7 @@ resources(name="package_data", sources=["pyproject.toml", "README.md", "LICENSE-
 
 python_distribution_with_secret(
     name="package",
+    skip_twine=True,
     dependencies=[
         ":package_data",
         "./pants_backend_odin:sources",

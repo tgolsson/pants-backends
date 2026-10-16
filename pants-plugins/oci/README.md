@@ -1,5 +1,8 @@
 # OCI backend for Pants
 
+This release targets Pants **2.30.0**. Install it with
+`pants-backend-oci==0.9.0` in `[GLOBAL].plugins` in `pants.toml`.
+
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-oci?label=Latest%20release)
 
 > **Warning**

@@ -13,6 +13,7 @@ from pants.backend.python.target_types import (
     LongDescriptionPathField,
     PythonDistributionDependenciesField,
     PythonDistributionEntryPointsField,
+    PythonDistributionOutputPathField,
     PythonProvidesField,
     SDistConfigSettingsField,
     SDistField,
@@ -94,11 +95,13 @@ class PythonDistributionWithSecret(Target):
         SDistConfigSettingsField,
         BuildBackendEnvVarsField,
         LongDescriptionPathField,
+        PythonDistributionOutputPathField,
         PublishSecretsField,
+        SkipTwineUploadField,
     )
     help = softwrap(f"""
         A publishable Python setuptools distribution (e.g. an sdist or wheel).
-        See {doc_url("python-distributions")}.
+        See {doc_url("docs/python/overview/building-distributions")}.
         """)
 
 
@@ -135,7 +138,7 @@ async def twine_upload_with_secret(
         )
 
     twine_pex, packages_digest, config_files = await concurrently(
-        create_venv_pex(twine_subsystem.to_pex_request(), **implicitly()),
+        create_venv_pex(**implicitly(twine_subsystem.to_pex_request())),
         merge_digests(MergeDigests(pkg.digest for pkg in request.packages)),
         find_config_file(twine_subsystem.config_request()),
     )

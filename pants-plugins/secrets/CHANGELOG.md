@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.0 - 2026-10-16
+
+- Now targets `pants` version `2.30`.
+- Migrate rules to the Pants call-by-name API.
+- Fix Twine PEX creation after the call-by-name migration.
+- Support `skip_twine` and distribution `output_path` on `python_distribution_with_secret` targets.
+
 ## 0.5.0 - 2025-05-14
 
 - Now targets `pants` version `2.24`.

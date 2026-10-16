@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## 0.6.0 - 2026-10-16
+
+- Now targets `pants` version `2.30`.
+- Migrate rules to the Pants call-by-name API.
+
 ## 0.5.0 - 2025-05-14
 
 - Now targets `pants` version `2.24`.
