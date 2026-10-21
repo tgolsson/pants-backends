@@ -63,7 +63,7 @@ def test_image_tag_injection_publishes_local_layout(tag, is_local):
     assert result == KustomizeInjectData(address, image.image_sha)
     assert len(published) == len(executed) == int(is_local)
     if is_local:
-        assert published[0].directory == "build:build"
+        assert published[0].directory == "build"
         assert published[0].input_digest == image.digest
         assert published[0].repository == "registry.example/app"
         assert published[0].tag == (tag or "latest")

@@ -146,6 +146,17 @@ class CraneTool(ExternalTool):
     options_scope = "crane"
     help = "Crane is used for interacting with remote OCI registries."
 
+    # Variables crane needs to find registry credentials: docker config, credential
+    # helpers on PATH, and podman/skopeo auth files.
+    registry_env_vars = (
+        "HOME",
+        "PATH",
+        "DOCKER_CONFIG",
+        "REGISTRY_AUTH_FILE",
+        "XDG_RUNTIME_DIR",
+        "XDG_CONFIG_HOME",
+    )
+
     default_version = "v0.22.1"
     default_known_versions = [
         "v0.22.1|linux_x86_64|0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0|16496784",

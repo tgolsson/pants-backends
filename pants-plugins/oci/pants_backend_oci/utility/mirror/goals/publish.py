@@ -10,15 +10,13 @@ from pants.core.goals.publish import (
 from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
-from pants.engine.fs import MergeDigests
-from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import InteractiveProcess, Process
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import SkopeoTool
+from pants_backend_oci.subsystem import CraneTool
 from pants_backend_oci.utility.mirror.targets import (
     DestinationRepository,
     ImageDigest,
@@ -49,7 +47,7 @@ class MirrorImageFieldSet(PublishFieldSet):
     def get_output_data(self) -> PublishOutputData:
         return PublishOutputData(
             {
-                "publisher": "skopeo",
+                "publisher": "crane",
                 **super().get_output_data(),
             }
         )
@@ -65,30 +63,29 @@ class OciMirrorProcessRequest:
 
 @rule(desc="Mirror OCI Image", level=LogLevel.DEBUG)
 async def oci_mirror_process(
-    request: OciMirrorProcessRequest, skopeo: SkopeoTool, platform: Platform
+    request: OciMirrorProcessRequest, crane: CraneTool, platform: Platform
 ) -> Process:
-    skopeo = await download_external_tool(skopeo.get_request(platform))
-    sandbox_input = await merge_digests(MergeDigests([skopeo.digest]))
+    crane = await download_external_tool(crane.get_request(platform))
     relevant_env = await environment_vars_subset(
-        EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]), **implicitly()
+        EnvironmentRequest(CraneTool.registry_env_vars), **implicitly()
     )
 
-    destination = f"docker://{request.destination}"
+    # Without a tag crane, like skopeo before it, pushes the mirror as `latest`.
+    destination = request.destination
     if request.tag:
         destination = f"{destination}:{request.tag}"
 
+    # crane copies the full manifest list and keeps the digest, so the mirror resolves
+    # `destination@sha256:<digest>` exactly like the source.
     argv = (
-        skopeo.exe,
-        # TODO[TSOL]: Should likely provide a way to inject a
-        # policy into this... Maybe dependency injector?
-        "--insecure-policy",
+        crane.exe,
         "copy",
-        f"docker://{request.source}@sha256:{request.digest}",
+        f"{request.source}@sha256:{request.digest}",
         destination,
     )
 
     return Process(
-        input_digest=sandbox_input,
+        input_digest=crane.digest,
         argv=argv,
         description=f"{request.destination}",
         output_files=tuple(),

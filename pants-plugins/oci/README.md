@@ -8,23 +8,33 @@ This release targets Pants **2.31.0**. Install it with
 > **Warning**
 > This plugin is in development. No stability is guaranteed! Contributions welcome.
 
-This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. To do this, this plugin uses three different tools:
+This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. To do this, this plugin uses four different tools:
 
 * [umoci](https://github.com/opencontainers/umoci) for manipulating OCI images
 * [runc](https://github.com/opencontainers/runc) for exeuction
-* [skopeo](https://github.com/containers/skopeo) for pulling and pushing images
+* [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
+* [skopeo](https://github.com/containers/skopeo) for exporting the packaged OCI layout
 
 ## Tool versions
 
-The defaults are umoci `v0.6.0`, Skopeo `v1.24.1`, and runc `v1.5.2`.
+The defaults are umoci `v0.6.0`, crane `v0.22.1`, Skopeo `v1.24.1`, and runc `v1.5.2`.
 umoci uses official Linux binaries and matching macOS builds from
 [tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary/releases/tag/v0.6.0).
 Skopeo binaries come from [lework/skopeo-binary](https://github.com/lework/skopeo-binary),
 since the Skopeo project does not publish standalone binaries. Both tools cover
 Linux/macOS on x86-64 and ARM64. runc is Linux-only, with `v1.4.3`, `v1.3.6`, and
-`v1.2.9` also recorded. Use `[umoci].version`, `[skopeo].version`, or `[runc].version`
+`v1.2.9` also recorded. crane uses the official go-containerregistry release archives.
+Use `[umoci].version`, `[crane].version`, `[skopeo].version`, or `[runc].version`
 to select another recorded version. Stable umoci now supports macOS without
 selecting the legacy pinned `nightly` version.
+
+Registry credentials are read the way crane reads them, from the first of these that
+exists: `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) with its credential
+helpers, then `$REGISTRY_AUTH_FILE`, then podman/skopeo's `containers/auth.json` under
+`$XDG_RUNTIME_DIR` or `$XDG_CONFIG_HOME` (`~/.config`). A docker config therefore hides a
+podman/skopeo login. Pulled images are fetched for
+the target's `os`/`architecture`, defaulting to `linux` and the host architecture, and
+Docker v2 manifests are converted to OCI.
 
 Kustomize injection publishes locally built image dependencies to their configured
 registry before inserting their image digest. An omitted registry tag defaults

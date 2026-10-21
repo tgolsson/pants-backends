@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `oci_deb_layer`, which builds a layer from `.deb` packages without running dpkg or
   maintainer scripts, recording each package in `/var/lib/dpkg/status.d/`.
 - Stop setting a layer target's entrypoint to a nested layer tarball.
+- Pull, publish and mirror images with crane instead of skopeo; skopeo is kept only for
+  exporting the packaged OCI layout. Credentials come from the docker config and its
+  credential helpers when one exists, and only otherwise from `REGISTRY_AUTH_FILE` or
+  podman/skopeo's `containers/auth.json`; a `podman login` alongside a docker config is no
+  longer used.
+- Pulled images are converted from Docker v2 to OCI in the rule; an omitted `os` now
+  defaults to `linux`.
+- `oci_mirror_image` now copies the whole manifest list and keeps the source digest,
+  instead of a single re-encoded platform image.
 
 ## 0.10.0 - 2026-10-17
 

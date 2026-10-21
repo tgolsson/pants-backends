@@ -97,7 +97,4 @@ def test_publish_with_repository_has_process(rule_runner) -> None:
     assert result[0].description.startswith("foobar:latest")
     artifact = built_package.artifacts[0]
     assert result[0].names == (artifact.sha,)
-    assert result[0].process.process.argv[-2:] == (
-        f"oci:{artifact.relpath}",
-        "docker://foobar:latest",
-    )
+    assert result[0].process.process.argv[1:] == ("push", artifact.relpath, "foobar:latest")

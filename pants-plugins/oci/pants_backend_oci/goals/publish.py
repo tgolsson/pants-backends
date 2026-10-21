@@ -21,7 +21,7 @@ from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import SkopeoTool
+from pants_backend_oci.subsystem import CraneTool
 from pants_backend_oci.target_types import ImageRepository, ImageTag
 
 
@@ -44,7 +44,7 @@ class PublishImageFieldSet(PublishFieldSet):
     def get_output_data(self) -> PublishOutputData:
         return PublishOutputData(
             {
-                "publisher": "skopeo",
+                "publisher": "crane",
                 **super().get_output_data(),
             }
         )
@@ -60,25 +60,22 @@ class OciPublishProcessRequest:
     directory: str
 
 
-@rule(desc="Convert OCI Image to Archive", level=LogLevel.DEBUG)
+@rule(desc="Push OCI Image", level=LogLevel.DEBUG)
 async def publish_oci_process(
-    request: OciPublishProcessRequest, skopeo: SkopeoTool, platform: Platform
+    request: OciPublishProcessRequest, crane: CraneTool, platform: Platform
 ) -> Process:
-    skopeo = await download_external_tool(skopeo.get_request(platform))
-    sandbox_input = await merge_digests(MergeDigests([skopeo.digest, request.input_digest]))
+    crane = await download_external_tool(crane.get_request(platform))
+    sandbox_input = await merge_digests(MergeDigests([crane.digest, request.input_digest]))
     relevant_env = await environment_vars_subset(
-        EnvironmentRequest(["HOME", "PATH", "XDG_RUNTIME_DIR"]), **implicitly()
+        EnvironmentRequest(CraneTool.registry_env_vars), **implicitly()
     )
     return Process(
         input_digest=sandbox_input,
         argv=(
-            skopeo.exe,
-            # TODO[TSOL]: Should likely provide a way to inject a
-            # policy into this... Maybe dependency injector?
-            "--insecure-policy",
-            "copy",
-            f"oci:{request.directory}",
-            f"docker://{request.repository}:{request.tag}",
+            crane.exe,
+            "push",
+            request.directory,
+            f"{request.repository}:{request.tag}",
         ),
         description=f"{request.repository}:{request.tag}",
         output_files=tuple(),
