@@ -11,3 +11,5 @@ This is the documentation for my Pants backend, which I use for my own projects 
 also building open-source software.
 
 Please see [the documentation](https://tgolsson.github.io/pants-backends/) for more information!
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for verifying changes and the Pants upgrade checklist.
