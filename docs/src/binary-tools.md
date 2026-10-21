@@ -1,18 +1,22 @@
 # Binary tool versions
 
-The plugin defaults and download metadata were refreshed on 2026-10-16. Each
-known-version entry pins both SHA-256 and byte size. Versions can be selected with
+The plugin defaults and download metadata were refreshed on 2026-10-16; crane
+was added on 2026-10-21. Each known-version entry pins both SHA-256 and byte size. Versions can be selected with
 the corresponding subsystem's `--version` option.
 
 | Tool | Default | Additional release lines covered |
 | --- | --- | --- |
 | kubectl | 1.37.1 | 1.36.5, 1.35.9, 1.34.12 |
 | Kustomize | 5.8.3 | 5.7.1, 5.0.3, 4.5.7 |
+| crane | 0.22.1 | Latest only |
 | Skopeo | 1.24.1 | Latest only |
 | runc | 1.5.2 | 1.4.3, 1.3.6, 1.2.9 |
 | mdBook | 0.5.4 | Latest 0.4 (0.4.52), plus existing historical entries |
 | Bitwarden CLI | 2026.10.0 | 2026.9.1, plus existing historical entries |
 | umoci | 0.6.0 | Existing pinned nightly and 0.4.7 entries |
+
+The OCI plugin uses crane to pull, publish, and mirror images. Skopeo is used
+only to export a packaged OCI image as an archive.
 
 ## Kubernetes and Kustomize
 
@@ -35,10 +39,12 @@ upstream maintenance of an older release line.
 
 ## Binary providers and platforms
 
-Kubernetes, Kustomize, runc, mdBook, and Bitwarden use official release artifacts.
-Skopeo's upstream project does not publish standalone release binaries, so its
-downloads use [lework/skopeo-binary](https://github.com/lework/skopeo-binary).
-Only the current Skopeo release is included; the old provider routing is removed.
+Kubernetes, Kustomize, crane, runc, mdBook, and Bitwarden use official release
+artifacts. crane comes from the
+[go-containerregistry release](https://github.com/google/go-containerregistry/releases)
+tarballs. Skopeo's upstream project does not publish standalone release binaries,
+so its downloads use [lework/skopeo-binary](https://github.com/lework/skopeo-binary).
+Only the current Skopeo release is included, for OCI archive export.
 
 umoci uses official Linux artifacts, including ARM64. macOS builds come from
 [tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary), built from the
