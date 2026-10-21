@@ -18,6 +18,10 @@
   description: A new feature or functionality
   color: A5D99C
 
+- name: "a: distroless"
+  description: Affects `pants_backend_distroless`
+  color: A80030
+
 - name: "a: k8s"
   description: Affects `pants_backend_k8s`
   color: 326ce5

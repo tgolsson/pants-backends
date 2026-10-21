@@ -1,0 +1,96 @@
+{
+  "architectures": {
+    "amd64": {
+      "packages": [
+        {
+          "architecture": "amd64",
+          "depends": [
+            "libjq1"
+          ],
+          "name": "jq",
+          "sha256": "d1833fdd7a1340b59c71c223178940044fc41a8c8e28861bc03ab258d791d303",
+          "size": 64932,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/jq_1.6-2.1_amd64.deb",
+          "version": "1.6-2.1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [
+            "libonig5"
+          ],
+          "name": "libjq1",
+          "sha256": "7dc22726010e660d294682018b0013badda93b6791049cff9edb303ddffbb35d",
+          "size": 134944,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/libjq1_1.6-2.1_amd64.deb",
+          "version": "1.6-2.1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [],
+          "name": "libonig5",
+          "sha256": "59ecfce6d88c7c4b09496ce182b3b8303e8e8477664e009b16ae83a09cd12be7",
+          "size": 187828,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_amd64.deb",
+          "version": "6.9.8-1"
+        }
+      ],
+      "roots": [
+        "jq"
+      ]
+    },
+    "arm64": {
+      "packages": [
+        {
+          "architecture": "arm64",
+          "depends": [
+            "libjq1"
+          ],
+          "name": "jq",
+          "sha256": "be06a56265a898f3047de90cb28ca589f0cf201b89b286530585f1bad92fc9e9",
+          "size": 64484,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/jq_1.6-2.1_arm64.deb",
+          "version": "1.6-2.1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [
+            "libonig5"
+          ],
+          "name": "libjq1",
+          "sha256": "f8f59e7479e5cabfc41cc7dacdb9e65396323ed014ffd7123f887fa72b156d7a",
+          "size": 120720,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/libjq1_1.6-2.1_arm64.deb",
+          "version": "1.6-2.1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [],
+          "name": "libonig5",
+          "sha256": "4693ac0f4fc8f2b8b4a7854463a8061a5b0fe7a7c2eb46b9cc21bc4c3adaf1ee",
+          "size": 179104,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_arm64.deb",
+          "version": "6.9.8-1"
+        }
+      ],
+      "roots": [
+        "jq"
+      ]
+    }
+  },
+  "inputs": {
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "exclude": [
+      "libc6"
+    ],
+    "packages": [
+      "jq"
+    ],
+    "sources": [
+      "https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main"
+    ]
+  },
+  "version": 1
+}

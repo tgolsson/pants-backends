@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   maintainer scripts, recording each package in `/var/lib/dpkg/status.d/`. Package contents
   are streamed, files shipped identically by several packages are accepted, and extended
   attributes are rejected.
+- `oci_deb_layer` includes the transitive closure of its `debs`, so it accepts the targets
+  `deb_packages` from `pants-backend-distroless` generates from a Debian lockfile. A `file`
+  target in `debs` that has its own `dependencies` now brings them into the layer too, and they
+  must be `.deb` files as well. Packages for more than one architecture are rejected.
 - Stop setting a layer target's entrypoint to a nested layer tarball.
 - Pull, publish and mirror images with crane instead of skopeo; skopeo is kept only for
   exporting the packaged OCI layout. Credentials come from the docker config and its

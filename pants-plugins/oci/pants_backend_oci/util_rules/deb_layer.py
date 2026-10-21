@@ -11,11 +11,16 @@ from pants.core.target_types import FileSourceField
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.fs import CreateDigest, FileContent, MergeDigests
-from pants.engine.internals.graph import resolve_targets
+from pants.engine.internals.graph import resolve_targets, transitive_targets
 from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
-from pants.engine.target import DependenciesRequest, InvalidFieldException, SourcesField
+from pants.engine.target import (
+    DependenciesRequest,
+    InvalidFieldException,
+    SourcesField,
+    TransitiveTargetsRequest,
+)
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
@@ -42,8 +47,17 @@ async def package_deb_layer(
     field_set: DebLayerPackageFieldSet,
     python: PythonBuildStandaloneBinary,
 ) -> BuiltPackage:
-    targets = await resolve_targets(**implicitly(DependenciesRequest(field_set.debs)))
-    not_files = [str(tgt.address) for tgt in targets if not tgt.has_field(FileSourceField)]
+    # The closure of `debs`, so a target that depends on the packages it needs (like those generated
+    # from a Debian lockfile) brings them along. Targets without sources only group others.
+    direct = await resolve_targets(**implicitly(DependenciesRequest(field_set.debs)))
+    closure = await transitive_targets(
+        TransitiveTargetsRequest([tgt.address for tgt in direct]), **implicitly()
+    )
+    not_files = [
+        str(tgt.address)
+        for tgt in closure.closure
+        if tgt.has_field(SourcesField) and not tgt.has_field(FileSourceField)
+    ]
     if not_files:
         raise InvalidFieldException(
             f"The `{DebLayerPackagesField.alias}` field of {field_set.address} must only contain "
@@ -52,7 +66,7 @@ async def package_deb_layer(
 
     sources = await determine_source_files(
         SourceFilesRequest(
-            sources_fields=[tgt.get(SourcesField) for tgt in targets],
+            sources_fields=[tgt[SourcesField] for tgt in closure.closure if tgt.has_field(SourcesField)],
             for_sources_types=(FileSourceField,),
             enable_codegen=True,
         )

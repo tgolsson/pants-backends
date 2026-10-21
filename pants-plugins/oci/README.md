@@ -224,14 +224,13 @@ oci_build_layer(
 
 Build a layer from Debian `.deb` packages without running `dpkg`, `apt` or any maintainer scripts. Package contents are extracted into the layer with zeroed timestamps, and each package is recorded in `/var/lib/dpkg/status.d/<package>` (plus `<package>.md5sums`), the same layout distroless images use, so scanners such as Trivy, Syft and Grype see the packages. Add it to an image through `layers`.
 
-Dependencies are not resolved: list every package the layer needs on top of the base image. Pin the packages to a [snapshot.debian.org](https://snapshot.debian.org) URL so the layer stays reproducible. Only Debian packages are supported for now; zstd-compressed packages (as used by Ubuntu) are rejected. A path shipped by more than one package must be identical in each (type, mode, ownership and content or link target), as `dpkg` requires; directories keep the metadata of the first package by name. Hardlinked files are compared by name, so two packages that ship the same hardlink pair but store it the other way around (which name is the file and which is the link) are rejected. Files with extended attributes (such as file capabilities) are rejected, since the layer can't carry them.
+The layer gets the transitive closure of the `debs` targets. To have apt dependencies resolved, use `deb_packages` from [`pants-backend-distroless`](https://pypi.org/project/pants-backend-distroless), which locks a package set against a snapshot and generates targets that depend on the packages they need. Otherwise list every package the layer needs on top of the base image as `file` targets, pinned to a [snapshot.debian.org](https://snapshot.debian.org) URL so the layer stays reproducible. Only Debian packages are supported for now; zstd-compressed packages (as used by Ubuntu) are rejected. A path shipped by more than one package must be identical in each (type, mode, ownership and content or link target), as `dpkg` requires; directories keep the metadata of the first package by name. Hardlinked files are compared by name, so two packages that ship the same hardlink pair but store it the other way around (which name is the file and which is the link) are rejected. Files with extended attributes (such as file capabilities) are rejected, since the layer can't carry them. Packages for more than one architecture are rejected; `Architecture: all` packages go with any.
 
 Things to be aware of:
 
 * No maintainer scripts run, so nothing a `postinst` would do happens: no `ldconfig`, no `update-alternatives` links, no triggers, and no generated files such as `/etc/ssl/certs/ca-certificates.crt`.
 * `dpkg` and `apt` inside the image read `/var/lib/dpkg/status`, not `status.d`, so they don't see these packages. A package that is also in the base image is reported twice by scanners.
 * `merged_usr` defaults to `True`, which is right for Debian 12 (bookworm) and later. Set it to `False` for older bases where `/bin` and `/lib` are real directories.
-* Two packages may not ship the same file.
 
 ``` python
 file(
@@ -260,7 +259,7 @@ oci_image_build(
 | Argument      | Meaning                                                                                              | Default value                                          |
 |---------------|------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
 | `name`        | The target name                                                                                      | Same as any other target, which is the directory name  |
-| `debs`        | The `.deb` files to extract, usually `file` targets with an `http_source`.                           | Required                                               |
+| `debs`        | The `.deb` files to extract, with their dependencies: `deb_packages` targets or `file` targets.      | Required                                               |
 | `merged_usr`  | Write contents of `/bin`, `/sbin` and `/lib*` under `/usr`, for bases where those are symlinks.      | `True`                                                 |
 | `decsription` | A description of the target                                                                          |                                                        |
 | `output_path` | The output path during `pants package`                                                               | A variant generated from the target name and directory |

@@ -28,7 +28,7 @@ below use `X` for the new Pants version.
 6. Refresh pinned binary tools: update `default_version` and `default_known_versions` (SHA-256 and byte size) in each
    plugin's `subsystem.py`, update the table and refresh date in `docs/src/binary-tools.md`, and note new defaults in
    the CHANGELOG entries below.
-7. For each released plugin — bitwarden, k8s, kustomize, mdbook, oci, secrets (odin is unreleased, `skip_twine=True`;
+7. For each released plugin — bitwarden, distroless, k8s, kustomize, mdbook, oci, secrets (odin is unreleased, `skip_twine=True`;
    don't bump it):
    - bump `version` in `pants-plugins/<name>/pyproject.toml` to the new plugin version `V`;
    - bump `python_artifact(version=...)` in `pants-plugins/<name>/BUILD` to `V`;
@@ -40,4 +40,4 @@ below use `X` for the new Pants version.
      kustomize → `pants_backend_k8s` and oci → `pants-backend-kustomize`.
 8. Verify as described above, and check CI is green.
 9. Publish by hand, e.g. `pants publish pants-plugins/secrets:package`; the PyPI token is read from Bitwarden. Publish in
-   dependency order: secrets, bitwarden; k8s, kustomize, oci; mdbook at any point.
+   dependency order: secrets, bitwarden; k8s, kustomize, oci; distroless and mdbook at any point.

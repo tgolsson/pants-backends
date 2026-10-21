@@ -6,7 +6,7 @@ import tarfile
 import pytest
 from pants.core.goals import package as package_goal
 from pants.core.goals.package import BuiltPackage
-from pants.core.target_types import FileTarget, ResourceTarget
+from pants.core.target_types import FileTarget, GenericTarget, ResourceTarget
 from pants.core.target_types import rules as core_target_type_rules
 from pants.core.util_rules import adhoc_binaries, source_files
 from pants.engine.addresses import Address
@@ -21,7 +21,7 @@ from pants_backend_oci.util_rules.deb_layer_builder_test import BAR, FOO, _dir, 
 @pytest.fixture
 def rule_runner() -> RuleRunner:
     return RuleRunner(
-        target_types=[DebLayer, FileTarget, ResourceTarget],
+        target_types=[DebLayer, FileTarget, GenericTarget, ResourceTarget],
         rules=[
             *archive.rules(),
             *deb_layer.rules(),
@@ -69,6 +69,58 @@ oci_deb_layer(name="layer", debs=[":foo", ":bar"])
     assert "usr/lib/libbar.so.1.0" in names
     assert "var/lib/dpkg/status.d/foo" in names
     assert "var/lib/dpkg/status.d/bar" in names
+
+
+def test_includes_the_transitive_closure(rule_runner: RuleRunner) -> None:
+    # Like the targets generated from a Debian lockfile: packages depend on the packages they need,
+    # and a sourceless target groups them.
+    rule_runner.write_files(
+        {
+            "debs/foo_1.0-1_amd64.deb": FOO,
+            "debs/bar_1.0-1_amd64.deb": BAR,
+            "debs/BUILD": """
+file(name="bar", source="bar_1.0-1_amd64.deb")
+file(name="foo", source="foo_1.0-1_amd64.deb", dependencies=[":bar"])
+target(name="group", dependencies=[":foo"])
+oci_deb_layer(name="layer", debs=[":group"])
+""",
+        }
+    )
+
+    names = layer_names(rule_runner, package(rule_runner, "layer"))
+    assert "var/lib/dpkg/status.d/foo" in names
+    assert "var/lib/dpkg/status.d/bar" in names
+
+
+def test_rejects_non_file_targets_in_closure(rule_runner: RuleRunner) -> None:
+    rule_runner.write_files(
+        {
+            "debs/foo_1.0-1_amd64.deb": FOO,
+            "debs/bar_1.0-1_amd64.deb": BAR,
+            "debs/BUILD": """
+resource(name="bar", source="bar_1.0-1_amd64.deb")
+file(name="foo", source="foo_1.0-1_amd64.deb", dependencies=[":bar"])
+oci_deb_layer(name="layer", debs=[":foo"])
+""",
+        }
+    )
+
+    with engine_error(contains="must only contain `file` targets, got: debs:bar"):
+        package(rule_runner, "layer")
+
+
+def test_rejects_closure_without_debs(rule_runner: RuleRunner) -> None:
+    rule_runner.write_files(
+        {
+            "debs/BUILD": """
+target(name="empty")
+oci_deb_layer(name="layer", debs=[":empty"])
+""",
+        }
+    )
+
+    with engine_error(contains="must only contain `.deb` files, got: nothing"):
+        package(rule_runner, "layer")
 
 
 def test_rejects_non_deb_files(rule_runner: RuleRunner) -> None:

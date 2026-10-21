@@ -10,6 +10,7 @@ pythonpath = [
    "%(buildroot)s/pants-plugins/bitwarden",
    "%(buildroot)s/pants-plugins/secrets",
    "%(buildroot)s/pants-plugins/odin",
+   "%(buildroot)s/pants-plugins/distroless",
 ]
 
 backend_packages = [
@@ -25,6 +26,7 @@ backend_packages = [
   "pants_backend_k8s",
   "pants_backend_oci",
   "pants_backend_oci.utility.mirror",
+  "pants_backend_distroless",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
 
@@ -49,6 +51,9 @@ root_patterns = [
   '/examples/oci',
 ]
 marker_filenames = ["pyproject.toml"]
+
+[apt.resolves]
+bookworm = "examples/oci/debian/bookworm.lock.json"
 
 [anonymous-telemetry]
 enabled = true

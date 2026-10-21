@@ -72,6 +72,7 @@ def make_deb(
     data: list[tarfile.TarInfo | tuple[str, bytes]],
     *,
     extra_control: str = "",
+    architecture: str = "amd64",
     md5sums: bytes | None = b"",
     data_member: str = "data.tar.xz",
     mtime: int = 1700000000,
@@ -79,7 +80,7 @@ def make_deb(
     mangle: Callable[[bytes], bytes] | None = None,
 ) -> bytes:
     control = (
-        f"Package: {package}\nVersion: 1.0-1\nArchitecture: amd64\n{extra_control}"
+        f"Package: {package}\nVersion: 1.0-1\nArchitecture: {architecture}\n{extra_control}"
         f"Description: test package\n long description\n .\n more\n"
     ).encode()
     control_entries: list[tarfile.TarInfo | tuple[str, bytes]] = [_dir("./"), ("./control", control)]
@@ -245,6 +246,15 @@ def test_layer_rejects_file_conflicts() -> None:
 def test_layer_rejects_duplicate_packages() -> None:
     with pytest.raises(DebError, match="package foo given twice"):
         layer_bytes([load(FOO, "a.deb"), load(FOO, "b.deb")])
+
+
+def test_layer_rejects_mixed_architectures() -> None:
+    arm = make_deb("bar", [], architecture="arm64")
+    with pytest.raises(DebError, match="more than one architecture: amd64: foo; arm64: bar"):
+        layer_bytes([load(FOO, "a.deb"), load(arm, "b.deb")])
+
+    # Architecture-independent packages go with any architecture.
+    layer_bytes([load(FOO, "a.deb"), load(make_deb("doc", [], architecture="all"), "b.deb")])
 
 
 def test_read_ar_rejects_truncated_members() -> None:

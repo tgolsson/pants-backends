@@ -383,6 +383,18 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
     """
     seen: dict[str, _Entry] = {}
     by_name: dict[str, DebPackage] = {}
+    architectures: dict[str, list[str]] = {}
+    for package in packages:
+        architecture = dict(parse_control(package.control)).get("Architecture", "all")
+        if architecture != "all":
+            architectures.setdefault(architecture, []).append(package.name)
+    if len(architectures) > 1:
+        raise DebError(
+            "packages for more than one architecture: "
+            + "; ".join(
+                f"{arch}: {', '.join(sorted(names))}" for arch, names in sorted(architectures.items())
+            )
+        )
     for package in packages:
         if package.name in by_name:
             raise DebError(

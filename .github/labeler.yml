@@ -45,6 +45,12 @@
       - 'pants-plugins/oci/*'
       - 'pants-plugins/oci/**/*'
 
+"a: distroless":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pants-plugins/distroless/*'
+      - 'pants-plugins/distroless/**/*'
+
 "a: mdbook":
   - changed-files:
     - any-glob-to-any-file:

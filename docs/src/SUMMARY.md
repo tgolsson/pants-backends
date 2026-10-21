@@ -23,6 +23,11 @@
 - [Changelog](./oci-changelog.md)
 - [Mirroring backend](./oci-mirror.md)
 
+# Distroless
+
+- [Introduction](distroless-readme.md)
+- [Changelog](./distroless-changelog.md)
+
 # MdBook
 
 - [Introduction](mdbook-readme.md)
