@@ -142,6 +142,33 @@ class SkopeoTool(ExternalTool):
         return f"./skopeo-{plat_str}"
 
 
+class CraneTool(ExternalTool):
+    options_scope = "crane"
+    help = "Crane is used for interacting with remote OCI registries."
+
+    default_version = "v0.22.1"
+    default_known_versions = [
+        "v0.22.1|linux_x86_64|0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0|16496784",
+        "v0.22.1|linux_arm64|898c0cff975f898a33e8c4580bdafb0e7c02c7faa33374e946762f97c4ab7110|14831376",
+        "v0.22.1|macos_x86_64|6fedd06a648c11335f0e8b9547e4783002c30e9336047fec292942cd518bb799|16785187",
+        "v0.22.1|macos_arm64|2231fc8df8806d20d680ff1225db44e095a55dd6ac1ae8eced4faf4b278b78fb|15441389",
+    ]
+
+    def generate_url(self, plat: Platform) -> str:
+        platform_mapping = {
+            "linux_arm64": "Linux_arm64",
+            "linux_x86_64": "Linux_x86_64",
+            "macos_arm64": "Darwin_arm64",
+            "macos_x86_64": "Darwin_x86_64",
+        }
+        plat_str = platform_mapping[plat.value]
+        base = "https://github.com/google/go-containerregistry/releases/download"
+        return f"{base}/{self.version}/go-containerregistry_{plat_str}.tar.gz"
+
+    def generate_exe(self, _: Platform) -> str:
+        return "./crane"
+
+
 class RuncTool(ExternalTool):
     options_scope = "runc"
     help = "Tool for executing OCI containers."
@@ -178,6 +205,7 @@ class RuncTool(ExternalTool):
 def rules():
     return [
         *SkopeoTool.rules(),
+        *CraneTool.rules(),
         *RuncTool.rules(),
         *UmociTool.rules(),
         *OciSubsystem.rules(),
