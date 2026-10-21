@@ -224,7 +224,7 @@ oci_build_layer(
 
 Build a layer from Debian `.deb` packages without running `dpkg`, `apt` or any maintainer scripts. Package contents are extracted into the layer with zeroed timestamps, and each package is recorded in `/var/lib/dpkg/status.d/<package>` (plus `<package>.md5sums`), the same layout distroless images use, so scanners such as Trivy, Syft and Grype see the packages. Add it to an image through `layers`.
 
-Dependencies are not resolved: list every package the layer needs on top of the base image. Pin the packages to a [snapshot.debian.org](https://snapshot.debian.org) URL so the layer stays reproducible. Only Debian packages are supported for now; zstd-compressed packages (as used by Ubuntu) are rejected.
+Dependencies are not resolved: list every package the layer needs on top of the base image. Pin the packages to a [snapshot.debian.org](https://snapshot.debian.org) URL so the layer stays reproducible. Only Debian packages are supported for now; zstd-compressed packages (as used by Ubuntu) are rejected. A path shipped by more than one package must be identical in each (type, mode, ownership and content or link target), as `dpkg` requires; directories keep the metadata of the first package by name. Hardlinked files are compared by name, so two packages that ship the same hardlink pair but store it the other way around (which name is the file and which is the link) are rejected. Files with extended attributes (such as file capabilities) are rejected, since the layer can't carry them.
 
 Things to be aware of:
 

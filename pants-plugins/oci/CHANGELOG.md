@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - Add `oci_deb_layer`, which builds a layer from `.deb` packages without running dpkg or
-  maintainer scripts, recording each package in `/var/lib/dpkg/status.d/`.
+  maintainer scripts, recording each package in `/var/lib/dpkg/status.d/`. Package contents
+  are streamed, files shipped identically by several packages are accepted, and extended
+  attributes are rejected.
 - Stop setting a layer target's entrypoint to a nested layer tarball.
 - Pull, publish and mirror images with crane instead of skopeo; skopeo is kept only for
   exporting the packaged OCI layout. Credentials come from the docker config and its

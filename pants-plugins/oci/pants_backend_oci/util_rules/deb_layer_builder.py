@@ -8,6 +8,10 @@ The package contents (`data.tar.*`) are copied into the layer, and each package 
 distroless images, which is what scanners such as Trivy, Syft and Grype read. Maintainer scripts are
 never executed.
 
+Package contents are streamed from the deb into the layer, so memory use doesn't grow with package
+size. A path shipped by more than one package is accepted when every copy is identical, as dpkg does
+for multi-arch packages.
+
 This module only uses the standard library: the `oci_deb_layer` rules copy it into the sandbox and
 call `main`, and tests import it directly.
 """
@@ -16,7 +20,9 @@ from __future__ import annotations
 
 import argparse
 import bz2
+import contextlib
 import gzip
+import hashlib
 import io
 import lzma
 import os
@@ -24,7 +30,10 @@ import posixpath
 import re
 import sys
 import tarfile
+import zlib
 from dataclasses import dataclass, field
+from dataclasses import fields as dataclass_fields
+from typing import BinaryIO, Callable
 
 STATUS_DIR = "var/lib/dpkg/status.d"
 
@@ -35,6 +44,9 @@ MERGED_USR_DIRS = ("bin", "sbin", "lib", "lib32", "lib64", "libx32")
 # Debian policy 5.6.1: package names are lowercase alphanumerics plus `+`, `-` and `.`.
 PACKAGE_NAME = re.compile(r"[a-z0-9][a-z0-9+.-]+")
 
+# PAX header prefixes carrying extended attributes and ACLs, which a GNU-format layer can't hold.
+XATTR_HEADERS = ("SCHILY.xattr.", "LIBARCHIVE.xattr.", "SCHILY.acl.", "RHT.security.")
+
 
 class DebError(Exception):
     pass
@@ -42,22 +54,30 @@ class DebError(Exception):
 
 @dataclass(frozen=True)
 class DebPackage:
+    """A deb's metadata, plus where its `data.tar.*` member sits in the still-open deb file."""
+
     name: str
     control: bytes
     md5sums: bytes | None
-    data: bytes = field(repr=False)
+    fileobj: BinaryIO = field(repr=False)
+    data_member: str
+    data_offset: int
+    data_size: int
     source: str = ""
 
 
-def read_ar(content: bytes) -> dict[str, bytes]:
-    """Read the members of an `ar` archive, as used by the `.deb` format."""
-    if not content.startswith(b"!<arch>\n"):
+def read_ar(f: BinaryIO) -> dict[str, tuple[int, int]]:
+    """Index the members of an `ar` archive, as used by the `.deb` format, by (offset, size)."""
+    f.seek(0)
+    if f.read(8) != b"!<arch>\n":
         raise DebError("not an ar archive")
 
+    end = f.seek(0, os.SEEK_END)
     members = {}
     offset = 8
-    while offset < len(content):
-        header = content[offset : offset + 60]
+    while offset < end:
+        f.seek(offset)
+        header = f.read(60)
         if len(header) < 60 or header[58:60] != b"`\n":
             raise DebError(f"malformed ar header at offset {offset}")
 
@@ -67,32 +87,81 @@ def read_ar(content: bytes) -> dict[str, bytes]:
         except ValueError:
             raise DebError(f"malformed ar member size at offset {offset}") from None
         start = offset + 60
-        if start + size > len(content):
+        if start + size > end:
             raise DebError(f"ar member {name} is truncated")
-        members[name] = content[start : start + size]
+        members[name] = (start, size)
         offset = start + size + (size % 2)
 
     return members
 
 
-def _decompress(name: str, payload: bytes) -> bytes:
+class _Slice(io.RawIOBase):
+    """A read-only view of `size` bytes at `offset` in a seekable file."""
+
+    def __init__(self, f: BinaryIO, offset: int, size: int) -> None:
+        self._f = f
+        self._pos = offset
+        self._end = offset + size
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        n = min(len(buffer), self._end - self._pos)
+        if n <= 0:
+            return 0
+        self._f.seek(self._pos)
+        data = self._f.read(n)
+        buffer[: len(data)] = data
+        self._pos += len(data)
+        return len(data)
+
+
+class _HashingReader:
+    """Passes reads through, hashing the bytes on the way."""
+
+    def __init__(self, f: BinaryIO) -> None:
+        self._f = f
+        self.sha256 = hashlib.sha256()
+
+    def read(self, size: int = -1) -> bytes:
+        data = self._f.read(size)
+        self.sha256.update(data)
+        return data
+
+
+class _CheckedReader:
+    """Turns decompression errors into a `DebError` naming what was being read."""
+
+    def __init__(self, f: BinaryIO, what: str) -> None:
+        self._f = f
+        self._what = what
+
+    def read(self, size: int = -1) -> bytes:
+        try:
+            return self._f.read(size)
+        except (OSError, EOFError, lzma.LZMAError, zlib.error) as e:
+            raise DebError(f"{self._what} is corrupt: {e}") from e
+
+
+def _decompressor(name: str) -> Callable[[BinaryIO], BinaryIO]:
     if name.endswith(".tar"):
-        return payload
+        return lambda f: f
     if name.endswith(".tar.gz"):
-        return gzip.decompress(payload)
+        return lambda f: gzip.GzipFile(fileobj=f, mode="rb")
     if name.endswith(".tar.xz"):
-        return lzma.decompress(payload)
+        return lzma.LZMAFile
     if name.endswith(".tar.bz2"):
-        return bz2.decompress(payload)
+        return bz2.BZ2File
     if name.endswith(".tar.zst"):
         raise DebError(f"{name}: zstd-compressed members are not supported yet")
     raise DebError(f"{name}: unknown compression")
 
 
-def _find_member(members: dict[str, bytes], prefix: str) -> tuple[str, bytes]:
-    for name, payload in members.items():
+def _find_member(members: dict[str, tuple[int, int]], prefix: str) -> tuple[str, tuple[int, int]]:
+    for name, location in members.items():
         if name.startswith(prefix):
-            return name, payload
+            return name, location
     raise DebError(f"missing {prefix}* member")
 
 
@@ -134,19 +203,28 @@ def parse_control(control: bytes) -> list[tuple[str, str]]:
     return fields
 
 
-def load_deb(content: bytes, source: str = "") -> DebPackage:
+def load_deb(f: BinaryIO, source: str = "") -> DebPackage:
+    """Read a deb's control metadata. `f` must stay open until the package is written to a layer."""
     try:
-        members = read_ar(content)
+        members = read_ar(f)
     except DebError as e:
         raise DebError(f"{source}: {e}") from e
 
-    if members.get("debian-binary", b"").strip() != b"2.0":
+    def read(location: tuple[int, int]) -> bytes:
+        offset, size = location
+        f.seek(offset)
+        return f.read(size)
+
+    if "debian-binary" not in members or read(members["debian-binary"]).strip() != b"2.0":
         raise DebError(f"{source}: unsupported deb format")
 
-    control_name, control_payload = _find_member(members, "control.tar")
-    data_name, data_payload = _find_member(members, "data.tar")
+    control_name, control_location = _find_member(members, "control.tar")
+    data_name, (data_offset, data_size) = _find_member(members, "data.tar")
+    # Fail on unsupported compression now rather than halfway through writing the layer.
+    _decompressor(data_name)
 
-    with tarfile.open(fileobj=io.BytesIO(_decompress(control_name, control_payload))) as tar:
+    control_tar = _decompressor(control_name)(io.BytesIO(read(control_location)))
+    with tarfile.open(fileobj=control_tar) as tar:
         control = _read_tar_file(tar, "control")
         md5sums = _read_tar_file(tar, "md5sums")
 
@@ -163,7 +241,10 @@ def load_deb(content: bytes, source: str = "") -> DebPackage:
         name=fields["Package"],
         control=control,
         md5sums=md5sums,
-        data=_decompress(data_name, data_payload),
+        fileobj=f,
+        data_member=data_name,
+        data_offset=data_offset,
+        data_size=data_size,
         source=source,
     )
 
@@ -238,6 +319,53 @@ def _directory(name: str) -> tarfile.TarInfo:
     return info
 
 
+@dataclass(frozen=True)
+class _Entry:
+    """What was written to the layer at a path, to compare against later packages shipping it."""
+
+    owner: str
+    type: bytes
+    mode: int
+    uid: int
+    gid: int
+    uname: str
+    gname: str
+    linkname: str
+    devmajor: int
+    devminor: int
+    sha256: str | None
+
+    @classmethod
+    def of(cls, info: tarfile.TarInfo, owner: str, sha256: str | None) -> _Entry:
+        return cls(
+            owner=owner,
+            type=info.type,
+            mode=info.mode,
+            uid=info.uid,
+            gid=info.gid,
+            uname=info.uname,
+            gname=info.gname,
+            linkname=info.linkname,
+            devmajor=info.devmajor,
+            devminor=info.devminor,
+            sha256=sha256,
+        )
+
+    def differences(self, other: _Entry) -> list[str]:
+        return [
+            "content" if f.name == "sha256" else f.name
+            for f in dataclass_fields(self)
+            if f.name != "owner" and getattr(self, f.name) != getattr(other, f.name)
+        ]
+
+
+def _sha256(f: BinaryIO) -> str:
+    digest = hashlib.sha256()
+    while chunk := f.read(1 << 16):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _regular_file(name: str, content: bytes) -> tarfile.TarInfo:
     info = tarfile.TarInfo(name)
     info.size = len(content)
@@ -251,9 +379,9 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
 
     Packages are written in name order and members in their original archive order, so hardlinks
     always follow their targets. Timestamps are zeroed; ownership and modes are kept from the deb.
+    Each package's `data.tar` is streamed straight from its deb file.
     """
-    # Path -> (owning package, whether it is a directory).
-    seen: dict[str, tuple[str, bool]] = {}
+    seen: dict[str, _Entry] = {}
     by_name: dict[str, DebPackage] = {}
     for package in packages:
         if package.name in by_name:
@@ -264,51 +392,78 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
 
     with tarfile.open(fileobj=out, mode="w", format=tarfile.GNU_FORMAT) as layer:
 
-        def add(info: tarfile.TarInfo, owner: str, content: bytes | None = None) -> None:
+        def add(info: tarfile.TarInfo, owner: str, content: BinaryIO | None = None) -> None:
             info.mtime = 0
-            if info.name in seen:
-                previous, previous_is_dir = seen[info.name]
+            previous = seen.get(info.name)
+            if previous is not None:
                 # Shared directories keep the metadata of the first package, in name order.
-                if info.isdir() and previous_is_dir:
+                if info.isdir() and previous.type == tarfile.DIRTYPE:
                     return
-                raise DebError(f"{info.name} is provided by both {previous} and {owner}")
+                # Other shared paths must be identical in every package, as dpkg requires.
+                entry = _Entry.of(info, owner, _sha256(content) if content is not None else None)
+                differences = previous.differences(entry)
+                if differences:
+                    raise DebError(
+                        f"{info.name} is provided by both {previous.owner} and {owner} "
+                        f"({', '.join(differences)} differ)"
+                    )
+                return
             if info.islnk():
                 target = seen.get(info.linkname)
-                if target is None or target[1]:
+                if target is None or target.type == tarfile.DIRTYPE:
                     raise DebError(
                         f"{info.name} in {owner} is a hardlink to {info.linkname}, which is not a "
                         "file earlier in the layer"
                     )
-            seen[info.name] = (owner, info.isdir())
-            layer.addfile(info, io.BytesIO(content) if content is not None else None)
+            hashing = _HashingReader(content) if content is not None else None
+            layer.addfile(info, hashing)
+            seen[info.name] = _Entry.of(info, owner, hashing.sha256.hexdigest() if hashing else None)
 
         for name in sorted(by_name):
             package = by_name[name]
-            with tarfile.open(fileobj=io.BytesIO(package.data)) as data:
-                for member in data:
-                    original = _clean(member.name)
-                    path = _merge_usr(original, merged_usr)
-                    if not path:
-                        continue
+            what = f"{package.source or name}: {package.data_member}"
+            raw = io.BufferedReader(_Slice(package.fileobj, package.data_offset, package.data_size))
+            with _decompressor(package.data_member)(raw) as decompressed:
+                stream = _CheckedReader(decompressed, what)
+                try:
+                    with tarfile.open(fileobj=stream, mode="r|") as data:
+                        for member in data:
+                            original = _clean(member.name)
+                            path = _merge_usr(original, merged_usr)
+                            if not path:
+                                continue
 
-                    info = tarfile.TarInfo(path)
-                    info.type = member.type
-                    info.mode = member.mode
-                    info.uid, info.gid = member.uid, member.gid
-                    info.uname, info.gname = member.uname, member.gname
-                    info.devmajor, info.devminor = member.devmajor, member.devminor
-                    if member.islnk():
-                        info.linkname = _normalize(member.linkname, merged_usr)
-                    elif member.issym():
-                        info.linkname = _symlink_target(original, member.linkname, merged_usr)
+                            xattrs = sorted(k for k in member.pax_headers if k.startswith(XATTR_HEADERS))
+                            if xattrs:
+                                raise DebError(
+                                    f"{path} in {name} has extended attributes ({', '.join(xattrs)}), "
+                                    "which deb layers do not support"
+                                )
 
-                    content = None
-                    if member.isreg():
-                        extracted = data.extractfile(member)
-                        content = extracted.read() if extracted else b""
-                        info.size = len(content)
+                            info = tarfile.TarInfo(path)
+                            info.type = member.type
+                            info.mode = member.mode
+                            info.uid, info.gid = member.uid, member.gid
+                            info.uname, info.gname = member.uname, member.gname
+                            info.devmajor, info.devminor = member.devmajor, member.devminor
+                            if member.islnk():
+                                info.linkname = _normalize(member.linkname, merged_usr)
+                            elif member.issym():
+                                info.linkname = _symlink_target(original, member.linkname, merged_usr)
 
-                    add(info, name, content)
+                            content = None
+                            if member.isreg():
+                                content = data.extractfile(member)
+                                info.size = member.size
+
+                            add(info, name, content)
+
+                    # Stream mode stops at the end-of-archive blocks; read on so the decompressor
+                    # reaches and verifies the stream's checksum and trailer.
+                    while stream.read(1 << 16):
+                        pass
+                except tarfile.TarError as e:
+                    raise DebError(f"{what} is corrupt: {e}") from e
 
         parts = STATUS_DIR.split("/")
         for depth in range(1, len(parts) + 1):
@@ -317,10 +472,10 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
         for name in sorted(by_name):
             package = by_name[name]
             entry = status_entry(package.control)
-            add(_regular_file(f"{STATUS_DIR}/{name}", entry), name, entry)
+            add(_regular_file(f"{STATUS_DIR}/{name}", entry), name, io.BytesIO(entry))
             if package.md5sums is not None:
                 md5sums = _rewrite_md5sums(package.md5sums, merged_usr)
-                add(_regular_file(f"{STATUS_DIR}/{name}.md5sums", md5sums), name, md5sums)
+                add(_regular_file(f"{STATUS_DIR}/{name}.md5sums", md5sums), name, io.BytesIO(md5sums))
 
 
 def main(argv: list[str]) -> int:
@@ -332,13 +487,10 @@ def main(argv: list[str]) -> int:
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     try:
-        packages = []
-        for path in args.debs:
-            with open(path, "rb") as f:
-                packages.append(load_deb(f.read(), source=path))
-
-        with open(args.output, "wb") as out:
-            build_layer(packages, out, merged_usr=args.merged_usr)
+        with contextlib.ExitStack() as stack:
+            packages = [load_deb(stack.enter_context(open(path, "rb")), source=path) for path in args.debs]
+            with open(args.output, "wb") as out:
+                build_layer(packages, out, merged_usr=args.merged_usr)
     except DebError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
