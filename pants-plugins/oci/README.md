@@ -38,13 +38,14 @@ to `latest`.
 
 ## Targets
 
-There's six targets currently implemented, of which five are generic:
+There's seven targets currently implemented, of which six are generic:
 
 * `oci_pull_image`
 * `oci_pull_images`
 * `oci_image_build`
 * `oci_image_empty`
 * `oci_build_layer`
+* `oci_deb_layer`
 
 And one with some special language semantics:
 
@@ -208,3 +209,49 @@ oci_build_layer(
 | `decsription` | A description of the target                                                    |                                                        |
 | `output_path` | The output path during `pants package`                                         | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                                   | `[]`                                                   |
+
+### `oci_deb_layer`
+
+Build a layer from Debian `.deb` packages without running `dpkg`, `apt` or any maintainer scripts. Package contents are extracted into the layer with zeroed timestamps, and each package is recorded in `/var/lib/dpkg/status.d/<package>` (plus `<package>.md5sums`), the same layout distroless images use, so scanners such as Trivy, Syft and Grype see the packages. Add it to an image through `layers`.
+
+Dependencies are not resolved: list every package the layer needs on top of the base image. Pin the packages to a [snapshot.debian.org](https://snapshot.debian.org) URL so the layer stays reproducible. Only Debian packages are supported for now; zstd-compressed packages (as used by Ubuntu) are rejected.
+
+Things to be aware of:
+
+* No maintainer scripts run, so nothing a `postinst` would do happens: no `ldconfig`, no `update-alternatives` links, no triggers, and no generated files such as `/etc/ssl/certs/ca-certificates.crt`.
+* `dpkg` and `apt` inside the image read `/var/lib/dpkg/status`, not `status.d`, so they don't see these packages. A package that is also in the base image is reported twice by scanners.
+* `merged_usr` defaults to `True`, which is right for Debian 12 (bookworm) and later. Set it to `False` for older bases where `/bin` and `/lib` are real directories.
+* Two packages may not ship the same file.
+
+``` python
+file(
+    name="jq_deb",
+    source=http_source(
+        url="https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/jq_1.6-2.1_amd64.deb",
+        sha256="d1833fdd7a1340b59c71c223178940044fc41a8c8e28861bc03ab258d791d303",
+        len=64932,
+        filename="jq_1.6-2.1_amd64.deb",
+    ),
+)
+
+oci_deb_layer(
+    name="jq",
+    debs=[":jq_deb", ":libjq1_deb", ":libonig5_deb"],
+)
+
+oci_image_build(
+    name="image",
+    base=[":debian#bookworm-20241016-slim"],
+    layers=[":jq"],
+    entrypoint="/usr/bin/jq",
+)
+```
+
+| Argument      | Meaning                                                                                              | Default value                                          |
+|---------------|------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| `name`        | The target name                                                                                      | Same as any other target, which is the directory name  |
+| `debs`        | The `.deb` files to extract, usually `file` targets with an `http_source`.                           | Required                                               |
+| `merged_usr`  | Write contents of `/bin`, `/sbin` and `/lib*` under `/usr`, for bases where those are symlinks.      | `True`                                                 |
+| `decsription` | A description of the target                                                                          |                                                        |
+| `output_path` | The output path during `pants package`                                                               | A variant generated from the target name and directory |
+| `tags`        | List of tags                                                                                         | `[]`                                                   |

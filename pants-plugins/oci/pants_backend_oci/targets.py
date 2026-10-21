@@ -12,6 +12,8 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    DebLayerMergedUsrField,
+    DebLayerPackagesField,
     ImageArchitectureField,
     ImageArgs,
     ImageArtifactExclusions,
@@ -172,6 +174,22 @@ class ImageLayer(Target):
     help = "A layer that can be inserted directly into an imgae"
 
 
+class DebLayer(Target):
+    alias = "oci_deb_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        DebLayerPackagesField,
+        DebLayerMergedUsrField,
+        OutputPathField,
+    )
+    help = softwrap("""
+        A layer built from `.deb` packages without running dpkg, apt or maintainer scripts.
+
+        Package contents are extracted as-is and each package is recorded in
+        `/var/lib/dpkg/status.d/`, like distroless images, so image scanners can see it.
+        """)
+
+
 def targets():
     return [
         PullImage,
@@ -181,6 +199,7 @@ def targets():
         ImageEmpty,
         ImageLayer,
         ImageExtractStep,
+        DebLayer,
     ]
 
 

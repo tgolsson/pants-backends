@@ -22,6 +22,7 @@ from pants.engine.target import (
     Target,
 )
 
+from pants_backend_oci.target_types import DebLayerPackagesField
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar, create_archive
 
 
@@ -51,7 +52,8 @@ class ImageLayer:
 
 @rule
 async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
-    if request.old_style:
+    if request.old_style or request.target.has_field(DebLayerPackagesField):
+        # A deb layer packages into a layer itself; its dependencies are raw `.deb` files.
         root_dependencies = [request.target]
 
     else:
@@ -162,12 +164,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         "--no-history",
     ]
 
-    if embedded_pkgs:
-        logger.info(f"Setting entrypoint to: {embedded_pkgs[0].artifacts[0].relpath}")
+    if other_artifacts:
+        logger.info(f"Setting entrypoint to: {other_artifacts[0].artifacts[0].relpath}")
         config.extend(
             [
                 "--config.entrypoint",
-                f"/{embedded_pkgs[0].artifacts[0].relpath}",
+                f"/{other_artifacts[0].artifacts[0].relpath}",
             ]
         )
 

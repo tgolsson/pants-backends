@@ -155,6 +155,28 @@ class ImageLayerOutputPathField(OutputPathField):
     pass
 
 
+class DebLayerPackagesField(Dependencies):
+    alias = "debs"
+    required = True
+
+    help = softwrap("""
+    The `.deb` packages to extract into the layer, typically `file` targets with an `http_source`
+    pinned to a snapshot.debian.org URL. Dependencies are not resolved: every package the layer
+    needs on top of the base image must be listed.
+    """)
+
+
+class DebLayerMergedUsrField(BoolField):
+    alias = "merged_usr"
+    default = True
+
+    help = softwrap("""
+    Whether the base image uses a merged `/usr`, where `/bin`, `/sbin` and `/lib*` are symlinks
+    into `/usr`. When set, package contents under those directories are written under `/usr`
+    instead, so the layer doesn't replace the base image's symlinks with directories.
+    """)
+
+
 class ImageLayersField(Dependencies):
     alias = "layers"
 
