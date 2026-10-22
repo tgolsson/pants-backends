@@ -70,7 +70,7 @@ async def oci_mirror_process(
         EnvironmentRequest(CraneTool.registry_env_vars), **implicitly()
     )
 
-    # Without a tag crane, like skopeo before it, pushes the mirror as `latest`.
+    # Without a tag crane pushes the mirror as `latest`.
     destination = request.destination
     if request.tag:
         destination = f"{destination}:{request.tag}"

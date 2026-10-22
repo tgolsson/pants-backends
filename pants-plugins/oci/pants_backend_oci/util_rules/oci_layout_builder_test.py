@@ -433,3 +433,89 @@ def test_set_cmd_keeps_literal_double_dashes(tmp_path: Path, monkeypatch: pytest
     assert b.main(["--tag", "build", "set-cmd", "--", "--", "set-cmd", "-x"]) == 0
 
     assert image(tmp_path / "build")[2]["config"]["Cmd"] == ["--", "set-cmd", "-x"]
+
+
+def archived_image(tmp_path: Path) -> Path:
+    """A layout with one layer, an older retagged manifest and a stray blob."""
+    layout = tmp_path / "build"
+    b.apply(str(layout), "build", [INIT])
+    b.add_layer(
+        str(layout),
+        b.load_image(str(layout), "build"),
+        write(tmp_path / "l.tar", make_tar({"f": b"x"})),
+        None,
+    )
+    b.apply(str(layout), "old", [INIT, {"op": "config", "cmd": ["old"]}])
+    write(layout / "blobs" / "sha256" / ("0" * 64), b"stray")
+    return layout
+
+
+def test_archive_holds_only_the_image_and_names_it(tmp_path: Path) -> None:
+    layout = archived_image(tmp_path)
+    descriptor, manifest, _ = image(layout)
+    archive = tmp_path / "out" / "image.tar"
+
+    digest = b.write_archive(str(layout), "build", str(archive), "example.com/app:1.0")
+
+    assert digest == descriptor["digest"]
+    own = [
+        descriptor["digest"],
+        manifest["config"]["digest"],
+        *(layer["digest"] for layer in manifest["layers"]),
+    ]
+    with tarfile.open(archive) as tar:
+        assert tar.getnames() == [
+            "blobs",
+            "blobs/sha256",
+            *sorted(f"blobs/sha256/{d[7:]}" for d in own),
+            "index.json",
+            "manifest.json",
+            "oci-layout",
+        ]
+        assert {(m.mtime, m.uid, m.gid, m.uname, m.gname) for m in tar.getmembers()} == {(0, 0, 0, "", "")}
+        index = json.load(tar.extractfile("index.json"))
+        docker = json.load(tar.extractfile("manifest.json"))
+        assert tar.extractfile(f"blobs/sha256/{digest[7:]}").read() == b.read_blob(str(layout), digest)
+    (entry,) = index["manifests"]
+    assert entry["digest"] == digest
+    assert entry["annotations"] == {
+        b.REF_NAME: "example.com/app:1.0",
+        "io.containerd.image.name": "example.com/app:1.0",
+    }
+    assert docker == [
+        {
+            "Config": f"blobs/sha256/{manifest['config']['digest'][7:]}",
+            "RepoTags": ["example.com/app:1.0"],
+            "Layers": [f"blobs/sha256/{layer['digest'][7:]}" for layer in manifest["layers"]],
+        }
+    ]
+
+
+def test_archive_is_deterministic(tmp_path: Path) -> None:
+    layout = archived_image(tmp_path)
+    b.write_archive(str(layout), "build", str(tmp_path / "a.tar"), "app:1")
+    b.write_archive(str(layout), "build", str(tmp_path / "b.tar"), "app:1")
+    assert (tmp_path / "a.tar").read_bytes() == (tmp_path / "b.tar").read_bytes()
+
+
+def test_archive_without_a_name_is_untagged(tmp_path: Path) -> None:
+    layout = archived_image(tmp_path)
+    b.write_archive(str(layout), "build", str(tmp_path / "image.tar"), None)
+    with tarfile.open(tmp_path / "image.tar") as tar:
+        (entry,) = json.load(tar.extractfile("index.json"))["manifests"]
+        (docker,) = json.load(tar.extractfile("manifest.json"))
+    assert "annotations" not in entry
+    assert docker["RepoTags"] is None
+
+
+def test_main_exports_an_archive(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    archived_image(tmp_path)
+
+    assert b.main(["export", "dist/image.tar", "--name", "app:1"]) == 0
+    assert capsys.readouterr().out.strip() == b.image_digest("build", "build")
+    with tarfile.open(tmp_path / "dist" / "image.tar") as tar:
+        (entry,) = json.load(tar.extractfile("index.json"))["manifests"]
+    assert entry["annotations"][b.REF_NAME] == "app:1"

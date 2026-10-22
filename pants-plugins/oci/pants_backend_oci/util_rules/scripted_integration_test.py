@@ -19,12 +19,14 @@ DEBIAN = dedent("""\
     """)
 
 
-def top_layer(layout: Path) -> list[str]:
+def top_layer(archive: Path) -> list[str]:
     """The paths in the image's last layer, which the scripted step added."""
-    index = json.loads((layout / "index.json").read_text())
-    manifest = json.loads((layout / "blobs/sha256" / index["manifests"][0]["digest"][7:]).read_text())
-    with tarfile.open(layout / "blobs/sha256" / manifest["layers"][-1]["digest"][7:]) as tar:
-        return tar.getnames()
+    with tarfile.open(archive) as image:
+        index = json.load(image.extractfile("index.json"))
+        manifest = json.load(image.extractfile(f"blobs/sha256/{index['manifests'][0]['digest'][7:]}"))
+        layer = image.extractfile(f"blobs/sha256/{manifest['layers'][-1]['digest'][7:]}")
+        with tarfile.open(fileobj=layer) as tar:
+            return tar.getnames()
 
 
 def pants(tmpdir: str, *args: str):
@@ -94,7 +96,7 @@ def test_scripted_layer_extract_and_image() -> None:
             assert tar.getnames() == [".", "./g", "./g/a", "./g/a/f", "./g/b", "./g/b/f"]
         with tarfile.open(next(dist.glob("*/extract.tar.gz"))) as tar:
             assert tar.getnames()[-1] == "./etc/debian_version"
-        assert top_layer(next(dist.glob("*/image.d"))) == [
+        assert top_layer(next(dist.glob("*/image.tar"))) == [
             "etc",
             "etc/motd",
             "var",

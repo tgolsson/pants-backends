@@ -1,8 +1,8 @@
 # Copyright 2026 Tom Solberg.
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-"""Writes OCI image layouts: creating an empty image, adding layers, editing the config and
-normalising pulled layouts.
+"""Writes OCI image layouts: creating an empty image, adding layers, editing the config,
+normalising pulled layouts and exporting an image as an OCI archive.
 
 This module runs inside a sandboxed process, with the rules only deciding what to do, so it uses
 only the standard library and never imports Pants.
@@ -18,10 +18,12 @@ import argparse
 import contextlib
 import gzip
 import hashlib
+import io
 import json
 import os
 import re
 import sys
+import tarfile
 import tempfile
 import zlib
 from dataclasses import dataclass
@@ -197,6 +199,76 @@ def collect_garbage(layout: str) -> None:
             path = os.path.join(blobs, algorithm, name)
             if f"{algorithm}:{name}" not in seen and os.path.isfile(path):
                 os.remove(path)
+
+
+# -- archives ----------------------------------------------------------------------------------
+
+
+def _archive_info(name: str, size: int = 0, directory: bool = False) -> tarfile.TarInfo:
+    info = tarfile.TarInfo(name)
+    if directory:
+        info.type = tarfile.DIRTYPE
+        info.mode = 0o755
+    else:
+        info.size = size
+        info.mode = 0o644
+    return info
+
+
+def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
+    """Write the image tagged `tag` as an OCI archive holding only its own blobs, and return its
+    manifest digest.
+
+    The image is named `name`, if given, in `index.json`, both as its ref name (podman) and its
+    containerd image name (`docker load` with OCI support). A Docker `manifest.json` naming it in
+    `RepoTags`, like `docker save` writes, lets older `docker load`s read it too.
+    """
+    desc = tagged_descriptor(read_index(layout), tag)
+    if desc.get("mediaType") not in (MANIFEST_MEDIA_TYPE, DOCKER_MANIFEST):
+        raise LayoutError(f"expected an image manifest tagged {tag!r}, found {desc.get('mediaType')}")
+    manifest = json.loads(read_blob(layout, desc["digest"]))
+    blobs = sorted(
+        {desc["digest"], manifest["config"]["digest"], *(layer["digest"] for layer in manifest["layers"])}
+    )
+
+    def arcname(digest: str) -> str:
+        return os.path.relpath(blob_path(layout, digest), layout).replace(os.sep, "/")
+
+    annotations = {k: v for k, v in desc.get("annotations", {}).items() if k != REF_NAME}
+    if name:
+        annotations.update({REF_NAME: name, "io.containerd.image.name": name})
+    entry = {**desc, "annotations": annotations}
+    if not annotations:
+        del entry["annotations"]
+    index = {"schemaVersion": 2, "mediaType": INDEX_MEDIA_TYPE, "manifests": [entry]}
+    docker_manifest = [
+        {
+            "Config": arcname(manifest["config"]["digest"]),
+            "RepoTags": [name] if name else None,
+            "Layers": [arcname(layer["digest"]) for layer in manifest["layers"]],
+        }
+    ]
+    files = {
+        "index.json": _json(index),
+        "manifest.json": _json(docker_manifest),
+        "oci-layout": _json({"imageLayoutVersion": "1.0.0"}),
+    }
+
+    if os.path.dirname(archive):
+        os.makedirs(os.path.dirname(archive), exist_ok=True)
+    # Sorted entries with zeroed owners and times keep the archive byte-identical between builds.
+    with tarfile.open(archive, "w", format=tarfile.PAX_FORMAT) as tar:
+        tar.addfile(_archive_info("blobs", directory=True))
+        tar.addfile(_archive_info("blobs/sha256", directory=True))
+        for digest in blobs:
+            path = blob_path(layout, digest)
+            if not os.path.isfile(path):
+                raise LayoutError(f"blob {digest} is missing from {layout}")
+            with open(path, "rb") as f:
+                tar.addfile(_archive_info(arcname(digest), os.fstat(f.fileno()).st_size), f)
+        for file_name, data in sorted(files.items()):
+            tar.addfile(_archive_info(file_name, len(data)), io.BytesIO(data))
+    return desc["digest"]
 
 
 # -- images ------------------------------------------------------------------------------------
@@ -481,6 +553,9 @@ def main(argv: list[str]) -> int:
     apply_parser.add_argument("spec")
     commands.add_parser("normalize", help="Tag and convert a pulled layout.")
     commands.add_parser("digest", help="Print the image's manifest digest.")
+    export_parser = commands.add_parser("export", help="Write the image as a named OCI archive.")
+    export_parser.add_argument("archive")
+    export_parser.add_argument("--name")
     commands.add_parser("set-cmd", help="Replace the image's cmd with the args after `--`, if any.")
     args = parser.parse_args(argv)
 
@@ -490,6 +565,8 @@ def main(argv: list[str]) -> int:
                 digest = apply(args.layout, args.tag, json.load(f))
         elif args.command == "normalize":
             digest = normalize(args.layout, args.tag)
+        elif args.command == "export":
+            digest = write_archive(args.layout, args.tag, args.archive, args.name)
         elif args.command == "set-cmd":
             ops = [{"op": "config", "cmd": cmd}] if cmd else []
             digest = apply(args.layout, args.tag, ops)

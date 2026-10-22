@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- **Breaking:** `pants package` writes an `oci_image_build` as a deterministic OCI archive,
+  `<name>.tar`, instead of an `<name>.d` OCI layout directory. The archive holds only the
+  image's blobs, names the image `repository:tag` and includes a Docker `manifest.json`, so
+  `podman load` and `docker load` keep the tag. It is written by the plugin's Python, so skopeo
+  is no longer downloaded and the `[skopeo]` options are removed.
 - Run scripted build steps (`commands=` on `oci_image_build` and `oci_build_layer`) and
   `oci_extract` through `podman build` with `--timestamp 0` instead of umoci and runc. A failing
   command or missing output now fails the build instead of producing an empty artifact, and a
@@ -42,11 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   target in `debs` that has its own `dependencies` now brings them into the layer too, and they
   must be `.deb` files as well. Packages for more than one architecture are rejected.
 - Stop setting a layer target's entrypoint to a nested layer tarball.
-- Pull, publish and mirror images with crane instead of skopeo; skopeo is kept only for
-  exporting the packaged OCI layout. Credentials come from the docker config and its
-  credential helpers when one exists, and only otherwise from `REGISTRY_AUTH_FILE` or
-  podman/skopeo's `containers/auth.json`; a `podman login` alongside a docker config is no
-  longer used.
+- Pull, publish and mirror images with crane instead of skopeo. Credentials come from the
+  docker config and its credential helpers when one exists, and only otherwise from
+  `REGISTRY_AUTH_FILE` or podman/skopeo's `containers/auth.json`; a `podman login` alongside a
+  docker config is no longer used.
 - Pulled images are converted from Docker v2 to OCI in the rule; an omitted `os` now
   defaults to `linux`.
 - `oci_mirror_image` now copies the whole manifest list and keeps the source digest,

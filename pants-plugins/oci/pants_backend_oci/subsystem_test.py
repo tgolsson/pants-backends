@@ -6,7 +6,7 @@ from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 
-from pants_backend_oci.subsystem import CraneTool, RuncTool, SkopeoTool, UmociTool, ZstdTool
+from pants_backend_oci.subsystem import CraneTool, RuncTool, UmociTool, ZstdTool
 from pants_backend_oci.subsystem import rules as subsystem_rules
 
 
@@ -18,7 +18,6 @@ def rule_runner() -> RuleRunner:
             *subsystem_rules(),
             QueryRule(DownloadedExternalTool, [ExternalToolRequest]),
             QueryRule(ProcessResult, [Process]),
-            QueryRule(SkopeoTool, []),
             QueryRule(CraneTool, []),
             QueryRule(UmociTool, []),
             QueryRule(RuncTool, []),
@@ -31,7 +30,7 @@ def rule_runner() -> RuleRunner:
     "tool_type,version,platform",
     [
         (tool_type, row.split("|")[0], Platform(row.split("|")[1].strip()))
-        for tool_type in (SkopeoTool, CraneTool, UmociTool, RuncTool, ZstdTool)
+        for tool_type in (CraneTool, UmociTool, RuncTool, ZstdTool)
         for row in tool_type.default_known_versions
     ],
 )

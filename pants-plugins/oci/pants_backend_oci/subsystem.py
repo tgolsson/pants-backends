@@ -106,45 +106,12 @@ class UmociTool(ExternalTool):
         return f"./umoci.{arch}" if self.version == "v0.4.7" else f"./umoci.linux.{arch}"
 
 
-class SkopeoTool(ExternalTool):
-    options_scope = "skopeo"
-    help = "Tool for moving containers."
-
-    default_version = "v1.24.1"
-    default_known_versions = [
-        "v1.24.1|linux_x86_64|067d461564e606b4f54f30453a9f21a53aabc4f1bb0acd5193ffff5b1aececbc|43205536",
-        "v1.24.1|linux_arm64|a7e32a8f39110a55e0230e0f27bf50f1b2e4f36841793b07a7ba711877e63020|36859900",
-        "v1.24.1|macos_x86_64|44b1d962439819968ea4a9947627e9f49b2d3fed47d01ebeb2597bd88ad79512|35991728",
-        "v1.24.1|macos_arm64|ba11a5e3f96a120345ead3d74774c3258473db39bcf42cc684f2a0cac281a9f9|34040002",
-    ]
-
-    def generate_url(self, plat: Platform) -> str:
-        platform_mapping = {
-            "linux_arm64": "linux-arm64",
-            "linux_x86_64": "linux-amd64",
-            "macos_x86_64": "darwin-amd64",
-            "macos_arm64": "darwin-arm64",
-        }
-        plat_str = platform_mapping[plat.value]
-        return f"https://github.com/lework/skopeo-binary/releases/download/{self.version}/skopeo-{plat_str}"
-
-    def generate_exe(self, plat: Platform) -> str:
-        platform_mapping = {
-            "linux_arm64": "linux-arm64",
-            "linux_x86_64": "linux-amd64",
-            "macos_arm64": "darwin-arm64",
-            "macos_x86_64": "darwin-amd64",
-        }
-        plat_str = platform_mapping[plat.value]
-        return f"./skopeo-{plat_str}"
-
-
 class CraneTool(ExternalTool):
     options_scope = "crane"
     help = "Crane is used for interacting with remote OCI registries."
 
     # Variables crane needs to find registry credentials: docker config, credential
-    # helpers on PATH, and podman/skopeo auth files.
+    # helpers on PATH, and podman auth files.
     registry_env_vars = (
         "HOME",
         "PATH",
@@ -241,7 +208,6 @@ class ZstdTool(ExternalTool):
 
 def rules():
     return [
-        *SkopeoTool.rules(),
         *CraneTool.rules(),
         *RuncTool.rules(),
         *UmociTool.rules(),

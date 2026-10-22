@@ -14,15 +14,23 @@ from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
 from pants.engine.fs import Digest, MergeDigests
+from pants.engine.internals.graph import resolve_target
 from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import InteractiveProcess, Process
 from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import CraneTool
 from pants_backend_oci.target_types import ImageRepository, ImageTag
+from pants_backend_oci.util_rules.image_bundle import (
+    FallibleImageBundleRequest,
+    ImageBundleRequest,
+    ibr_to_fibr,
+    resolve_image_bundle,
+)
 
 
 @dataclass(frozen=True)
@@ -95,15 +103,25 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
             (PublishPackages(names=(f"{field_set.address}",), description="(because it has no repository)"),)
         )
 
+    # Push the image's OCI layout rather than the packaged archive: crane reads an archive through
+    # its Docker `manifest.json` and would push a re-encoded manifest with a different digest.
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(field_set.address, description_of_origin="publish_oci_image"), **implicitly()
+    )
+    image_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
+    image = await resolve_image_bundle(**implicitly({image_request.request: FallibleImageBundleRequest}))
+    if image.exit_code != 0 or image.dependency_failed:
+        raise Exception(f"Failed packaging image:\n{image.stderr}")
+
     process = await publish_oci_process(
         OciPublishProcessRequest(
-            input_digest=package.digest,
+            input_digest=image.output.digest,
             repository=field_set.repository.value,
             tag=field_set.tag.value or "latest",
             description=(
                 f"Publish OCI Image {field_set.address} -> {field_set.repository.value}:{field_set.tag.value}"
             ),
-            directory=metadata.relpath,
+            directory="build",
         ),
         **implicitly(),
     )

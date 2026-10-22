@@ -8,25 +8,25 @@ from pants.core.goals.package import (
     OutputPathField,
     PackageFieldSet,
 )
-from pants.core.util_rules.external_tool import download_external_tool
+from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.engine.fs import Digest, MergeDigests
 from pants.engine.internals.graph import resolve_target
-from pants.engine.intrinsics import merge_digests
-from pants.engine.platform import Platform
+from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import InvalidTargetException, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import SkopeoTool
 from pants_backend_oci.target_types import ImageBuildOutputs, ImageDigest, ImageRepository, ImageTag
+from pants_backend_oci.util_rules import oci_layout_builder
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     ImageBundleRequest,
     ibr_to_fibr,
     resolve_image_bundle,
 )
+from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
 
 
 @dataclass(frozen=True)
@@ -53,36 +53,20 @@ class ArtifactFieldSet(PackageFieldSet):
 class OciArchiveRequest:
     input_digest: Digest
     output_filename: str
+    name: str | None
     description: str
 
 
-@dataclass(frozen=True)
-class BuiltOciArchive(BuiltPackage):
-    """An OCI image in `oci-archive` format."""
-
-    directory: str = ""
-    tag: str = ""
-    sha: str = ""
-
-
 @rule(desc="Convert OCI Image to Archive", level=LogLevel.DEBUG)
-async def package_oci_archive(request: OciArchiveRequest, skopeo: SkopeoTool, platform: Platform) -> Process:
-    skopeo = await download_external_tool(skopeo.get_request(platform))
-
-    sandbox_input = await merge_digests(MergeDigests([skopeo.digest, request.input_digest]))
+async def package_oci_archive(request: OciArchiveRequest, python: PythonBuildStandaloneBinary) -> Process:
+    builder = await create_digest(sandboxed_modules(oci_layout_builder))
+    sandbox_input = await merge_digests(MergeDigests([builder, request.input_digest]))
+    name = ("--name", request.name) if request.name else ()
     return Process(
         input_digest=sandbox_input,
-        argv=(
-            skopeo.exe,
-            # TODO[TSOL]: Should likely provide a way to inject a
-            # policy into this... Maybe dependency injector?
-            "--insecure-policy",
-            "copy",
-            "oci:build:build",
-            f"oci:{request.output_filename}",
-        ),
-        description=f"Generate OCI Archive: {request.output_filename}",
-        output_directories=(request.output_filename,),
+        argv=(python.path, "-c", module_main(oci_layout_builder), "export", request.output_filename, *name),
+        description=request.description,
+        output_files=(request.output_filename,),
     )
 
 
@@ -95,12 +79,12 @@ class BuiltOciImage(BuiltPackageArtifact):
     tag: str = ""
 
     @classmethod
-    def create(cls, sha: str, tag: str, directory: str) -> BuiltOciImage:
+    def create(cls, sha: str, tag: str, path: str) -> BuiltOciImage:
         return cls(
             sha=sha,
             tag=tag,
-            relpath=directory,
-            extra_log_lines=(f"  {cls.__name__}: {directory}@{sha}",),
+            relpath=path,
+            extra_log_lines=(f"  {cls.__name__}: {path}@{sha}",),
         )
 
 
@@ -126,10 +110,15 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
     image_digest = image.output.digest
 
     suffix = field_set.tag.value if field_set.tag.value else field_set.digest.value
+    # A pulled image is named by its registry digest, which normalising it to OCI may have changed,
+    # so only a tagged image gets a name.
+    name = f"{field_set.repository.value}:{field_set.tag.value}" if field_set.tag.value else None
+    output_filename = field_set.output_path.value_or_default(file_ending="tar")
     archive_process = await package_oci_archive(
         OciArchiveRequest(
             input_digest=image_digest,
-            output_filename=field_set.output_path.value_or_default(file_ending="d"),
+            output_filename=output_filename,
+            name=name,
             description=f"Package OCI Image {field_set.address} -> {field_set.repository.value}:{suffix}",
         ),
         **implicitly(),
@@ -140,9 +129,7 @@ async def package_oci_image(field_set: ImageFieldSet) -> BuiltPackage:
     return BuiltPackage(
         digest=result.output_digest,
         artifacts=(
-            BuiltOciImage.create(
-                image.output.image_sha, "build", field_set.output_path.value_or_default(file_ending="d")
-            ),
+            BuiltOciImage.create(image.output.image_sha, field_set.tag.value or "build", output_filename),
         ),
     )
 

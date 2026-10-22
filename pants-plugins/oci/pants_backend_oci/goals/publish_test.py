@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 
 import pytest
@@ -7,6 +8,7 @@ from pants.core.util_rules import archive as pants_archive
 from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine import process
 from pants.engine.addresses import Address
+from pants.engine.fs import DigestContents
 from pants.engine.internals import graph
 from pants.testutil.rule_runner import QueryRule, RuleRunner
 
@@ -95,4 +97,8 @@ def test_publish_with_repository_has_process(rule_runner) -> None:
     assert result[0].description.startswith("foobar:latest")
     artifact = built_package.artifacts[0]
     assert result[0].names == (artifact.sha,)
-    assert result[0].process.process.argv[1:] == ("push", artifact.relpath, "foobar:latest")
+    assert result[0].process.process.argv[1:] == ("push", "build", "foobar:latest")
+    # The pushed layout holds the packaged image's manifest, so the registry digest matches.
+    contents = rule_runner.request(DigestContents, [result[0].process.process.input_digest])
+    (index,) = [json.loads(c.content) for c in contents if c.path == "build/index.json"]
+    assert [m["digest"] for m in index["manifests"]] == [artifact.sha]

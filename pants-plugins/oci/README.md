@@ -12,7 +12,9 @@ This is a backend implementing support for building OCI images in pants; running
 
 * [podman](https://podman.io/docs/installation), installed by the user, for `pants run`, OCI repl and scripted build steps
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
-* [skopeo](https://github.com/containers/skopeo) for exporting the packaged OCI layout
+
+`pants package` writes each `oci_image_build` to `dist/` as an OCI archive, `<name>.tar`, with the
+image named `repository:tag`. Load it with `podman load -i <archive>` or `docker load -i <archive>`.
 
 ## Running images
 
@@ -61,22 +63,20 @@ A failing command or a missing output fails the build. `examples/oci/scripted` s
 
 ## Tool versions
 
-The defaults are crane `v0.22.1`, Skopeo `v1.24.1` and zstd `v1.5.6-bcr2`.
-Skopeo binaries come from [lework/skopeo-binary](https://github.com/lework/skopeo-binary),
-since the Skopeo project does not publish standalone binaries, for Linux/macOS on x86-64 and
-ARM64. crane uses the official go-containerregistry release archives.
+The defaults are crane `v0.22.1` and zstd `v1.5.6-bcr2`. crane uses the official
+go-containerregistry release archives.
 zstd, used by `oci_deb_layer` and `oci_cacerts_layer` to read zstd-compressed packages such as
 Ubuntu's, comes from the static builds of [aspect-build/zstd-prebuilt](https://github.com/aspect-build/zstd-prebuilt)
 for Linux/macOS on x86-64 and ARM64. It is downloaded like the other tools, not installed as a Python
 dependency.
-Use `[crane].version`, `[skopeo].version` or `[zstd].version` to select another recorded
+Use `[crane].version` or `[zstd].version` to select another recorded
 version. The `[umoci]` and `[runc]` options are no longer used and will be removed.
 
 Registry credentials are read the way crane reads them, from the first of these that
 exists: `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) with its credential
-helpers, then `$REGISTRY_AUTH_FILE`, then podman/skopeo's `containers/auth.json` under
+helpers, then `$REGISTRY_AUTH_FILE`, then podman's `containers/auth.json` under
 `$XDG_RUNTIME_DIR` or `$XDG_CONFIG_HOME` (`~/.config`). A docker config therefore hides a
-podman/skopeo login. Pulled images are fetched for
+podman login. Pulled images are fetched for
 the target's `os`/`architecture`, defaulting to `linux` and the host architecture, and
 Docker v2 manifests are converted to OCI.
 

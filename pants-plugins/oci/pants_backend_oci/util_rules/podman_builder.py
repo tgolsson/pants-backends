@@ -20,7 +20,6 @@ import contextlib
 import copy
 import fnmatch
 import gzip
-import io
 import json
 import os
 import re
@@ -92,23 +91,9 @@ def write_archive(layout: str, tag: str, archive: str) -> str:
     The name is the manifest digest, so builds running at once never import different images
     under the same name into the shared store.
     """
-    desc = oci_layout_builder.tagged_descriptor(oci_layout_builder.read_index(layout), tag)
-    ref = "pants-" + desc["digest"].partition(":")[2]
-    index = {
-        "schemaVersion": 2,
-        "mediaType": oci_layout_builder.INDEX_MEDIA_TYPE,
-        "manifests": [
-            {**desc, "annotations": {**desc.get("annotations", {}), oci_layout_builder.REF_NAME: ref}}
-        ],
-    }
-    data = json.dumps(index).encode()
-    with tarfile.open(archive, "w") as tar:
-        for name in sorted(os.listdir(layout)):
-            if name != "index.json":
-                tar.add(os.path.join(layout, name), arcname=name)
-        info = tarfile.TarInfo("index.json")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
+    digest = oci_layout_builder.image_digest(layout, tag)
+    ref = "pants-" + digest.partition(":")[2]
+    oci_layout_builder.write_archive(layout, tag, archive, ref)
     return ref
 
 
