@@ -5,7 +5,13 @@ import gzip
 import hashlib
 import io
 import lzma
+import os
+import struct
+import sys
 import tarfile
+import threading
+from dataclasses import replace
+from pathlib import Path
 from typing import Callable
 
 import pytest
@@ -16,6 +22,7 @@ from pants_backend_oci.util_rules.deb_layer_builder import (
     DebPackage,
     build_layer,
     load_deb,
+    open_data,
     parse_control,
     read_ar,
     status_entry,
@@ -53,6 +60,64 @@ def _tar(
     return buf.getvalue()
 
 
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+ZSTD_MAX_BLOCK = 128 * 1024
+
+
+def zstd_frame(data: bytes) -> bytes:
+    """A valid zstd frame storing `data` in raw (uncompressed) blocks, so tests need no zstd library.
+
+    The frame header is a single segment with an 8-byte content size and no checksum.
+    """
+    out = bytearray(ZSTD_MAGIC + bytes([0b1110_0000]) + struct.pack("<Q", len(data)))
+    chunks = [data[i : i + ZSTD_MAX_BLOCK] for i in range(0, len(data), ZSTD_MAX_BLOCK)] or [b""]
+    for i, chunk in enumerate(chunks):
+        last = i == len(chunks) - 1
+        out += struct.pack("<I", (len(chunk) << 3) | last)[:3] + chunk
+    return bytes(out)
+
+
+# Decodes the raw-block frames `zstd_frame` writes, standing in for `zstd -d -c -q`.
+FAKE_ZSTD = f"""#!{sys.executable}
+import sys
+
+# Like zstd, write each block as soon as it is decoded, so a failure can follow partial output.
+stdin, stdout = sys.stdin.buffer, sys.stdout.buffer
+if stdin.read(4) != {ZSTD_MAGIC!r}:
+    sys.exit("zstd: /*stdin*\\\\: unknown header")
+stdin.read(9)
+while True:
+    header = int.from_bytes(stdin.read(3), "little")
+    block = stdin.read(header >> 3)
+    if len(block) < header >> 3:
+        sys.exit("zstd: /*stdin*\\\\: truncated input")
+    stdout.write(block)
+    stdout.flush()
+    if header & 1:
+        break
+"""
+
+
+@pytest.fixture
+def fake_zstd(tmp_path: Path) -> str:
+    path = tmp_path / "zstd"
+    path.write_text(FAKE_ZSTD)
+    path.chmod(0o755)
+    return str(path)
+
+
+def _compress(member: str, data: bytes) -> bytes:
+    if member.endswith(".xz"):
+        return lzma.compress(data)
+    if member.endswith(".gz"):
+        return gzip.compress(data, mtime=0)
+    if member.endswith(".bz2"):
+        return bz2.compress(data)
+    if member.endswith(".zst"):
+        return zstd_frame(data)
+    return data
+
+
 def _dir(name: str) -> tarfile.TarInfo:
     info = tarfile.TarInfo(name)
     info.type = tarfile.DIRTYPE
@@ -75,6 +140,7 @@ def make_deb(
     architecture: str = "amd64",
     md5sums: bytes | None = b"",
     data_member: str = "data.tar.xz",
+    control_member: str = "control.tar.xz",
     mtime: int = 1700000000,
     data_format: int = tarfile.GNU_FORMAT,
     mangle: Callable[[bytes], bytes] | None = None,
@@ -87,27 +153,21 @@ def make_deb(
     if md5sums is not None:
         control_entries.append(("./md5sums", md5sums or f"abc  usr/bin/{package}\n".encode()))
 
-    data_tar = _tar([_dir("./"), *data], mtime=mtime, format=data_format)
-    if data_member.endswith(".xz"):
-        data_tar = lzma.compress(data_tar)
-    elif data_member.endswith(".gz"):
-        data_tar = gzip.compress(data_tar, mtime=0)
-    elif data_member.endswith(".bz2"):
-        data_tar = bz2.compress(data_tar)
+    data_tar = _compress(data_member, _tar([_dir("./"), *data], mtime=mtime, format=data_format))
     if mangle is not None:
         data_tar = mangle(data_tar)
 
     return _ar(
         [
             ("debian-binary", b"2.0\n"),
-            ("control.tar.xz", lzma.compress(_tar(control_entries, mtime=mtime))),
+            (control_member, _compress(control_member, _tar(control_entries, mtime=mtime))),
             (data_member, data_tar),
         ]
     )
 
 
-def load(deb: bytes, source: str = "") -> DebPackage:
-    return load_deb(io.BytesIO(deb), source=source)
+def load(deb: bytes, source: str = "", zstd: str | None = None) -> DebPackage:
+    return load_deb(io.BytesIO(deb), source=source, zstd=zstd)
 
 
 def layer_bytes(packages, **kwargs) -> bytes:
@@ -155,10 +215,90 @@ def test_load_deb_reads_control_and_md5sums() -> None:
     assert dict(parse_control(package.control))["Version"] == "1.0-1"
 
 
-def test_load_deb_rejects_zstd() -> None:
-    deb = make_deb("foo", [("./usr/bin/foo", b"")], data_member="data.tar.zst")
-    with pytest.raises(DebError, match="zstd"):
+FOO_DATA = [_dir("./usr/"), _dir("./usr/bin/"), ("./usr/bin/foo", b"#!/bin/sh\necho foo\n")]
+
+
+def test_load_deb_needs_zstd_binary_for_zstd_members() -> None:
+    deb = make_deb("foo", FOO_DATA, data_member="data.tar.zst")
+    with pytest.raises(
+        DebError, match="foo.deb: data.tar.zst: reading zstd-compressed members needs a zstd binary"
+    ):
         load(deb, source="foo.deb")
+
+
+def test_zstd_frame_splits_large_data_into_blocks(fake_zstd: str) -> None:
+    deb = make_deb("foo", [("./usr/bin/foo", os.urandom(300 * 1024))], data_member="data.tar.zst")
+    package = load(deb, source="foo.deb", zstd=fake_zstd)
+    layer = layer_bytes([package])
+    assert len(read_layer_file(layer, "usr/bin/foo")) == 300 * 1024
+
+
+def test_zstd_deb_gives_same_layer_as_xz(fake_zstd: str) -> None:
+    zst = make_deb("foo", FOO_DATA, data_member="data.tar.zst", control_member="control.tar.zst")
+    xz = make_deb("foo", FOO_DATA)
+    package = load(zst, source="foo.deb", zstd=fake_zstd)
+    assert package.name == "foo" and package.md5sums == b"abc  usr/bin/foo\n"
+    assert layer_bytes([package]) == layer_bytes([load(xz)])
+
+
+def test_layer_rejects_corrupt_zstd_data(fake_zstd: str) -> None:
+    deb = make_deb("foo", FOO_DATA, data_member="data.tar.zst", mangle=lambda data: data[:-10])
+    with pytest.raises(DebError, match=r"broken.deb: data.tar.zst is corrupt: zstd: truncated input$"):
+        layer_bytes([load(deb, source="broken.deb", zstd=fake_zstd)])
+
+
+def test_load_deb_rejects_corrupt_zstd_control(fake_zstd: str) -> None:
+    deb = make_deb("foo", FOO_DATA, control_member="control.tar.zst")
+    deb = deb.replace(ZSTD_MAGIC, b"\0\0\0\0", 1)
+    with pytest.raises(DebError, match=r"broken.deb: control.tar.zst is corrupt: zstd: unknown header"):
+        load(deb, source="broken.deb", zstd=fake_zstd)
+
+
+def test_load_deb_reports_missing_zstd_binary(tmp_path: Path) -> None:
+    deb = make_deb("foo", FOO_DATA, control_member="control.tar.zst")
+    with pytest.raises(DebError, match="could not run"):
+        load(deb, source="foo.deb", zstd=str(tmp_path / "missing"))
+
+
+def _unfinished(frame: bytes) -> bytes:
+    """Mark a single-block frame's block as not the last, and follow it with a truncated block."""
+    return frame[:13] + bytes([frame[13] & ~1]) + frame[14:] + struct.pack("<I", 100 << 3)[:3] + b"abc"
+
+
+def test_zstd_failure_after_a_complete_tar_is_reported(fake_zstd: str) -> None:
+    # The tar ends in the first block, so only zstd's exit status shows the stream is broken.
+    deb = make_deb("foo", FOO_DATA, data_member="data.tar.zst", mangle=_unfinished)
+    with pytest.raises(DebError, match=r"broken.deb: data.tar.zst is corrupt: zstd: truncated input$"):
+        layer_bytes([load(deb, source="broken.deb", zstd=fake_zstd)])
+
+
+def test_zstd_is_stopped_when_the_reader_fails(fake_zstd: str) -> None:
+    deb = make_deb("foo", [("./usr/bin/foo", os.urandom(1 << 20))], data_member="data.tar.zst")
+    package = load(deb, source="foo.deb", zstd=fake_zstd)
+    threads = threading.active_count()
+    with pytest.raises(RuntimeError, match="stop"):
+        with open_data(package) as data:
+            next(iter(data))
+            raise RuntimeError("stop")
+    assert threading.active_count() == threads
+
+
+class _FailingFile(io.BytesIO):
+    def read(self, size: int | None = -1) -> bytes:
+        raise OSError("disk on fire")
+
+
+def test_zstd_reports_read_errors_of_the_deb(fake_zstd: str) -> None:
+    deb = make_deb("foo", FOO_DATA, data_member="data.tar.zst")
+    package = replace(load(deb, source="foo.deb", zstd=fake_zstd), fileobj=_FailingFile(deb))
+    with pytest.raises(DebError, match="foo.deb: data.tar.zst: could not read the package: disk on fire"):
+        layer_bytes([package])
+
+
+def test_load_deb_rejects_corrupt_control_tar() -> None:
+    deb = _ar([("debian-binary", b"2.0\n"), ("control.tar", b"garbage"), ("data.tar", _tar([]))])
+    with pytest.raises(DebError, match="broken.deb: control.tar is corrupt"):
+        load(deb, source="broken.deb")
 
 
 def test_parse_control_keeps_continuation_lines() -> None:

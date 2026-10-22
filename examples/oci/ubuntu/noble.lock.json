@@ -1,0 +1,143 @@
+{
+  "architectures": {
+    "amd64": {
+      "packages": [
+        {
+          "architecture": "all",
+          "depends": [
+            "openssl"
+          ],
+          "name": "ca-certificates",
+          "sha256": "641de77d8f142cfd62a1a6f964ba67b20754d3337c480efb529d086075a06c9a",
+          "size": 159378,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20240203_all.deb",
+          "version": "20240203"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [
+            "libjq1"
+          ],
+          "name": "jq",
+          "sha256": "36276dcac711c742776377001886f5a72293391446b5d5e7646541336f2234aa",
+          "size": 65538,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/jq_1.7.1-3build1_amd64.deb",
+          "version": "1.7.1-3build1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [
+            "libonig5"
+          ],
+          "name": "libjq1",
+          "sha256": "aaecde9f29e7485de2e6bb12f1d322b6da7bee5a63914c40b599bce517ef3938",
+          "size": 140506,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/libjq1_1.7.1-3build1_amd64.deb",
+          "version": "1.7.1-3build1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [],
+          "name": "libonig5",
+          "sha256": "605f42287d2bcb6c84f5a02377c7cd777090c5e857259a4030a571989f19dde2",
+          "size": 172336,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_amd64.deb",
+          "version": "6.9.9-1build1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [],
+          "name": "openssl",
+          "sha256": "96243ee49f17de820bf0322fa672923c627a3013fbc6fa9eb3f570fdcdc14853",
+          "size": 1002532,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.4_amd64.deb",
+          "version": "3.0.13-0ubuntu3.4"
+        }
+      ],
+      "roots": [
+        "ca-certificates",
+        "jq"
+      ]
+    },
+    "arm64": {
+      "packages": [
+        {
+          "architecture": "all",
+          "depends": [
+            "openssl"
+          ],
+          "name": "ca-certificates",
+          "sha256": "641de77d8f142cfd62a1a6f964ba67b20754d3337c480efb529d086075a06c9a",
+          "size": 159378,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20240203_all.deb",
+          "version": "20240203"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [
+            "libjq1"
+          ],
+          "name": "jq",
+          "sha256": "5d41870b5e22674b0919078c101894cbc1b29a9dfb4d0b234d41b9effc9f8ce0",
+          "size": 64630,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/jq_1.7.1-3build1_arm64.deb",
+          "version": "1.7.1-3build1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [
+            "libonig5"
+          ],
+          "name": "libjq1",
+          "sha256": "95d05fa2db72a77721f571e7f89a4a3144927a844e87395c67de1cf54217b248",
+          "size": 132646,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/libjq1_1.7.1-3build1_arm64.deb",
+          "version": "1.7.1-3build1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [],
+          "name": "libonig5",
+          "sha256": "12044a8919f3aae339652bfcd8b424245d6606a6124ae3ce08682485c12b124f",
+          "size": 171690,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_arm64.deb",
+          "version": "6.9.9-1build1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [],
+          "name": "openssl",
+          "sha256": "200b00590d44f47d76466b35cffdae123bb2875c0750a033e358bb6277e219dc",
+          "size": 984642,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.4_arm64.deb",
+          "version": "3.0.13-0ubuntu3.4"
+        }
+      ],
+      "roots": [
+        "ca-certificates",
+        "jq"
+      ]
+    }
+  },
+  "inputs": {
+    "architectures": [
+      "amd64",
+      "arm64"
+    ],
+    "exclude": [
+      "debconf",
+      "libc6",
+      "libssl3t64"
+    ],
+    "packages": [
+      "ca-certificates",
+      "jq"
+    ],
+    "sources": [
+      "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble main",
+      "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-updates main",
+      "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-security main"
+    ]
+  },
+  "version": 1
+}

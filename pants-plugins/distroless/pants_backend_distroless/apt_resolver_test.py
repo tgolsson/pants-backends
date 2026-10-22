@@ -44,6 +44,12 @@ from pants_backend_distroless.apt_resolver import (
         ("2.36-9+deb12u7", "2.36-9+deb12u8"),
         ("3.0.14-1~deb12u1", "3.0.14-1"),
         ("1.2.3-1", "1.2.3a-1"),
+        # Ubuntu revisions.
+        ("1.7.1-3", "1.7.1-3build1"),
+        ("1.7.1-3build1", "1.7.1-3build2"),
+        ("3.0.13-0ubuntu3.1", "3.0.13-0ubuntu3.4"),
+        ("3.0.13-0ubuntu3.4", "3.0.13-0ubuntu3.10"),
+        ("1.5.86ubuntu1", "1.5.87"),
     ],
 )
 def test_compare_versions(lower: str, higher: str) -> None:
@@ -419,3 +425,55 @@ def test_main_reports_errors(tmp_path: Path, capsys) -> None:
 
     assert main(["--request", str(tmp_path / "request.json"), "--output", str(tmp_path / "lock.json")]) == 1
     assert "error: amd64: No package named nope" in capsys.readouterr().err
+
+
+def test_ubuntu_t64_rename_satisfies_the_old_name() -> None:
+    # Ubuntu 24.04's 64-bit time_t transition renamed libraries and kept the old name as a Provides.
+    resolved = resolve(
+        index(
+            stanza("curl", "8.5.0-2ubuntu10.4", Depends="libssl3 (>= 3.0.0)"),
+            stanza(
+                "libssl3t64",
+                "3.0.13-0ubuntu3.4",
+                Provides="libssl3 (= 3.0.13-0ubuntu3.4)",
+                Breaks="libssl3 (<< 3.0.13-0ubuntu3.4)",
+                Replaces="libssl3",
+            ),
+        ),
+        ["curl"],
+        [],
+    )[1]
+    assert names(resolved) == {"curl": "8.5.0-2ubuntu10.4", "libssl3t64": "3.0.13-0ubuntu3.4"}
+
+
+def test_ubuntu_snapshot_layout(tmp_path: Path) -> None:
+    """Ubuntu's `Release` lists every index format, and updates come from a separate pocket."""
+    root = tmp_path / "ubuntu" / "20241001T000000Z"
+    uri = root.as_uri()
+    pockets = {
+        "noble": stanza("distro-info-data", "0.60") + "\n" + stanza("jq", "1.7.1-3build1"),
+        # `Phased-Update-Percentage` is apt client policy; a snapshot lock takes the update as is.
+        "noble-updates": stanza("distro-info-data", "0.60ubuntu0.1", Phased_Update_Percentage="10"),
+    }
+    for suite, text in pockets.items():
+        dists = root / "dists" / suite
+        lines = []
+        for ext, compress in (("", lambda data: data), (".gz", gzip.compress), (".xz", lzma.compress)):
+            path = f"main/binary-amd64/Packages{ext}"
+            data = compress(text.encode())
+            (dists / path).parent.mkdir(parents=True, exist_ok=True)
+            (dists / path).write_bytes(data)
+            lines.append(f" {hashlib.sha256(data).hexdigest()} {len(data)} {path}")
+        (dists / "Release").write_text(f"Origin: Ubuntu\nSuite: {suite}\nSHA256:\n" + "\n".join(lines) + "\n")
+    # The uncompressed index no longer matches `Release`, so this also checks a compressed one is used.
+    for suite in pockets:
+        (root / "dists" / suite / "main/binary-amd64/Packages").write_text("garbage")
+
+    sources = [Source.parse(f"{uri} {suite} main") for suite in pockets]
+    packages = [p for source in sources for p in fetch_index(source, "amd64")]
+    resolved = resolve(Index(packages), ["distro-info-data", "jq"], [])[1]
+    assert names(resolved) == {"distro-info-data": "0.60ubuntu0.1", "jq": "1.7.1-3build1"}
+    assert {r.package.url for r in resolved} == {
+        f"{uri}/pool/main/d/distro-info-data/distro-info-data_0.60ubuntu0.1_amd64.deb",
+        f"{uri}/pool/main/j/jq/jq_1.7.1-3build1_amd64.deb",
+    }

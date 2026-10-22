@@ -54,6 +54,7 @@ marker_filenames = ["pyproject.toml"]
 
 [apt.resolves]
 bookworm = "examples/oci/debian/bookworm.lock.json"
+noble = "examples/oci/ubuntu/noble.lock.json"
 
 [anonymous-telemetry]
 enabled = true

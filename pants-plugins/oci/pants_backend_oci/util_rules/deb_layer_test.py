@@ -8,14 +8,17 @@ from pants.core.goals import package as package_goal
 from pants.core.goals.package import BuiltPackage
 from pants.core.target_types import FileTarget, GenericTarget, ResourceTarget
 from pants.core.target_types import rules as core_target_type_rules
-from pants.core.util_rules import adhoc_binaries, source_files
+from pants.core.util_rules import adhoc_binaries
+from pants.core.util_rules import archive as pants_archive
+from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.fs import DigestContents
 from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
+from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.targets import DebLayer
 from pants_backend_oci.util_rules import archive, deb_layer, layer
-from pants_backend_oci.util_rules.deb_layer_builder_test import BAR, FOO, _dir, make_deb
+from pants_backend_oci.util_rules.deb_layer_builder_test import BAR, FOO, FOO_DATA, _dir, make_deb
 
 
 @pytest.fixture
@@ -29,6 +32,10 @@ def rule_runner() -> RuleRunner:
             *package_goal.rules(),
             *adhoc_binaries.rules(),
             *source_files.rules(),
+            *external_tool.rules(),
+            *pants_archive.rules(),
+            *system_binaries.rules(),
+            *ZstdTool.rules(),
             *core_target_type_rules(),
             QueryRule(BuiltPackage, [deb_layer.DebLayerPackageFieldSet]),
             QueryRule(layer.ImageLayer, [layer.ImageLayerRequest]),
@@ -69,6 +76,30 @@ oci_deb_layer(name="layer", debs=[":foo", ":bar"])
     assert "usr/lib/libbar.so.1.0" in names
     assert "var/lib/dpkg/status.d/foo" in names
     assert "var/lib/dpkg/status.d/bar" in names
+
+
+LAYER_BUILD = 'file(name="foo", source="foo_1.0-1_amd64.deb")\noci_deb_layer(name="layer", debs=[":foo"])\n'
+
+
+def test_packages_layer_from_zstd_debs(rule_runner: RuleRunner) -> None:
+    # Ubuntu compresses both members with zstd; the layer matches the one from the xz-compressed deb.
+    zst = make_deb("foo", FOO_DATA, data_member="data.tar.zst", control_member="control.tar.zst")
+    rule_runner.write_files(
+        {
+            "debs/foo_1.0-1_amd64.deb": zst,
+            "xz/foo_1.0-1_amd64.deb": FOO,
+            "debs/BUILD": LAYER_BUILD,
+            "xz/BUILD": LAYER_BUILD,
+        }
+    )
+
+    built = package(rule_runner, "layer")
+    xz_target = rule_runner.get_target(Address("xz", target_name="layer"))
+    xz_built = rule_runner.request(BuiltPackage, [deb_layer.DebLayerPackageFieldSet.create(xz_target)])
+    (content,) = rule_runner.request(DigestContents, [built.digest])
+    (xz_content,) = rule_runner.request(DigestContents, [xz_built.digest])
+    assert "usr/bin/foo" in layer_names(rule_runner, built)
+    assert content.content == xz_content.content
 
 
 def test_includes_the_transitive_closure(rule_runner: RuleRunner) -> None:

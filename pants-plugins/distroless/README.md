@@ -9,7 +9,7 @@ This release targets Pants **2.31.0**. Install it with
 > **Warning**
 > This plugin is in development. No stability is guaranteed! Contributions welcome.
 
-This backend builds the parts of distroless-style images that come from Debian packages, in the
+This backend builds the parts of distroless-style images that come from Debian or Ubuntu packages, in the
 spirit of [rules_distroless](https://github.com/GoogleContainerTools/rules_distroless): declare the
 top-level packages against an apt repository snapshot, and `pants generate-lockfiles` resolves their
 dependencies into a committed lockfile. The locked packages feed `oci_deb_layer` from
@@ -20,7 +20,6 @@ an image needs: `oci_passwd_layer`, `oci_group_layer` and `oci_cacerts_layer`.
 ## Planned and missing features
 
 * Verifying the GPG signature of the repository's `Release` file.
-* Ubuntu packages, which are zstd-compressed.
 
 ## Targets
 
@@ -86,6 +85,29 @@ the lockfile can be regenerated and the packages stay downloadable. Several sour
 for example to add `bookworm-updates`, or `bookworm-security` from
 `https://snapshot.debian.org/archive/debian-security/<timestamp>`. Every `Packages` index is checked
 against the SHA256 in its suite's `Release` file; the `Release` file's signature is not verified.
+
+Ubuntu works the same way, from [snapshot.ubuntu.com](https://snapshot.ubuntu.com). Its updates
+and security fixes are separate suites of the same archive, and unlike the live archive, where
+arm64 lives on `ports.ubuntu.com`, the snapshot serves arm64 packages under `/ubuntu` too, so one
+set of sources covers both architectures. `Phased-Update-Percentage` is ignored: a snapshot lock
+takes a phased update like any other version. Ubuntu's packages are zstd-compressed, which
+`oci_deb_layer` reads with its `zstd` tool.
+
+``` python
+deb_packages(
+    name="noble",
+    resolve="noble",
+    sources=[
+        "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble main",
+        "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-updates main",
+        "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-security main",
+    ],
+    architectures=["amd64", "arm64"],
+    packages=["jq", "ca-certificates"],
+    # Already in the ubuntu:noble base image.
+    exclude=["libc6", "debconf", "libssl3t64"],
+)
+```
 
 #### Resolution
 

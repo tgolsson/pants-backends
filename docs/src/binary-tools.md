@@ -1,7 +1,7 @@
 # Binary tool versions
 
 The plugin defaults and download metadata were refreshed on 2026-10-16; crane
-was added on 2026-10-21. Each known-version entry pins both SHA-256 and byte size. Versions can be selected with
+was added on 2026-10-21 and zstd on 2026-10-22. Each known-version entry pins both SHA-256 and byte size. Versions can be selected with
 the corresponding subsystem's `--version` option.
 
 | Tool | Default | Additional release lines covered |
@@ -14,6 +14,7 @@ the corresponding subsystem's `--version` option.
 | mdBook | 0.5.4 | Latest 0.4 (0.4.52), plus existing historical entries |
 | Bitwarden CLI | 2026.10.0 | 2026.9.1, plus existing historical entries |
 | umoci | 0.6.0 | Existing pinned nightly and 0.4.7 entries |
+| zstd | 1.5.6-bcr2 | Latest only |
 
 The OCI plugin uses crane to pull, publish, and mirror images. Skopeo is used
 only to export a packaged OCI image as an archive.
@@ -45,6 +46,10 @@ artifacts. crane comes from the
 tarballs. Skopeo's upstream project does not publish standalone release binaries,
 so its downloads use [lework/skopeo-binary](https://github.com/lework/skopeo-binary).
 Only the current Skopeo release is included, for OCI archive export.
+zstd's upstream publishes Windows binaries only, so its downloads use the static
+builds from [aspect-build/zstd-prebuilt](https://github.com/aspect-build/zstd-prebuilt),
+which Bazel's bazel-lib uses as well. The OCI plugin runs it to read
+zstd-compressed `.deb` packages, such as Ubuntu's.
 
 umoci uses official Linux artifacts, including ARM64. macOS builds come from
 [tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary), built from the

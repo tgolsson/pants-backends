@@ -37,7 +37,8 @@ oci_image_build(
 )
 
 # The users, groups and CA bundle `useradd`, `groupadd` and `update-ca-certificates` would create,
-# built without running anything. They replace the base image's files, so `root` is listed too.
+# built without running anything. They replace the base image's files, so `root` is listed too, and
+# the base's other accounts (`nobody`, `daemon`, ...) are gone unless listed here.
 oci_passwd_layer(
     name="passwd",
     users=[

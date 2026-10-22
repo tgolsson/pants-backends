@@ -29,7 +29,8 @@ class DebPackagesSourcesField(StringSequenceField):
     help = softwrap("""
     The apt repositories to resolve against, each a sources.list line without the leading `deb`:
     `<uri> <suite> <component>...`, e.g.
-    `https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main`. Pin the URI to a
+    `https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main` or
+    `https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble main`. Pin the URI to a
     snapshot so the lockfile can be regenerated. When several sources have the same package, the
     highest version wins; for equal versions the earlier source wins.
     """)

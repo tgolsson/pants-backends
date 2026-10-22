@@ -213,11 +213,41 @@ class RuncTool(ExternalTool):
         return f"./runc.{plat_str}"
 
 
+class ZstdTool(ExternalTool):
+    options_scope = "zstd"
+    help = softwrap("""
+    Zstandard, used to decompress `.deb` packages whose members are zstd-compressed, as Ubuntu's
+    are. The default binaries are the static builds from https://github.com/aspect-build/zstd-prebuilt.
+    """)
+
+    default_version = "v1.5.6-bcr2"
+    default_known_versions = [
+        "v1.5.6-bcr2|linux_x86_64|190c196b46883a234238d9c52a211c1494df79bb170fbe30c6fc22639d5d4731|1147128",
+        "v1.5.6-bcr2|linux_arm64|4fa2386a975c2120f91f3103bd4268a19a341cb9063417f3829018e94f28c8c6|940152",
+        "v1.5.6-bcr2|macos_x86_64|d81be8618553d7d658e09da669ffd68ec76d8095161a590c9b8a1a99fce67ca8|1127528",
+        "v1.5.6-bcr2|macos_arm64|9848858f7332effb071818f282b3ac3052085e3dafa9ae09f0060b7e211a80dc|976184",
+    ]
+
+    def generate_url(self, plat: Platform) -> str:
+        binary = self.generate_exe(plat).removeprefix("./")
+        return f"https://github.com/aspect-build/zstd-prebuilt/releases/download/{self.version}/{binary}"
+
+    def generate_exe(self, plat: Platform) -> str:
+        platform_mapping = {
+            "linux_arm64": "linux_arm64",
+            "linux_x86_64": "linux_amd64",
+            "macos_arm64": "darwin_arm64",
+            "macos_x86_64": "darwin_amd64",
+        }
+        return f"./zstd_{platform_mapping[plat.value]}"
+
+
 def rules():
     return [
         *SkopeoTool.rules(),
         *CraneTool.rules(),
         *RuncTool.rules(),
         *UmociTool.rules(),
+        *ZstdTool.rules(),
         *OciSubsystem.rules(),
     ]

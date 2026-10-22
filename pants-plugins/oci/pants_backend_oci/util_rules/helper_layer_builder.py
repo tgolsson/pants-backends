@@ -9,13 +9,21 @@ Layers are deterministic: entries are written in path order with zeroed timestam
 ownership, so the same input always gives the same bytes. Only the files and home directories
 themselves are written, not their parents, so the base image's `/etc`, `/home` or `/tmp` keep their
 ownership and modes; a parent missing from the base is created when the image is unpacked.
+
+This module and `deb_layer_builder` only use the standard library. The passwd and group layers are
+built in the rules; the CA bundle layer reads debs, which may need a `zstd` binary, so its rule
+copies both modules into the sandbox and calls `main`.
 """
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import io
+import os
 import posixpath
 import re
+import sys
 import tarfile
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Iterable, Mapping
@@ -26,6 +34,7 @@ from pants_backend_oci.util_rules.deb_layer_builder import (
     clean_path,
     directory_info,
     file_info,
+    load_deb,
     open_data,
 )
 
@@ -260,3 +269,30 @@ def build_cacerts_layer(package: DebPackage, out: BinaryIO) -> None:
     if copyright is not None:
         files.append(_file(CA_COPYRIGHT, copyright))
     _write_layer(files, out)
+
+
+def main(argv: list[str]) -> int:
+    """Build the CA bundle layer from the one `ca-certificates` package among `debs`."""
+    parser = argparse.ArgumentParser(description="Build an OCI layer with the CA bundle.")
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--zstd", help="A zstd binary, for zstd-compressed members.")
+    parser.add_argument("debs", nargs="+")
+    args = parser.parse_args(argv)
+
+    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+    try:
+        with contextlib.ExitStack() as stack:
+            packages = [
+                load_deb(stack.enter_context(open(path, "rb")), source=path, zstd=args.zstd)
+                for path in args.debs
+            ]
+            matching = [package for package in packages if package.name == CA_CERTIFICATES]
+            if len(matching) != 1:
+                found = ", ".join(p.source for p in matching) or "none"
+                raise DebError(f"expected exactly one `{CA_CERTIFICATES}` package, found: {found}")
+            with open(args.output, "wb") as out:
+                build_cacerts_layer(matching[0], out)
+    except DebError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0

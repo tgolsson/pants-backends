@@ -17,14 +17,18 @@ This is a backend implementing support for building OCI images in pants; running
 
 ## Tool versions
 
-The defaults are umoci `v0.6.0`, crane `v0.22.1`, Skopeo `v1.24.1`, and runc `v1.5.2`.
+The defaults are umoci `v0.6.0`, crane `v0.22.1`, Skopeo `v1.24.1`, runc `v1.5.2`, and zstd `v1.5.6-bcr2`.
 umoci uses official Linux binaries and matching macOS builds from
 [tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary/releases/tag/v0.6.0).
 Skopeo binaries come from [lework/skopeo-binary](https://github.com/lework/skopeo-binary),
 since the Skopeo project does not publish standalone binaries. Both tools cover
 Linux/macOS on x86-64 and ARM64. runc is Linux-only, with `v1.4.3`, `v1.3.6`, and
 `v1.2.9` also recorded. crane uses the official go-containerregistry release archives.
-Use `[umoci].version`, `[crane].version`, `[skopeo].version`, or `[runc].version`
+zstd, used by `oci_deb_layer` and `oci_cacerts_layer` to read zstd-compressed packages such as
+Ubuntu's, comes from the static builds of [aspect-build/zstd-prebuilt](https://github.com/aspect-build/zstd-prebuilt)
+for Linux/macOS on x86-64 and ARM64. It is downloaded like the other tools, not installed as a Python
+dependency.
+Use `[umoci].version`, `[crane].version`, `[skopeo].version`, `[runc].version`, or `[zstd].version`
 to select another recorded version. Stable umoci now supports macOS without
 selecting the legacy pinned `nightly` version.
 
@@ -228,7 +232,7 @@ oci_build_layer(
 
 Build a layer from Debian `.deb` packages without running `dpkg`, `apt` or any maintainer scripts. Package contents are extracted into the layer with zeroed timestamps, and each package is recorded in `/var/lib/dpkg/status.d/<package>` (plus `<package>.md5sums`), the same layout distroless images use, so scanners such as Trivy, Syft and Grype see the packages. Add it to an image through `layers`.
 
-The layer gets the transitive closure of the `debs` targets. To have apt dependencies resolved, use `deb_packages` from [`pants-backend-distroless`](https://pypi.org/project/pants-backend-distroless), which locks a package set against a snapshot and generates targets that depend on the packages they need. Otherwise list every package the layer needs on top of the base image as `file` targets, pinned to a [snapshot.debian.org](https://snapshot.debian.org) URL so the layer stays reproducible. Only Debian packages are supported for now; zstd-compressed packages (as used by Ubuntu) are rejected. A path shipped by more than one package must be identical in each (type, mode, ownership and content or link target), as `dpkg` requires; directories keep the metadata of the first package by name. Hardlinked files are compared by name, so two packages that ship the same hardlink pair but store it the other way around (which name is the file and which is the link) are rejected. Files with extended attributes (such as file capabilities) are rejected, since the layer can't carry them. Packages for more than one architecture are rejected; `Architecture: all` packages go with any.
+The layer gets the transitive closure of the `debs` targets. To have apt dependencies resolved, use `deb_packages` from [`pants-backend-distroless`](https://pypi.org/project/pants-backend-distroless), which locks a package set against a snapshot and generates targets that depend on the packages they need. Otherwise list every package the layer needs on top of the base image as `file` targets, pinned to a [snapshot.debian.org](https://snapshot.debian.org) or [snapshot.ubuntu.com](https://snapshot.ubuntu.com) URL so the layer stays reproducible. Debian and Ubuntu packages are both supported; members compressed with gzip, xz or bzip2 are read directly, and zstd-compressed ones (as Ubuntu uses) are piped through the `zstd` tool. A path shipped by more than one package must be identical in each (type, mode, ownership and content or link target), as `dpkg` requires; directories keep the metadata of the first package by name. Hardlinked files are compared by name, so two packages that ship the same hardlink pair but store it the other way around (which name is the file and which is the link) are rejected. Files with extended attributes (such as file capabilities) are rejected, since the layer can't carry them. Packages for more than one architecture are rejected; `Architecture: all` packages go with any.
 
 Things to be aware of:
 
@@ -317,7 +321,7 @@ A user's `home` defaults to `/home/<name>`, `shell` to `/sbin/nologin`, `gecos` 
 
 Build a layer with the CA bundle `/etc/ssl/certs/ca-certificates.crt` from the `ca-certificates` package, without running `update-ca-certificates`: every certificate under `/usr/share/ca-certificates` is concatenated in path order, as the package's `postinst` and `update-ca-certificates` would. The package's copyright file is included too. Like distroless images, the layer has no per-certificate files or OpenSSL hash links in `/etc/ssl/certs`, so tools that look certificates up by hash in a directory rather than reading the bundle file don't find them.
 
-`debs` is searched for the `ca-certificates` package, so it can point at a target generated by `deb_packages`; the packages it depends on are ignored.
+`debs` is searched for the `ca-certificates` package, so it can point at a target generated by `deb_packages`; the packages it depends on are ignored. Debian's and Ubuntu's packages both work.
 
 The bundle is reproducible: certificates are concatenated in a bytewise sort of their paths, so it depends only on the package. It is not byte-for-byte what Debian would produce, though: the package's `postinst` sorts the list by locale, so a scripted build can order the certificates differently, and `!` deselections in `/etc/ca-certificates.conf` and certificates added under `/usr/local/share/ca-certificates` are not supported.
 

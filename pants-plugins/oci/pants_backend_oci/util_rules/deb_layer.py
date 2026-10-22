@@ -9,11 +9,13 @@ from importlib import resources
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
 from pants.core.target_types import FileSourceField
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
+from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
 from pants.engine.fs import CreateDigest, FileContent, MergeDigests, Snapshot
 from pants.engine.internals.graph import resolve_targets, transitive_targets
 from pants.engine.intrinsics import create_digest, merge_digests
+from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import (
@@ -26,6 +28,7 @@ from pants.engine.target import (
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
+from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.target_types import DebLayerMergedUsrField, DebLayerPackagesField
 from pants_backend_oci.util_rules import deb_layer_builder
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
@@ -96,17 +99,20 @@ async def resolve_deb_files(request: DebFilesRequest) -> DebFiles:
 async def package_deb_layer(
     field_set: DebLayerPackageFieldSet,
     python: PythonBuildStandaloneBinary,
+    zstd_tool: ZstdTool,
+    platform: Platform,
 ) -> BuiltPackage:
     debs = await resolve_deb_files(DebFilesRequest(field_set.debs, field_set.address))
     sources = debs.snapshot
+    zstd = await download_external_tool(zstd_tool.get_request(platform))
 
     # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
     builder_source = resources.files(__package__).joinpath(_BUILDER_SOURCE).read_bytes()
     script = await create_digest(CreateDigest([FileContent(f"{_BUILDER_MODULE}.py", builder_source)]))
-    input_digest = await merge_digests(MergeDigests([script, sources.digest]))
+    input_digest = await merge_digests(MergeDigests([script, sources.digest, zstd.digest]))
 
     relpath = field_set.output_path.value_or_default(file_ending="tar")
-    argv = [python.path, "-c", _BUILDER_MAIN, "--output", relpath]
+    argv = [python.path, "-c", _BUILDER_MAIN, "--output", relpath, "--zstd", zstd.exe]
     if not field_set.merged_usr.value:
         argv.append("--no-merged-usr")
 

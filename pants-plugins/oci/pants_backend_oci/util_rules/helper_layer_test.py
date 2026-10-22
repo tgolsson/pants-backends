@@ -8,11 +8,14 @@ from pants.core.goals import package as package_goal
 from pants.core.goals.package import BuiltPackage
 from pants.core.target_types import FileTarget, GenericTarget
 from pants.core.target_types import rules as core_target_type_rules
-from pants.core.util_rules import source_files
+from pants.core.util_rules import adhoc_binaries
+from pants.core.util_rules import archive as pants_archive
+from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.fs import DigestContents
 from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
+from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.targets import CaCertsLayer, GroupLayer, PasswdLayer
 from pants_backend_oci.util_rules import archive, deb_layer, helper_layer, layer
 from pants_backend_oci.util_rules.deb_layer_builder_test import FOO
@@ -36,7 +39,12 @@ def rule_runner() -> RuleRunner:
             *helper_layer.rules(),
             *layer.rules(),
             *package_goal.rules(),
+            *adhoc_binaries.rules(),
             *source_files.rules(),
+            *external_tool.rules(),
+            *pants_archive.rules(),
+            *system_binaries.rules(),
+            *ZstdTool.rules(),
             *core_target_type_rules(),
             *(QueryRule(BuiltPackage, [field_set]) for field_set in FIELD_SETS.values()),
             QueryRule(layer.ImageLayer, [layer.ImageLayerRequest]),
@@ -120,9 +128,23 @@ def test_cacerts_layer_finds_package_with_unconventional_filename(rule_runner: R
     assert CERT_B in read(rule_runner, package(rule_runner, "renamed"), CA_BUNDLE)
 
 
+def test_cacerts_layer_reads_zstd_debs(rule_runner: RuleRunner) -> None:
+    write(rule_runner)
+    rule_runner.write_files(
+        {
+            "img/ca-certificates_1.0-1_all.deb": ca_certificates_deb(
+                data_member="data.tar.zst", control_member="control.tar.zst"
+            )
+        }
+    )
+    assert CERT_B in read(rule_runner, package(rule_runner, "cacerts"), CA_BUNDLE)
+
+
 def test_cacerts_layer_requires_ca_certificates(rule_runner: RuleRunner) -> None:
     write(rule_runner, BUILD + '\noci_cacerts_layer(name="no_ca", debs=[":foo"])\n')
-    with engine_error(contains="must bring exactly one `ca-certificates` package, found: none"):
+    with engine_error(
+        contains="the `debs` field of img:no_ca: expected exactly one `ca-certificates` package, found: none"
+    ):
         package(rule_runner, "no_ca")
 
 

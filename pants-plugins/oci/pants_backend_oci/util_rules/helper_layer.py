@@ -2,33 +2,49 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 """Rules for the declarative helper layers: `oci_passwd_layer`, `oci_group_layer` and
-`oci_cacerts_layer`. The layers are small, so they are built in the rule rather than a process."""
+`oci_cacerts_layer`. The passwd and group layers are small, so they are built in the rule rather
+than a process. The CA bundle is built in a process, since reading zstd-compressed debs needs a
+`zstd` binary."""
 
 from __future__ import annotations
 
 import io
 import os
 from dataclasses import dataclass
+from importlib import resources
 from typing import BinaryIO, Callable
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
-from pants.engine.fs import CreateDigest, DigestSubset, FileContent, PathGlobs
-from pants.engine.intrinsics import create_digest, digest_subset_to_digest, get_digest_contents
-from pants.engine.rules import collect_rules, rule
+from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
+from pants.core.util_rules.external_tool import download_external_tool
+from pants.engine.fs import CreateDigest, DigestSubset, FileContent, MergeDigests, PathGlobs
+from pants.engine.intrinsics import (
+    create_digest,
+    digest_subset_to_digest,
+    execute_process,
+    merge_digests,
+)
+from pants.engine.platform import Platform
+from pants.engine.process import Process
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import InvalidFieldException
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
+from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.target_types import CaCertsPackagesField, GroupEntriesField, PasswdUsersField
+from pants_backend_oci.util_rules import deb_layer_builder, helper_layer_builder
 from pants_backend_oci.util_rules.deb_layer import DebFilesRequest, resolve_deb_files
-from pants_backend_oci.util_rules.deb_layer_builder import DebError, load_deb
 from pants_backend_oci.util_rules.helper_layer_builder import (
     CA_CERTIFICATES,
-    build_cacerts_layer,
     build_group_layer,
     build_passwd_layer,
 )
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
+
+# The builders are copied into the sandbox under their package path, so their imports still resolve.
+_BUILDER_MODULES = (deb_layer_builder, helper_layer_builder)
+_CACERTS_MAIN = f"import sys, {helper_layer_builder.__name__} as m; sys.exit(m.main(sys.argv[1:]))"
 
 
 @dataclass(frozen=True)
@@ -76,37 +92,68 @@ async def package_group_layer(field_set: GroupLayerFieldSet) -> BuiltPackage:
     return BuiltPackage(digest, (BuiltLayerArtifact(relpath=relpath),))
 
 
+def _sandboxed_builders() -> CreateDigest:
+    """The builder modules at their package paths, with empty `__init__.py`s for the packages."""
+    files = []
+    for module in _BUILDER_MODULES:
+        package, _, name = module.__name__.rpartition(".")
+        # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
+        source = resources.files(package).joinpath(f"{name}.py").read_bytes()
+        files.append(FileContent(f"{module.__name__.replace('.', '/')}.py", source))
+    parts = _BUILDER_MODULES[0].__name__.split(".")[:-1]
+    for depth in range(1, len(parts) + 1):
+        files.append(FileContent(f"{'/'.join(parts[:depth])}/__init__.py", b""))
+    return CreateDigest(files)
+
+
 @rule(desc="Package OCI layer with a CA bundle", level=LogLevel.DEBUG)
-async def package_cacerts_layer(field_set: CaCertsLayerFieldSet) -> BuiltPackage:
+async def package_cacerts_layer(
+    field_set: CaCertsLayerFieldSet,
+    python: PythonBuildStandaloneBinary,
+    zstd_tool: ZstdTool,
+    platform: Platform,
+) -> BuiltPackage:
     debs = await resolve_deb_files(DebFilesRequest(field_set.debs, field_set.address))
 
     # Debs are named `<package>_<version>_<arch>.deb`, so only read the likely candidates, falling
     # back to every deb for other names. The package name is still checked from the control file.
     candidates = [f for f in debs.snapshot.files if os.path.basename(f).startswith(f"{CA_CERTIFICATES}_")]
-    digest = debs.snapshot.digest
+    debs_digest = debs.snapshot.digest
     if candidates:
-        digest = await digest_subset_to_digest(DigestSubset(digest, PathGlobs(candidates)))
-    contents = await get_digest_contents(digest)
+        debs_digest = await digest_subset_to_digest(DigestSubset(debs_digest, PathGlobs(candidates)))
 
-    try:
-        packages = [load_deb(io.BytesIO(deb.content), source=deb.path) for deb in contents]
-    except DebError as e:
-        raise InvalidFieldException(f"Could not read the debs of {field_set.address}: {e}") from e
+    zstd = await download_external_tool(zstd_tool.get_request(platform))
+    builders = await create_digest(_sandboxed_builders())
+    input_digest = await merge_digests(MergeDigests([builders, debs_digest, zstd.digest]))
 
-    matching = [package for package in packages if package.name == CA_CERTIFICATES]
-    if len(matching) != 1:
-        found = ", ".join(p.source for p in matching) or "none"
+    relpath = field_set.output_path.value_or_default(file_ending="tar")
+    result = await execute_process(
+        Process(
+            argv=(
+                python.path,
+                "-c",
+                _CACERTS_MAIN,
+                "--output",
+                relpath,
+                "--zstd",
+                zstd.exe,
+                *(candidates or debs.snapshot.files),
+            ),
+            input_digest=input_digest,
+            output_files=(relpath,),
+            description=f"Build OCI layer with a CA bundle: {field_set.address}",
+            level=LogLevel.DEBUG,
+        ),
+        **implicitly(),
+    )
+    if result.exit_code != 0:
+        error = result.stderr.decode(errors="replace").strip().removeprefix("error: ")
         raise InvalidFieldException(
-            f"The `{CaCertsPackagesField.alias}` field of {field_set.address} must bring exactly one "
-            f"`{CA_CERTIFICATES}` package, found: {found}"
+            f"Could not build the CA bundle from the `{CaCertsPackagesField.alias}` field of "
+            f"{field_set.address}: {error}"
         )
 
-    try:
-        relpath, layer = _layer(field_set.output_path, lambda out: build_cacerts_layer(matching[0], out))
-    except DebError as e:
-        raise InvalidFieldException(f"Could not build the CA bundle of {field_set.address}: {e}") from e
-    digest = await create_digest(layer)
-    return BuiltPackage(digest, (BuiltLayerArtifact(relpath=relpath),))
+    return BuiltPackage(result.output_digest, (BuiltLayerArtifact(relpath=relpath),))
 
 
 def rules():

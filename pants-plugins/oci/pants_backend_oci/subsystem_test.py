@@ -6,7 +6,7 @@ from pants.engine.process import Process, ProcessResult
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 
-from pants_backend_oci.subsystem import CraneTool, RuncTool, SkopeoTool, UmociTool
+from pants_backend_oci.subsystem import CraneTool, RuncTool, SkopeoTool, UmociTool, ZstdTool
 from pants_backend_oci.subsystem import rules as subsystem_rules
 
 
@@ -22,6 +22,7 @@ def rule_runner() -> RuleRunner:
             QueryRule(CraneTool, []),
             QueryRule(UmociTool, []),
             QueryRule(RuncTool, []),
+            QueryRule(ZstdTool, []),
         ]
     )
 
@@ -30,7 +31,7 @@ def rule_runner() -> RuleRunner:
     "tool_type,version,platform",
     [
         (tool_type, row.split("|")[0], Platform(row.split("|")[1].strip()))
-        for tool_type in (SkopeoTool, CraneTool, UmociTool, RuncTool)
+        for tool_type in (SkopeoTool, CraneTool, UmociTool, RuncTool, ZstdTool)
         for row in tool_type.default_known_versions
     ],
 )
@@ -56,3 +57,21 @@ def test_crane_version(rule_runner):
         ],
     )
     assert result.stdout.decode().strip() == CraneTool.default_version.removeprefix("v")
+
+
+def test_zstd_version(rule_runner):
+    zstd = rule_runner.request(ZstdTool, [])
+    downloaded = rule_runner.request(
+        DownloadedExternalTool, [zstd.get_request(Platform.create_for_localhost())]
+    )
+    result = rule_runner.request(
+        ProcessResult,
+        [
+            Process(
+                argv=[downloaded.exe, "-V"],
+                input_digest=downloaded.digest,
+                description="Run zstd -V",
+            )
+        ],
+    )
+    assert "v1.5.6" in result.stdout.decode()

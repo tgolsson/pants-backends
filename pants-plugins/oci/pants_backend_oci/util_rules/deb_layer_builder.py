@@ -9,8 +9,9 @@ distroless images, which is what scanners such as Trivy, Syft and Grype read. Ma
 never executed.
 
 Package contents are streamed from the deb into the layer, so memory use doesn't grow with package
-size. A path shipped by more than one package is accepted when every copy is identical, as dpkg does
-for multi-arch packages.
+size. zstd-compressed members, as Ubuntu uses, are decompressed by piping them through a `zstd`
+binary, since the standard library can't read them before Python 3.14. A path shipped by more than
+one package is accepted when every copy is identical, as dpkg does for multi-arch packages.
 
 This module only uses the standard library: the `oci_deb_layer` rules copy it into the sandbox and
 call `main`, and tests import it directly.
@@ -28,8 +29,10 @@ import lzma
 import os
 import posixpath
 import re
+import subprocess
 import sys
 import tarfile
+import threading
 import zlib
 from dataclasses import dataclass, field
 from dataclasses import fields as dataclass_fields
@@ -64,6 +67,7 @@ class DebPackage:
     data_offset: int
     data_size: int
     source: str = ""
+    zstd: str | None = None
 
 
 def read_ar(f: BinaryIO) -> dict[str, tuple[int, int]]:
@@ -144,7 +148,81 @@ class _CheckedReader:
             raise DebError(f"{self._what} is corrupt: {e}") from e
 
 
-def _decompressor(name: str) -> Callable[[BinaryIO], BinaryIO]:
+class _ZstdReader:
+    """Decompresses a stream by piping it through `zstd -d`, fed from a thread so neither pipe blocks."""
+
+    def __init__(self, zstd: str, f: BinaryIO, what: str) -> None:
+        self._what = what
+        self._stderr = b""
+        self._feed_error: OSError | None = None
+        try:
+            self._process = subprocess.Popen(
+                [zstd, "-d", "-c", "-q"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except OSError as e:
+            raise DebError(f"{what}: could not run {zstd}: {e}") from e
+        self._feeder = threading.Thread(target=self._feed, args=(f,), daemon=True)
+        self._feeder.start()
+
+    def _feed(self, f: BinaryIO) -> None:
+        assert self._process.stdin is not None
+        try:
+            while chunk := f.read(1 << 16):
+                self._process.stdin.write(chunk)
+        except (BrokenPipeError, ValueError):
+            # zstd exited early, e.g. on corrupt input, or the reader was closed; `_finish` reports it.
+            pass
+        except OSError as e:
+            # Reading the deb failed; `_finish` reports it rather than zstd's complaint about short input.
+            self._feed_error = e
+        finally:
+            with contextlib.suppress(OSError):
+                self._process.stdin.close()
+
+    def read(self, size: int = -1) -> bytes:
+        assert self._process.stdout is not None
+        if self._process.returncode is not None:
+            return b""
+        data = self._process.stdout.read(size)
+        if not data and size != 0:
+            # Report a failure as soon as the output ends, before a reader blames the short stream.
+            self._finish(check=True)
+        return data
+
+    def __enter__(self) -> _ZstdReader:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self._finish(check=exc_type is None)
+
+    def _finish(self, check: bool) -> None:
+        assert self._process.stdout is not None and self._process.stderr is not None
+        if self._process.returncode is None:
+            if not check:
+                self._process.kill()
+            # Drain what is left, so zstd reaches and verifies the end of the frame.
+            while self._process.stdout.read(1 << 16):
+                pass
+            self._stderr = self._process.stderr.read()
+            self._process.wait()
+            self._feeder.join()
+            self._process.stdout.close()
+            self._process.stderr.close()
+        if check and self._feed_error is not None:
+            raise DebError(f"{self._what}: could not read the package: {self._feed_error}")
+        if check and self._process.returncode != 0:
+            # zstd names its input in errors, which is only ever stdin here.
+            message = self._stderr.decode(errors="replace").strip().replace("/*stdin*\\: ", "")
+            raise DebError(
+                f"{self._what} is corrupt: {message or f'zstd exited with {self._process.returncode}'}"
+            )
+
+
+def _decompressor(name: str, zstd: str | None = None, what: str = "") -> Callable[[BinaryIO], BinaryIO]:
+    """A function wrapping a member's stream in its decompressor. `what` names it in errors."""
     if name.endswith(".tar"):
         return lambda f: f
     if name.endswith(".tar.gz"):
@@ -154,7 +232,9 @@ def _decompressor(name: str) -> Callable[[BinaryIO], BinaryIO]:
     if name.endswith(".tar.bz2"):
         return bz2.BZ2File
     if name.endswith(".tar.zst"):
-        raise DebError(f"{name}: zstd-compressed members are not supported yet")
+        if zstd is None:
+            raise DebError(f"{name}: reading zstd-compressed members needs a zstd binary")
+        return lambda f: _ZstdReader(zstd, f, what or name)
     raise DebError(f"{name}: unknown compression")
 
 
@@ -203,8 +283,11 @@ def parse_control(control: bytes) -> list[tuple[str, str]]:
     return fields
 
 
-def load_deb(f: BinaryIO, source: str = "") -> DebPackage:
-    """Read a deb's control metadata. `f` must stay open until the package is written to a layer."""
+def load_deb(f: BinaryIO, source: str = "", zstd: str | None = None) -> DebPackage:
+    """Read a deb's control metadata. `f` must stay open until the package is written to a layer.
+
+    `zstd` is the path to a `zstd` binary, needed for zstd-compressed members.
+    """
     try:
         members = read_ar(f)
     except DebError as e:
@@ -221,12 +304,18 @@ def load_deb(f: BinaryIO, source: str = "") -> DebPackage:
     control_name, control_location = _find_member(members, "control.tar")
     data_name, (data_offset, data_size) = _find_member(members, "data.tar")
     # Fail on unsupported compression now rather than halfway through writing the layer.
-    _decompressor(data_name)
-
-    control_tar = _decompressor(control_name)(io.BytesIO(read(control_location)))
-    with tarfile.open(fileobj=control_tar) as tar:
-        control = _read_tar_file(tar, "control")
-        md5sums = _read_tar_file(tar, "md5sums")
+    try:
+        _decompressor(data_name, zstd)
+        with _decompressor(control_name, zstd)(io.BytesIO(read(control_location))) as decompressed:
+            control_tar = io.BytesIO(_CheckedReader(decompressed, control_name).read())
+    except DebError as e:
+        raise DebError(f"{source}: {e}") from e
+    try:
+        with tarfile.open(fileobj=control_tar) as tar:
+            control = _read_tar_file(tar, "control")
+            md5sums = _read_tar_file(tar, "md5sums")
+    except tarfile.TarError as e:
+        raise DebError(f"{source}: {control_name} is corrupt: {e}") from e
 
     if control is None:
         raise DebError(f"{source}: control.tar has no control file")
@@ -246,6 +335,7 @@ def load_deb(f: BinaryIO, source: str = "") -> DebPackage:
         data_offset=data_offset,
         data_size=data_size,
         source=source,
+        zstd=zstd,
     )
 
 
@@ -254,7 +344,7 @@ def open_data(package: DebPackage) -> Iterator[tarfile.TarFile]:
     """Stream a package's `data.tar.*`, turning corrupt or truncated archives into a `DebError`."""
     what = f"{package.source or package.name}: {package.data_member}"
     raw = io.BufferedReader(_Slice(package.fileobj, package.data_offset, package.data_size))
-    with _decompressor(package.data_member)(raw) as decompressed:
+    with _decompressor(package.data_member, package.zstd, what)(raw) as decompressed:
         stream = _CheckedReader(decompressed, what)
         try:
             with tarfile.open(fileobj=stream, mode="r|") as data:
@@ -503,13 +593,17 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True)
     parser.add_argument("--no-merged-usr", dest="merged_usr", action="store_false")
+    parser.add_argument("--zstd", help="A zstd binary, for zstd-compressed members.")
     parser.add_argument("debs", nargs="+")
     args = parser.parse_args(argv)
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     try:
         with contextlib.ExitStack() as stack:
-            packages = [load_deb(stack.enter_context(open(path, "rb")), source=path) for path in args.debs]
+            packages = [
+                load_deb(stack.enter_context(open(path, "rb")), source=path, zstd=args.zstd)
+                for path in args.debs
+            ]
             with open(args.output, "wb") as out:
                 build_layer(packages, out, merged_usr=args.merged_usr)
     except DebError as e:

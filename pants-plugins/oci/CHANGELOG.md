@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- `oci_deb_layer` and `oci_cacerts_layer` read zstd-compressed packages, such as Ubuntu's, by
+  piping them through a new `[zstd]` tool: a static zstd binary of about 1 MB downloaded from
+  aspect-build/zstd-prebuilt, not a Python dependency. `oci_cacerts_layer` is now built in a
+  process instead of in the rule.
 - Add `oci_passwd_layer`, `oci_group_layer` and `oci_cacerts_layer`, which build `/etc/passwd`
   (with home directories), `/etc/group` and a CA bundle from the `ca-certificates` package as
   reproducible layers, without running `useradd` or `update-ca-certificates`.
