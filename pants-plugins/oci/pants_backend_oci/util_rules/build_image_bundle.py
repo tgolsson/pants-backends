@@ -32,7 +32,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
-from pants_backend_oci.util_rules.run import RunContainerRequest, run_in_container
+from pants_backend_oci.util_rules.run import ScriptedLayerRequest, run_scripted_layer
 
 
 @dataclass(frozen=True)
@@ -115,12 +115,13 @@ async def build_oci_bundle_package(request: BuildImageBundleRequest) -> Fallible
     if image.output is None:
         return image
 
-    modified_image = await run_in_container(
-        RunContainerRequest(image.output, request.target.commands.value, True), **implicitly()
+    scripted = await run_scripted_layer(
+        ScriptedLayerRequest(image.output, request.target.commands.value, request.target.address),
+        **implicitly(),
     )
 
     return await assemble_image(
-        AssembleImageRequest(modified_image.output_digest, (config,), description), **implicitly()
+        AssembleImageRequest(image.output.digest, (scripted, config), description), **implicitly()
     )
 
 

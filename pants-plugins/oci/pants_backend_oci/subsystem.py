@@ -14,28 +14,25 @@ class OciSubsystem(Subsystem):
     command_shell = StrListOption(
         default=["/bin/sh", "-c"],
         advanced=True,
-        help="The default shell to use for container build commands.",
+        help="The shell that runs `commands=` in scripted build steps. It must exist in the base image.",
     )
 
     rootless = BoolOption(
         default=True,
         advanced=True,
-        help=(
-            "Whether to run in rootless mode, which changes behavior for some commands. Recommended on but"
-            " may require more setup.."
-        ),
+        help="No longer used: scripted build steps run through rootless podman.",
     )
 
     uid_map = StrListOption(
         default=["0:1000:1", "1:100000:65536"],
         advanced=True,
-        help="The UID map to use.",
+        help="No longer used: podman manages its own rootless mappings.",
     )
 
     gid_map = StrListOption(
         default=["0:1000:1", "1:100000:65536"],
         advanced=True,
-        help="The GID map to use.",
+        help="No longer used: podman manages its own rootless mappings.",
     )
 
     empty_image_target = StrOption(

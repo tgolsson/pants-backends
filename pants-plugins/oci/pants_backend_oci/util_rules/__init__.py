@@ -4,23 +4,18 @@ from pants_backend_oci.util_rules import (
     binaries,
     build_image_artifact,
     build_image_bundle,
-    copy,
     deb_layer,
     empty_image_bundle,
     helper_layer,
     image_bundle,
-    jq,
     layer,
     pull_image_bundle,
     run,
-    tools,
-    unpack,
 )
 
 
 def rules():
     return [
-        *copy.rules(),
         *deb_layer.rules(),
         *helper_layer.rules(),
         *archive.rules(),
@@ -29,11 +24,8 @@ def rules():
         *layer.rules(),
         *assemble.rules(),
         *pull_image_bundle.rules(),
-        *unpack.rules(),
         *empty_image_bundle.rules(),
-        *jq.rules(),
         *binaries.rules(),
         *build_image_artifact.rules(),
         *run.rules(),
-        *tools.rules(),
     ]

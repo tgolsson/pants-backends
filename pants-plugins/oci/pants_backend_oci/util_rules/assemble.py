@@ -75,8 +75,9 @@ AssembleOp = Union[InitImage, ConfigEdit, ImageLayer]
 
 def layer_ops(layer: ImageLayer, path: str) -> list[dict]:
     """Add `layer`, found at `path` in the sandbox, and apply the config it brings."""
-    created_by = f"Layer target: {layer.address}"
-    history = {"created": EPOCH, "created_by": created_by, "author": AUTHOR, "comment": created_by}
+    target = f"Layer target: {layer.address}"
+    created_by = layer.created_by or target
+    history = {"created": EPOCH, "created_by": created_by, "author": AUTHOR, "comment": target}
     config = ConfigEdit(
         env=(BUILT_BY,),
         entrypoint=(layer.entrypoint,) if layer.entrypoint else None,

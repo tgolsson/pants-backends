@@ -13,7 +13,6 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner
 from pants_backend_oci import subsystem, synthetic_targets, util_rules
 from pants_backend_oci.goals import package, publish
 from pants_backend_oci.targets import ImageBuild, ImageEmpty
-from pants_backend_oci.tools import process as fprocess
 
 
 @dataclass(frozen=True)
@@ -33,7 +32,6 @@ def rule_runner() -> RuleRunner:
         rules=[
             *core_rules(),
             *external_tool.rules(),
-            *fprocess.rules(),
             *graph.rules(),
             *package.rules(),
             *pants_archive.rules(),

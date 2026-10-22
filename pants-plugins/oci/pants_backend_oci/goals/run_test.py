@@ -8,14 +8,10 @@ from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.testutil.rule_runner import run_rule_with_mocks
 
-from pants_backend_oci.goals.run import (
-    PodmanBinary,
-    RunImageBundleProcessRequest,
-    find_podman,
-    prepare_run_image_bundle,
-)
+from pants_backend_oci.goals.run import RunImageBundleProcessRequest, prepare_run_image_bundle
 from pants_backend_oci.targets import ImageBuild
 from pants_backend_oci.util_rules.image_bundle import FallibleImageBundle, ImageBundle
+from pants_backend_oci.util_rules.run import PodmanBinary, find_podman
 
 
 @pytest.mark.parametrize("interactive,terminal", [(False, False), (False, True), (True, False)])

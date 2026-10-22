@@ -32,16 +32,14 @@ from pants_backend_oci.util_rules.assemble import (
     assemble_image,
     assembled_or_raise,
 )
-from pants_backend_oci.util_rules.copy import CopyFromRequest, copy_from_container
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
-    ImageBundle,
     ImageBundleRequest,
     ibr_to_fibr,
     resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
-from pants_backend_oci.util_rules.run import RunContainerRequest, run_in_container
+from pants_backend_oci.util_rules.run import ImageFilesRequest, image_files
 
 
 @dataclass(frozen=True)
@@ -119,23 +117,18 @@ async def build_image_artifact(
         )
         bundle = assembled_or_raise(image, request.target.address)
 
-    modified_image = await run_in_container(
-        RunContainerRequest(bundle, request.target.commands.value, True), **implicitly()
-    )
-    bundle = ImageBundle(modified_image.output_digest, "", True)
-
-    artifacts = await copy_from_container(
-        CopyFromRequest(
+    return await image_files(
+        ImageFilesRequest(
+            request.target.address,
             request.target.output_path.value_or_default(file_ending="tar.gz"),
             bundle,
-            tuple(),
-            request.target.outputs.value,
+            request.target.commands.value,
+            tuple(request.target.outputs.value or ()),
             exclude_patterns=tuple(request.target.exclude.value or ()),
+            description=f"Run build step for {request.target.address}",
         ),
         **implicitly(),
     )
-
-    return artifacts
 
 
 @rule(desc="Extract artifact from container", level=LogLevel.DEBUG)
@@ -158,22 +151,18 @@ async def extract_image_artifact(
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
 
-    base = maybe_built_base.output
-
-    bundle = ImageBundle(base.digest, "", True)
-
-    artifacts = await copy_from_container(
-        CopyFromRequest(
+    return await image_files(
+        ImageFilesRequest(
+            request.target.address,
             request.target.output_path.value_or_default(file_ending="tar.gz"),
-            bundle,
-            tuple(),
-            request.target.outputs.value,
+            maybe_built_base.output,
+            None,
+            tuple(request.target.outputs.value or ()),
             exclude_patterns=tuple(request.target.exclude.value or ()),
+            description=f"Extract files for {request.target.address}",
         ),
         **implicitly(),
     )
-
-    return artifacts
 
 
 def rules():

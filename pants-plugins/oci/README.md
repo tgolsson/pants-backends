@@ -10,9 +10,7 @@ This release targets Pants **2.31.0**. Install it with
 
 This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses these tools:
 
-* [umoci](https://github.com/opencontainers/umoci) for unpacking and repacking images for scripted `commands=` steps
-* [runc](https://github.com/opencontainers/runc) for executing scripted build steps
-* [podman](https://podman.io/docs/installation), installed by the user, for `pants run` and OCI repl
+* [podman](https://podman.io/docs/installation), installed by the user, for `pants run`, OCI repl and scripted build steps
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 * [skopeo](https://github.com/containers/skopeo) for exporting the packaged OCI layout
 
@@ -20,8 +18,8 @@ This is a backend implementing support for building OCI images in pants; running
 
 Install [podman](https://podman.io/docs/installation) on Linux and configure rootless execution,
 including `/etc/subuid` and `/etc/subgid` mappings for your user. Run Pants as an unprivileged user.
-Declarative packaging and registry publishing do not require podman. Images with scripted
-build steps still need the legacy execution tools.
+Declarative packaging and registry publishing do not require podman; scripted build steps do
+(see below).
 
 `pants run examples/oci/debian:image` runs the image's entrypoint and default command.
 Arguments after `--` replace its command arguments while keeping the entrypoint, for example
@@ -33,27 +31,46 @@ Podman uses a dedicated `oci_podman/v1` directory under Pants' named-cache direc
 private runtime and temporary directories under `/tmp` and the portable `vfs` storage driver.
 Runtime directories are named by user and a hash of the store path to keep podman socket paths short. Exited containers
 are removed; imported images and layers remain cached across runs. This store can grow and is
-separate from your default podman store. The legacy `[oci].rootless`, `uid_map`, and `gid_map`
-options apply to scripted build steps, not run/repl; podman manages its own rootless mappings.
+separate from your default podman store. Its files belong to your subordinate user ids, so clear
+it with `podman unshare rm -rf <named-caches-dir>/oci_podman`. The `[oci].rootless`, `uid_map`
+and `gid_map` options are no longer used; podman manages its own rootless mappings.
 Remote connections (`CONTAINER_HOST` / `CONTAINER_CONNECTION`) are rejected. macOS support
 requires a separate load/run path through `podman machine` and is deferred.
 
+## Scripted build steps
+
+`commands=` on `oci_image_build` and `oci_build_layer` runs a command inside the image. It is an
+escape hatch: everything else is built declaratively, without running anything, and is
+reproducible. A scripted step is only as reproducible as its command.
+
+Scripted steps run through `podman build`, from the image as an OCI archive and with
+`--timestamp 0`, as root inside the container. They need the same local, rootless Linux podman as
+`pants run` and share its store. The command runs through `[oci].command_shell`
+(`/bin/sh -c` by default), so the base image must have that shell; distroless images don't, and
+the step then fails. Network access follows podman's defaults.
+
+- `oci_build_layer` keeps only its `outputs` and packages them as a layer tarball for other images,
+  with the owners and modes they have in the image and zeroed timestamps. An output may be a glob,
+  matched one path segment per segment (`usr/lib/*/libfoo.so`); matches keep their paths.
+- `oci_image_build` with `commands=` adds what the command changed as one more layer on top of
+  the image's layers, which are kept as they are.
+- `oci_extract` copies its `outputs` out of an image without running anything, but still reads
+  the image through podman.
+
+A failing command or a missing output fails the build. `examples/oci/scripted` shows all three.
+
 ## Tool versions
 
-The defaults are umoci `v0.6.0`, crane `v0.22.1`, Skopeo `v1.24.1`, runc `v1.5.2`, and zstd `v1.5.6-bcr2`.
-umoci uses official Linux binaries and matching macOS builds from
-[tgolsson/umoci-binary](https://github.com/tgolsson/umoci-binary/releases/tag/v0.6.0).
+The defaults are crane `v0.22.1`, Skopeo `v1.24.1` and zstd `v1.5.6-bcr2`.
 Skopeo binaries come from [lework/skopeo-binary](https://github.com/lework/skopeo-binary),
-since the Skopeo project does not publish standalone binaries. Both tools cover
-Linux/macOS on x86-64 and ARM64. runc is Linux-only, with `v1.4.3`, `v1.3.6`, and
-`v1.2.9` also recorded. crane uses the official go-containerregistry release archives.
+since the Skopeo project does not publish standalone binaries, for Linux/macOS on x86-64 and
+ARM64. crane uses the official go-containerregistry release archives.
 zstd, used by `oci_deb_layer` and `oci_cacerts_layer` to read zstd-compressed packages such as
 Ubuntu's, comes from the static builds of [aspect-build/zstd-prebuilt](https://github.com/aspect-build/zstd-prebuilt)
 for Linux/macOS on x86-64 and ARM64. It is downloaded like the other tools, not installed as a Python
 dependency.
-Use `[umoci].version`, `[crane].version`, `[skopeo].version`, `[runc].version`, or `[zstd].version`
-to select another recorded version. Stable umoci now supports macOS without
-selecting the legacy pinned `nightly` version.
+Use `[crane].version`, `[skopeo].version` or `[zstd].version` to select another recorded
+version. The `[umoci]` and `[runc]` options are no longer used and will be removed.
 
 Registry credentials are read the way crane reads them, from the first of these that
 exists: `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) with its credential
@@ -71,7 +88,7 @@ to `latest`.
 
 * Currently there's no support for pulling tags, as that would break determinism
 * Multi-platform SHA/.sig is untested/unsupported
-* Container execution requires local Linux podman; in-container build steps still require Linux (runc). Remote podman and macOS `podman machine` execution are not supported yet.
+* Container execution and scripted build steps require local Linux podman. Remote podman and macOS `podman machine` execution are not supported yet.
 
 ## Targets
 
@@ -205,7 +222,8 @@ oci_image_empty(
 
 ### `oci_extract`
 
-Extract one or more files from another container image.
+Extract one or more files from another container image. Nothing is run, but the image is read
+through podman; see [Scripted build steps](#scripted-build-steps).
 
 ``` python
 oci_extract(
@@ -226,7 +244,7 @@ oci_extract(
 
 ### `oci_build_layer`
 
-Run a command in an image, and capture the configured output into a layer artifact, that can be injected into other images. This matches the `COPY --from` workflows.
+Run a command in an image, and capture the configured output into a layer artifact, that can be injected into other images. This matches the `COPY --from` workflows. The command runs through podman; see [Scripted build steps](#scripted-build-steps).
 
 ``` python
 oci_build_layer(
@@ -234,7 +252,7 @@ oci_build_layer(
 	base=[":rust-1-70"],
     packages=[":files"],
     env=['RUSTC_OPTS=...'],
-	commands=['cd /my-package && cargo build --release'],
+	commands='cd /my-package && cargo build --release',
 	outputs=['/my-package/target/release/my-package'],
 )
 ```
@@ -242,7 +260,7 @@ oci_build_layer(
 | Argument      | Meaning                                                                        | Default value                                          |
 |---------------|--------------------------------------------------------------------------------|--------------------------------------------------------|
 | `name`        | The target name                                                                | Same as any other target, which is the directory name  |
-| `commands`    | The commands to execute in the container                                       | `[]`                                                   |
+| `commands`    | The command to run in the container, through `[oci].command_shell`              |                                                        |
 | `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                   |
 | `env`         | Environment variables to set. Does not support interpolation.                  | `[]`                                                   |
 | `outputs`     | Paths to capture into the built layer.                                         | `[]`                                                   |

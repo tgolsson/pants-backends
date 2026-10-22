@@ -8,12 +8,6 @@ from dataclasses import dataclass
 from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
-from pants.core.util_rules.system_binaries import (
-    BinaryPath,
-    BinaryPathRequest,
-    SystemBinariesSubsystem,
-    find_binary,
-)
 from pants.engine.fs import MergeDigests
 from pants.engine.internals.graph import resolve_target
 from pants.engine.intrinsics import create_digest, merge_digests
@@ -36,28 +30,8 @@ from pants_backend_oci.util_rules.image_bundle import (
     ibr_to_fibr,
     resolve_image_bundle,
 )
+from pants_backend_oci.util_rules.run import PODMAN_CACHE, PODMAN_STORE_VERSION, PodmanBinary
 from pants_backend_oci.util_rules.sandboxed import sandboxed_modules
-
-
-class PodmanBinary(BinaryPath):
-    pass
-
-
-@rule(desc="Finding podman for OCI run/repl")
-async def find_podman(
-    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
-    platform: Platform,
-) -> PodmanBinary:
-    if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
-        raise ValueError("OCI run/repl requires local Linux podman; podman machine is not supported yet.")
-    # Do not execute podman during discovery: even --version can initialize its host runtime.
-    request = BinaryPathRequest(binary_name="podman", search_path=system_binaries.system_binary_paths)
-    paths = await find_binary(request, **implicitly())
-    binary = paths.first_path_or_raise(
-        request,
-        rationale="run OCI images. Install podman: https://podman.io/docs/installation",
-    )
-    return PodmanBinary(binary.path, binary.fingerprint)
 
 
 @dataclass(frozen=True)
@@ -111,7 +85,7 @@ async def prepare_run_image_bundle(
         "--podman",
         podman.path,
         "--cache",
-        str(caches.val / "oci_podman" / "v1"),
+        str(caches.val / PODMAN_CACHE / PODMAN_STORE_VERSION),
         "--archive",
         "{chroot}/image.tar",
     ]

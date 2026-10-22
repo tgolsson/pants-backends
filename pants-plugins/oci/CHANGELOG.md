@@ -7,16 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Run scripted build steps (`commands=` on `oci_image_build` and `oci_build_layer`) and
+  `oci_extract` through `podman build` with `--timestamp 0` instead of umoci and runc. A failing
+  command or missing output now fails the build instead of producing an empty artifact, and a
+  scripted image step adds one layer on top of the unchanged base layers. Layer and extract
+  outputs keep the owners and modes they have in the image, globs in `outputs` keep their paths,
+  and empty `outputs` is an error. `[oci].rootless`, `uid_map`, `gid_map`, `[umoci]` and `[runc]`
+  are no longer used.
 - Run images and OCI repl through user-installed rootless podman on Linux, using OCI archives
   and separate Pants-managed storage. Non-root ownership and groups are preserved. Remote
-  podman and macOS execution are not supported yet; scripted build steps still use umoci/runc.
+  podman and macOS execution are not supported yet.
 - Align the Python OCI examples with a pinned Debian 12 / Python 3.11 base.
 - Assemble images in Python instead of with umoci: adding layers, editing the config, creating
   the empty base image and tagging pulled images now run a small
   Python script in a sandboxed process. Each image is assembled in one process instead of
   several umoci calls per layer. Built image digests change once: layers are gzipped
   differently, history entries no longer carry stray quotes, and empty `User`/`WorkingDir`
-  fields from the base config are kept. umoci is still used to unpack images for `commands=` steps.
+  fields from the base config are kept.
 - `oci_build_layer` adds a layer for each of its `dependencies`, not only the first.
 - `oci_deb_layer` and `oci_cacerts_layer` read zstd-compressed packages, such as Ubuntu's, by
   piping them through a new `[zstd]` tool: a static zstd binary of about 1 MB downloaded from

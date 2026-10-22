@@ -55,6 +55,8 @@ class ImageLayer:
     path: str
     # The packaged artifact to run, when the layer brings one.
     entrypoint: str | None = None
+    # What made the layer, for its history; the target's address if unset.
+    created_by: str | None = None
 
 
 @rule

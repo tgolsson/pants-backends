@@ -6,7 +6,6 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner
 
 from pants_backend_oci import synthetic_targets
 from pants_backend_oci.targets import ImageEmpty
-from pants_backend_oci.tools import process as fprocess
 from pants_backend_oci.util_rules import assemble, empty_image_bundle, image_bundle
 
 # The empty image is for the host's architecture.
@@ -25,7 +24,6 @@ def test_empty_image_has_fixed_sha() -> None:
             *assemble.rules(),
             *adhoc_binaries.rules(),
             *process.rules(),
-            *fprocess.rules(),
             *synthetic_targets.rules(),
             QueryRule(
                 image_bundle.FallibleImageBundle,
