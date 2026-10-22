@@ -1,18 +1,11 @@
-import datetime
-import os
+import dataclasses
 from dataclasses import dataclass
 
-from pants.core.util_rules.adhoc_binaries import GunzipBinary
-from pants.core.util_rules.external_tool import download_external_tool
-from pants.engine.fs import MergeDigests
 from pants.engine.internals.graph import (
     resolve_target,
     resolve_targets,
     resolve_unparsed_address_inputs,
 )
-from pants.engine.intrinsics import merge_digests
-from pants.engine.platform import Platform
-from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
@@ -26,19 +19,16 @@ from pants.engine.target import (
 from pants.engine.unions import UnionRule
 from pants.util.strutil import softwrap
 
-from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import ImageBase, ImageRepository, ImageTag
-from pants_backend_oci.tools.process import FusedProcess
+from pants_backend_oci.util_rules.assemble import AssembleImageRequest, ConfigEdit, assemble_image
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    ImageBundle,
     ImageBundleRequest,
     ibr_to_fibr,
     resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
-from pants_backend_oci.util_rules.oci_sha import OciShaRequest, extract_build_info_sha
 
 
 class PythonMain(StringField):
@@ -82,13 +72,7 @@ class BuildPythonImageRequest(FallibleImageBundleRequest):
 
 
 @rule(desc="Build Python OCI image")
-async def build_python_image(
-    request: BuildPythonImageRequest,
-    umoci: UmociTool,
-    platform: Platform,
-    gunzip: GunzipBinary,
-) -> FallibleImageBundle:
-    umoci_request = download_external_tool(umoci.get_request(platform))
+async def build_python_image(request: BuildPythonImageRequest) -> FallibleImageBundle:
     base = await resolve_unparsed_address_inputs(
         request.target.base.to_unparsed_address_inputs(), **implicitly()
     )
@@ -102,96 +86,27 @@ async def build_python_image(
         resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
     )
 
-    base_image = resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
-
-    layers = []
-    for dependency in dependencies:
-        layers.append(build_image_layer(ImageLayerRequest(dependency)))
-
-    base_image, umoci, *layers = await concurrently(
-        base_image,
-        umoci_request,
-        *layers,
+    base_image, *layers = await concurrently(
+        resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest})),
+        *(build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies),
     )
+    if base_image.output is None:
+        return dataclasses.replace(base_image, dependency_failed=True)
 
     pex = request.target.python_main.value
-    digest = base_image.output.digest
+    if pex is None:
+        pex = next((layer.entrypoint for layer in layers if (layer.entrypoint or "").endswith(".pex")), None)
 
-    for layer in layers:
-        if pex is None:
-            if "--config.entrypoint" in layer.config_command:
-                idx = layer.config_command.index("--config.entrypoint")
-                ep = layer.config_command[idx + 1]
-                if ep.endswith(".pex"):
-                    pex = ep
-
-        input_digest = await merge_digests(MergeDigests([umoci.digest, digest, layer.digest]))
-        layer_processes = (
-            Process(
-                (umoci.exe, *layer.layer_command[:-1], layer.layer_command[-1].rstrip(".gz")),
-                input_digest=input_digest,
-                description=f"Package OCI Image Bundle: {layer.address}",
-            ),
-            Process(
-                (umoci.exe, *layer.config_command),
-                description=f"Configure OCI Image Bundle: {layer.address}",
-                output_directories=("build/",),
-            ),
-        )
-        if layer.compressed:
-            layer_processes = (
-                Process(
-                    argv=gunzip.extract_archive_argv(
-                        layer.layer_command[-1], os.path.dirname(layer.layer_command[-1])
-                    ),
-                    description=f"Uncompress OCI Image Bundle: {layer.address}",
-                ),
-                *layer_processes,
-            )
-        image = await fallible_to_exec_result_or_raise(
-            **implicitly(
-                FusedProcess(
-                    layer_processes,
-                )
-            )
-        )
-
-        digest = image.output_digest
-
-    input_digest = await merge_digests(MergeDigests([umoci.digest, digest]))
-    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
-
+    ops: list = list(layers)
     if pex is not None:
-        image_with_layer = await fallible_to_exec_result_or_raise(
-            **implicitly(
-                Process(
-                    (
-                        umoci.exe,
-                        "config",
-                        "--image",
-                        "build:build",
-                        "--config.entrypoint",
-                        "python",
-                        "--config.entrypoint",
-                        pex,
-                        f"--history.created={timestamp}",
-                    ),
-                    input_digest=input_digest,
-                    description=f"Package OCI Image Bundle: {layer.address}",
-                    output_directories=("build/",),
-                )
-            )
-        )
-    else:
-        image_with_layer = image
+        ops.append(ConfigEdit(entrypoint=("python", pex), history=True))
 
-    image_digest = await extract_build_info_sha(OciShaRequest(image_with_layer.output_digest))
-    output = ImageBundle(
-        digest=image_with_layer.output_digest,
-        image_sha=image_digest.image_digest,
-        is_local=True,
+    return await assemble_image(
+        AssembleImageRequest(
+            base_image.output.digest, tuple(ops), f"Assemble Python OCI image: {request.target.address}"
+        ),
+        **implicitly(),
     )
-    return FallibleImageBundle(output)
 
 
 def rules():

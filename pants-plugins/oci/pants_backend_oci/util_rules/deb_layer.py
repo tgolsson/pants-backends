@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import resources
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
 from pants.core.target_types import FileSourceField
@@ -12,7 +11,7 @@ from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
-from pants.engine.fs import CreateDigest, FileContent, MergeDigests, Snapshot
+from pants.engine.fs import MergeDigests, Snapshot
 from pants.engine.internals.graph import resolve_targets, transitive_targets
 from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
@@ -32,10 +31,9 @@ from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.target_types import DebLayerMergedUsrField, DebLayerPackagesField
 from pants_backend_oci.util_rules import deb_layer_builder
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
+from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
 
-_BUILDER_SOURCE = f"{deb_layer_builder.__name__.rpartition('.')[2]}.py"
-_BUILDER_MODULE = "__deb_layer_builder"
-_BUILDER_MAIN = f"import sys, {_BUILDER_MODULE}; sys.exit({_BUILDER_MODULE}.main(sys.argv[1:]))"
+_BUILDER_MAIN = module_main(deb_layer_builder)
 
 
 @dataclass(frozen=True)
@@ -106,9 +104,7 @@ async def package_deb_layer(
     sources = debs.snapshot
     zstd = await download_external_tool(zstd_tool.get_request(platform))
 
-    # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
-    builder_source = resources.files(__package__).joinpath(_BUILDER_SOURCE).read_bytes()
-    script = await create_digest(CreateDigest([FileContent(f"{_BUILDER_MODULE}.py", builder_source)]))
+    script = await create_digest(sandboxed_modules(deb_layer_builder))
     input_digest = await merge_digests(MergeDigests([script, sources.digest, zstd.digest]))
 
     relpath = field_set.output_path.value_or_default(file_ending="tar")

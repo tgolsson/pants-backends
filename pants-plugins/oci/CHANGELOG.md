@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Assemble images in Python instead of with umoci: adding layers, editing the config, creating
+  the empty base image, tagging pulled images and setting `pants run -- args` now run a small
+  Python script in a sandboxed process. Each image is assembled in one process instead of
+  several umoci calls per layer. Built image digests change once: layers are gzipped
+  differently, history entries no longer carry stray quotes, and empty `User`/`WorkingDir`
+  fields from the base config are kept. umoci is still used to unpack images for `pants run`
+  and `commands=` steps.
+- `oci_build_layer` adds a layer for each of its `dependencies`, not only the first.
 - `oci_deb_layer` and `oci_cacerts_layer` read zstd-compressed packages, such as Ubuntu's, by
   piping them through a new `[zstd]` tool: a static zstd binary of about 1 MB downloaded from
   aspect-build/zstd-prebuilt, not a Python dependency. `oci_cacerts_layer` is now built in a

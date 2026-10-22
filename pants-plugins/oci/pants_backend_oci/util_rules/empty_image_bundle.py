@@ -2,26 +2,21 @@
 
 from __future__ import annotations
 
-import datetime
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.core.util_rules.external_tool import download_external_tool
+from pants.engine.fs import EMPTY_DIGEST
 from pants.engine.platform import Platform
-from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet, Target
 from pants.engine.unions import UnionRule
 
-from pants_backend_oci.subsystem import UmociTool
 from pants_backend_oci.target_types import ImageEmptyMarker
-from pants_backend_oci.tools.process import FusedProcess
+from pants_backend_oci.util_rules.assemble import AssembleImageRequest, InitImage, assemble_image
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundle,
     FallibleImageBundleRequest,
-    ImageBundle,
 )
-from pants_backend_oci.util_rules.oci_sha import OciShaRequest, extract_build_info_sha
 
 
 @dataclass(frozen=True)
@@ -36,51 +31,14 @@ class ImageBundleEmptyRequest(FallibleImageBundleRequest):
 
 
 @rule
-async def make_empty_oci_image(
-    request: ImageBundleEmptyRequest,
-    platform: Platform,
-    umoci: UmociTool,
-) -> FallibleImageBundle:
-    umoci = await download_external_tool(umoci.get_request(platform))
-
-    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
-    result = await fallible_to_exec_result_or_raise(
-        **implicitly(
-            FusedProcess(
-                (
-                    Process(
-                        argv=(umoci.exe, "init", "--layout", "build"),
-                        input_digest=umoci.digest,
-                        description="Creating base OCI layout",
-                    ),
-                    Process(
-                        argv=(umoci.exe, "new", "--image", "build:build"),
-                        input_digest=umoci.digest,
-                        description="Creating a new empty base image",
-                        output_directories=("build",),
-                    ),
-                    Process(
-                        argv=(
-                            umoci.exe,
-                            "config",
-                            "--image",
-                            "build:build",
-                            "--config.env",
-                            "BUILT_BY=pants.oci",
-                            "--author=pants_backend_oci",
-                            f"--created={timestamp}",
-                            "--no-history",
-                        ),
-                        description="Erasing timestamps and other info",
-                    ),
-                ),
-            )
-        )
-    )
-
-    image_digest = await extract_build_info_sha(OciShaRequest(result.output_digest))
-    return FallibleImageBundle(
-        ImageBundle(result.output_digest, image_sha=image_digest.image_digest, is_local=True)
+async def make_empty_oci_image(request: ImageBundleEmptyRequest, platform: Platform) -> FallibleImageBundle:
+    # The empty image is for the host's architecture.
+    architecture = "arm64" if platform.value.endswith("arm64") else "amd64"
+    return await assemble_image(
+        AssembleImageRequest(
+            EMPTY_DIGEST, (InitImage(architecture, "linux"),), "Creating an empty OCI image"
+        ),
+        **implicitly(),
     )
 
 

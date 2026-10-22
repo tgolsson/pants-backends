@@ -11,7 +11,6 @@ from __future__ import annotations
 import io
 import os
 from dataclasses import dataclass
-from importlib import resources
 from typing import BinaryIO, Callable
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
@@ -41,10 +40,11 @@ from pants_backend_oci.util_rules.helper_layer_builder import (
     build_passwd_layer,
 )
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
+from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
 
 # The builders are copied into the sandbox under their package path, so their imports still resolve.
 _BUILDER_MODULES = (deb_layer_builder, helper_layer_builder)
-_CACERTS_MAIN = f"import sys, {helper_layer_builder.__name__} as m; sys.exit(m.main(sys.argv[1:]))"
+_CACERTS_MAIN = module_main(helper_layer_builder)
 
 
 @dataclass(frozen=True)
@@ -92,20 +92,6 @@ async def package_group_layer(field_set: GroupLayerFieldSet) -> BuiltPackage:
     return BuiltPackage(digest, (BuiltLayerArtifact(relpath=relpath),))
 
 
-def _sandboxed_builders() -> CreateDigest:
-    """The builder modules at their package paths, with empty `__init__.py`s for the packages."""
-    files = []
-    for module in _BUILDER_MODULES:
-        package, _, name = module.__name__.rpartition(".")
-        # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
-        source = resources.files(package).joinpath(f"{name}.py").read_bytes()
-        files.append(FileContent(f"{module.__name__.replace('.', '/')}.py", source))
-    parts = _BUILDER_MODULES[0].__name__.split(".")[:-1]
-    for depth in range(1, len(parts) + 1):
-        files.append(FileContent(f"{'/'.join(parts[:depth])}/__init__.py", b""))
-    return CreateDigest(files)
-
-
 @rule(desc="Package OCI layer with a CA bundle", level=LogLevel.DEBUG)
 async def package_cacerts_layer(
     field_set: CaCertsLayerFieldSet,
@@ -123,7 +109,7 @@ async def package_cacerts_layer(
         debs_digest = await digest_subset_to_digest(DigestSubset(debs_digest, PathGlobs(candidates)))
 
     zstd = await download_external_tool(zstd_tool.get_request(platform))
-    builders = await create_digest(_sandboxed_builders())
+    builders = await create_digest(sandboxed_modules(*_BUILDER_MODULES))
     input_digest = await merge_digests(MergeDigests([builders, debs_digest, zstd.digest]))
 
     relpath = field_set.output_path.value_or_default(file_ending="tar")

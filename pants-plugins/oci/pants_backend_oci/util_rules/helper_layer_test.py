@@ -163,5 +163,5 @@ def test_helper_layers_are_added_as_their_own_layer(rule_runner: RuleRunner, nam
         image_layer = rule_runner.request(layer.ImageLayer, [layer.ImageLayerRequest(target, old_style)])
 
         # The layer tarball is added as-is, not re-archived as a file inside another layer.
-        assert image_layer.layer_command[-1] == f"img/{name}.tar"
-        assert "--config.entrypoint" not in image_layer.config_command
+        assert image_layer.path == f"img/{name}.tar"
+        assert image_layer.entrypoint is None

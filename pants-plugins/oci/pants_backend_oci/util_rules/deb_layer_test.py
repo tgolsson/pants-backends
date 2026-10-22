@@ -216,6 +216,5 @@ oci_deb_layer(name="layer", debs=[":foo"])
         image_layer = rule_runner.request(layer.ImageLayer, [layer.ImageLayerRequest(target, old_style)])
 
         # The layer tarball is added as-is, not re-archived as a file inside another layer.
-        assert image_layer.layer_command[-1] == "debs/layer.tar"
-        assert not image_layer.compressed
-        assert "--config.entrypoint" not in image_layer.config_command
+        assert image_layer.path == "debs/layer.tar"
+        assert image_layer.entrypoint is None

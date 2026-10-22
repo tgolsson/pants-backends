@@ -7,22 +7,16 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.core.goals.package import OutputPathField, PackageFieldSet
-from pants.core.util_rules.external_tool import download_external_tool
-from pants.core.util_rules.system_binaries import BashBinary, CatBinary, CpBinary, MkdirBinary
-from pants.engine.fs import MergeDigests
 from pants.engine.internals.graph import (
     resolve_target,
     resolve_targets,
     resolve_unparsed_address_inputs,
 )
-from pants.engine.intrinsics import merge_digests
-from pants.engine.platform import Platform
-from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
+from pants.engine.process import ProcessResult
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, FieldSet, Target, WrappedTargetRequest
 from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import RuncTool, UmociTool
 from pants_backend_oci.target_types import (
     ImageArtifactExclusions,
     ImageBase,
@@ -31,6 +25,12 @@ from pants_backend_oci.target_types import (
     ImageDependencies,
     ImageEnvironment,
     ImageExtractMarker,
+)
+from pants_backend_oci.util_rules.assemble import (
+    AssembleImageRequest,
+    ConfigEdit,
+    assemble_image,
+    assembled_or_raise,
 )
 from pants_backend_oci.util_rules.copy import CopyFromRequest, copy_from_container
 from pants_backend_oci.util_rules.image_bundle import (
@@ -86,13 +86,6 @@ class ImageArtifactExtractRequest(FallibleImageBundleRequest):
 @rule(desc="Build artifact in container", level=LogLevel.DEBUG)
 async def build_image_artifact(
     request: ImageArtifactBuildRequest,
-    umoci: UmociTool,
-    runc: RuncTool,
-    platform: Platform,
-    bash: BashBinary,
-    cat: CatBinary,
-    cp: CpBinary,
-    mkdir: MkdirBinary,
 ) -> ProcessResult:
     base = await resolve_unparsed_address_inputs(
         request.target.base.to_unparsed_address_inputs(), **implicitly()
@@ -110,84 +103,21 @@ async def build_image_artifact(
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
 
-    umoci_request = download_external_tool(umoci.get_request(platform))
-    base = maybe_built_base.output
-    base_digest = base.digest
+    bundle = maybe_built_base.output
 
     if request.target.dependencies.value:
-        dependencies = await concurrently(
-            resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
+        dependencies = await resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies)))
+        layers = await concurrently(
+            build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies
         )
-
-        layers = []
-        for dependency in dependencies:
-            layers.append(build_image_layer(ImageLayerRequest(dependency[0])))
-
-        umoci, *layers = await concurrently(
-            umoci_request,
-            *layers,
+        config = ConfigEdit(env=tuple(request.target.environment.value or ()), history=True)
+        image = await assemble_image(
+            AssembleImageRequest(
+                bundle.digest, (*layers, config), f"Assemble OCI image: {request.target.address}"
+            ),
+            **implicitly(),
         )
-
-        for layer in layers:
-            input_digest = await merge_digests(MergeDigests([umoci.digest, base_digest, layer.digest]))
-
-            image_with_layer = await fallible_to_exec_result_or_raise(
-                **implicitly(
-                    Process(
-                        (umoci.exe, *layer.layer_command),
-                        input_digest=input_digest,
-                        description=f"Package OCI Layer Artifact: {layer.address}",
-                        output_directories=("build/",),
-                    )
-                )
-            )
-
-            digest = image_with_layer.output_digest
-            input_digest = await merge_digests(MergeDigests([umoci.digest, digest]))
-            image_with_config = await fallible_to_exec_result_or_raise(
-                **implicitly(
-                    Process(
-                        (umoci.exe, *layer.config_command),
-                        input_digest=input_digest,
-                        description=f"Configure OCI Layer Artifact: {layer.address}",
-                        output_directories=("build/",),
-                    )
-                )
-            )
-            base_digest = image_with_config.output_digest
-
-        config = []
-        for value in request.target.environment.value:
-            config.extend(
-                [
-                    "--config.env",
-                    value,
-                ]
-            )
-
-        output_digest = base_digest
-        image_with_config = await fallible_to_exec_result_or_raise(
-            **implicitly(
-                Process(
-                    (
-                        umoci.exe,
-                        "config",
-                        *config,
-                        "--image",
-                        "build:build",
-                    ),
-                    input_digest=input_digest,
-                    description=f"Configure OCI Image Bundle: {layer.address}",
-                    output_directories=("build/",),
-                )
-            )
-        )
-
-        output_digest = image_with_config.output_digest
-    else:
-        output_digest = base_digest
-
-    bundle = ImageBundle(output_digest, "", True)
+        bundle = assembled_or_raise(image, request.target.address)
 
     modified_image = await run_in_container(
         RunContainerRequest(bundle, request.target.commands.value, True), **implicitly()
@@ -211,8 +141,6 @@ async def build_image_artifact(
 @rule(desc="Extract artifact from container", level=LogLevel.DEBUG)
 async def extract_image_artifact(
     request: ImageArtifactExtractRequest,
-    umoci: UmociTool,
-    platform: Platform,
 ) -> ProcessResult:
     base = await resolve_unparsed_address_inputs(
         request.target.base.to_unparsed_address_inputs(), **implicitly()

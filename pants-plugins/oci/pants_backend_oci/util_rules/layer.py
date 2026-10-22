@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import datetime
 import logging
 from dataclasses import dataclass
 
@@ -52,10 +51,10 @@ class ImageLayer:
     address: Address
     digest: Digest
 
-    layer_command: tuple[str]
-    config_command: tuple[str]
-
-    compressed: bool = True
+    # The layer tar, plain or gzipped, within `digest`.
+    path: str
+    # The packaged artifact to run, when the layer brings one.
+    entrypoint: str | None = None
 
 
 @rule
@@ -110,15 +109,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     other_artifacts = []
     layer_artifacts = []
 
-    is_compressed = False
     for target in embedded_pkgs:
         if len(target.artifacts) > 1 or not isinstance(target.artifacts[0], BuiltLayerArtifact):
             other_artifacts.append(target)
 
         else:
             layer_artifacts.append(target)
-            if target.artifacts[0].relpath.endswith(".tar.gz"):
-                is_compressed = True
 
     embedded_pkgs_digest = [built_package.digest for built_package in other_artifacts]
 
@@ -162,46 +158,12 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         raise Exception(f"Multiple layers not yet supported: {real_layers}")
 
     raw_layer_digest, layer_name = real_layers[0]
-    timestamp = datetime.datetime(1970, 1, 1).isoformat() + "Z"
-    config = [
-        "--config.env",
-        "BUILT_BY=pants.oci",
-        "--author=pants_backend_oci",
-        f"--created={timestamp}",
-        "--no-history",
-    ]
-
+    entrypoint = None
     if other_artifacts:
-        logger.info(f"Setting entrypoint to: {other_artifacts[0].artifacts[0].relpath}")
-        config.extend(
-            [
-                "--config.entrypoint",
-                f"/{other_artifacts[0].artifacts[0].relpath}",
-            ]
-        )
+        entrypoint = f"/{other_artifacts[0].artifacts[0].relpath}"
+        logger.info(f"Setting entrypoint to: {entrypoint}")
 
-    return ImageLayer(
-        request.target.address,
-        raw_layer_digest,
-        (
-            "raw",
-            "add-layer",
-            "--history.author=pants_backend_oci",
-            f"--history.created_by='Layer target: {request.target.address}'",
-            f"--history.comment='Layer target: {request.target.address}'",
-            f"--history.created={timestamp}",
-            "--image",
-            "build:build",
-            layer_name,
-        ),
-        (
-            "config",
-            *config,
-            "--image",
-            "build:build",
-        ),
-        compressed=is_compressed,
-    )
+    return ImageLayer(request.target.address, raw_layer_digest, layer_name, entrypoint)
 
 
 def rules():

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 
-from pants.core.util_rules.external_tool import download_external_tool
-from pants.engine.platform import Platform
+from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
+from pants.engine.intrinsics import create_digest
 from pants.engine.process import Process
 from pants.engine.rules import collect_rules, rule
 
-from pants_backend_oci.subsystem import OciSubsystem, UmociTool
+from pants_backend_oci.util_rules import oci_layout_builder
+from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
 
 
 @dataclass(frozen=True)
@@ -16,29 +18,23 @@ class SetCmdProcessRequest:
 
 
 @rule
-async def set_args(
-    request: SetCmdProcessRequest, tool: UmociTool, platform: Platform, oci: OciSubsystem
-) -> Process:
-    umoci = await download_external_tool(tool.get_request(platform))
+async def set_args(request: SetCmdProcessRequest, python: PythonBuildStandaloneBinary) -> Process:
+    builder = await create_digest(sandboxed_modules(oci_layout_builder))
+    python_argv = shlex.join((python.path, "-c", module_main(oci_layout_builder)))
 
+    # The args are only known when the fused script runs, so the builder replaces the image's cmd
+    # with them in the sandbox, before the image is unpacked. Without args it leaves the cmd alone,
+    # and if it fails the run stops rather than starting the image with its old cmd.
     command = [
         rf"""
         # nosplit
-        if [ $# -gt 0 ]; then
-            {{chroot}}/{umoci.exe} --log={tool.log} config --clear config.cmd --image build:build
-            i=0
-            args=()
-            for arg in "$@"; do
-                args[$i]="--config.cmd=$arg"
-                ((++i))
-            done
-            {{chroot}}/{umoci.exe} --log={tool.log} config "${{args[@]}}" --image build:build
-        fi
+        {python_argv} set-cmd -- "$@" > /dev/null || exit $?
         """
     ]
 
     return Process(
         tuple(command),
+        input_digest=builder,
         description="Setting arguments",
     )
 

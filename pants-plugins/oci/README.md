@@ -8,9 +8,9 @@ This release targets Pants **2.31.0**. Install it with
 > **Warning**
 > This plugin is in development. No stability is guaranteed! Contributions welcome.
 
-This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. To do this, this plugin uses four different tools:
+This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses four different tools:
 
-* [umoci](https://github.com/opencontainers/umoci) for manipulating OCI images
+* [umoci](https://github.com/opencontainers/umoci) for unpacking and repacking images for `pants run` and `commands=` steps
 * [runc](https://github.com/opencontainers/runc) for exeuction
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 * [skopeo](https://github.com/containers/skopeo) for exporting the packaged OCI layout
