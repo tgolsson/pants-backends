@@ -5,7 +5,7 @@ import sys
 
 
 def main():
-    print("Hello from inside Runc!")
+    print("Hello from inside podman!")
     print("Args: ", sys.argv)
     print("Python Version:", sys.version)
 

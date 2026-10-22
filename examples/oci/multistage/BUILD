@@ -23,7 +23,7 @@ pex_binary(
 
 oci_build_layer(
     name="app-deps",
-    base=["//examples/oci:python3-d11#latest"],
+    base=["//examples/oci:python3-d12#latest"],
     packages=[":binary-deps"],
     commands="python /examples.oci.multistage/binary-deps.pex venv --scope=deps --compile /bin/app",
     env=[
@@ -45,7 +45,7 @@ pex_binary(
 
 oci_build_layer(
     name="app-srcs",
-    base=["//examples/oci:python3-d11#latest"],
+    base=["//examples/oci:python3-d12#latest"],
     packages=[":binary-srcs"],
     commands="python /examples.oci.multistage/binary-srcs.pex venv --scope=srcs --compile /bin/app",
     env=[
@@ -57,7 +57,7 @@ oci_build_layer(
 
 oci_image_build(
     name="img",
-    base=["//examples/oci:python3-d11#latest"],
+    base=["//examples/oci:python3-d12#latest"],
     packages=[":app-deps", ":app-srcs"],
     entrypoint="/bin/app/pex",
     args=[],

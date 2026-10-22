@@ -7,13 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Run images and OCI repl through user-installed rootless podman on Linux, using OCI archives
+  and separate Pants-managed storage. Non-root ownership and groups are preserved. Remote
+  podman and macOS execution are not supported yet; scripted build steps still use umoci/runc.
+- Align the Python OCI examples with a pinned Debian 12 / Python 3.11 base.
 - Assemble images in Python instead of with umoci: adding layers, editing the config, creating
-  the empty base image, tagging pulled images and setting `pants run -- args` now run a small
+  the empty base image and tagging pulled images now run a small
   Python script in a sandboxed process. Each image is assembled in one process instead of
   several umoci calls per layer. Built image digests change once: layers are gzipped
   differently, history entries no longer carry stray quotes, and empty `User`/`WorkingDir`
-  fields from the base config are kept. umoci is still used to unpack images for `pants run`
-  and `commands=` steps.
+  fields from the base config are kept. umoci is still used to unpack images for `commands=` steps.
 - `oci_build_layer` adds a layer for each of its `dependencies`, not only the first.
 - `oci_deb_layer` and `oci_cacerts_layer` read zstd-compressed packages, such as Ubuntu's, by
   piping them through a new `[zstd]` tool: a static zstd binary of about 1 MB downloaded from

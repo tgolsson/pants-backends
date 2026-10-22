@@ -34,7 +34,7 @@ oci_layer(
 
 oci_image_build(
     name="img",
-    base=["//examples/oci:python3-d11#latest"],
+    base=["//examples/oci:python3-d12#latest"],
     layers=[":app-deps", ":app-srcs"],
     entrypoint="python3",
     args=["/examples.oci.layers/binary-srcs.pex"],

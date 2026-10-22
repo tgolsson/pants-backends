@@ -2,40 +2,68 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
-from textwrap import dedent
 
 from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
-from pants.core.util_rules.external_tool import download_external_tool
-from pants.core.util_rules.system_binaries import MkdirBinary, MvBinary
-from pants.engine.fs import CreateDigest, Directory, FileContent, MergeDigests
+from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
+from pants.core.util_rules.system_binaries import (
+    BinaryPath,
+    BinaryPathRequest,
+    SystemBinariesSubsystem,
+    find_binary,
+)
+from pants.engine.fs import MergeDigests
 from pants.engine.internals.graph import resolve_target
 from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
-from pants.engine.process import Process
-from pants.engine.rules import collect_rules, concurrently, implicitly, rule
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
+from pants.option.global_options import NamedCachesDirOption
 
-from pants_backend_oci.subsystem import OciSubsystem, RuncTool
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
-from pants_backend_oci.tools.process import FusedProcess, fuse_process
-from pants_backend_oci.util_rules.configure import SetCmdProcessRequest, set_args
+from pants_backend_oci.util_rules import podman_runner
+from pants_backend_oci.util_rules.archive import (
+    CreateDeterministicDirectoryTar,
+    tar_directory_process,
+)
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     ImageBundleRequest,
     ibr_to_fibr,
     resolve_image_bundle,
 )
-from pants_backend_oci.util_rules.tools import RuncToolsRequest, get_binary_shims
-from pants_backend_oci.util_rules.unpack import UnpackedImageBundleRequest, make_unpack_process
+from pants_backend_oci.util_rules.sandboxed import sandboxed_modules
+
+
+class PodmanBinary(BinaryPath):
+    pass
+
+
+@rule(desc="Finding podman for OCI run/repl")
+async def find_podman(
+    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
+    platform: Platform,
+) -> PodmanBinary:
+    if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
+        raise ValueError("OCI run/repl requires local Linux podman; podman machine is not supported yet.")
+    # Do not execute podman during discovery: even --version can initialize its host runtime.
+    request = BinaryPathRequest(binary_name="podman", search_path=system_binaries.system_binary_paths)
+    paths = await find_binary(request, **implicitly())
+    binary = paths.first_path_or_raise(
+        request,
+        rationale="run OCI images. Install podman: https://podman.io/docs/installation",
+    )
+    return PodmanBinary(binary.path, binary.fingerprint)
 
 
 @dataclass(frozen=True)
 class RunImageBundleCommand(RunFieldSet):
     required_fields = (ImageRepository,)
-    run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_HERMETIC
+    run_in_sandbox_behavior = RunInSandboxBehavior.RUN_REQUEST_NOT_HERMETIC
 
     repository: ImageRepository
     run_tty: ImageRunTty
@@ -51,113 +79,48 @@ class RunImageBundleProcessRequest:
 @rule
 async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
-    tool: RuncTool,
-    oci: OciSubsystem,
-    mkdir_binary: MkdirBinary,
-    mv: MvBinary,
+    podman: PodmanBinary,
+    python: PythonBuildStandaloneBinary,
+    caches: NamedCachesDirOption,
     platform: Platform,
 ) -> Process:
-    download_runc_tool = download_external_tool(tool.get_request(platform))
+    if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
+        raise ValueError("OCI run/repl requires local Linux podman; podman machine is not supported yet.")
     wrapped_target = await resolve_target(
-        WrappedTargetRequest(request.target.address, description_of_origin="package_oci_image"),
+        WrappedTargetRequest(request.target.address, description_of_origin="run OCI image"),
         **implicitly(),
     )
-    target = wrapped_target.target
-    bundle_request = await ibr_to_fibr(ImageBundleRequest(target), **implicitly())
-    image = resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
+    bundle_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
+    image = await resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
+    if image.exit_code != 0 or image.dependency_failed or image.output is None:
+        raise ValueError(f"Failed preparing OCI image {request.target.address}: {image.stderr}")
 
-    tool, image, rundir, shims = await concurrently(
-        download_runc_tool,
-        image,
-        create_digest(CreateDigest([Directory("runspace")])),
-        get_binary_shims(RuncToolsRequest(), **implicitly()),
+    tar = await tar_directory_process(
+        CreateDeterministicDirectoryTar("build", "image.tar", gzip=False), **implicitly()
     )
-
-    if image.exit_code != 0:
-        raise ValueError(image.stderr)
-
-    packed_image_process, set_cmd_process = await concurrently(
-        make_unpack_process(UnpackedImageBundleRequest(image.output.digest), **implicitly()),
-        set_args(SetCmdProcessRequest(), **implicitly()),
+    tar_input = await merge_digests(
+        MergeDigests([image.output.digest] + ([tar.input_digest] if tar.input_digest else []))
     )
-
-    name = str(request.target.address).replace("/", "_").replace(":", "_").replace("#", "_")
-    components = [
-        dedent(f"""
-        ROOT=`pwd`
-        cat $ROOT/unpacked_image/config.json | jq '
-                    .process.terminal = false |
-                    [
-                        "CAP_AUDIT_WRITE",
-                        "CAP_CHOWN",
-                        "CAP_DAC_OVERRIDE",
-                        "CAP_FOWNER",
-                        "CAP_FSETID",
-                        "CAP_KILL",
-                        "CAP_MKNOD",
-                        "CAP_NET_BIND_SERVICE",
-                        "CAP_NET_RAW",
-                        "CAP_SETFCAP",
-                        "CAP_SETGID",
-                        "CAP_SETPCAP",
-                        "CAP_SETUID",
-                        "CAP_SYS_CHROOT"
-                    ] as $caps |
-                    .process.capabilities.effective = $caps |
-                    .process.capabilities.inheritable = $caps |
-                    .process.capabilities.permitted = $caps |
-                    .process.capabilities.bounding = $caps |
-                    .process.capabilities.ambient = $caps
-                ' > "$ROOT/unpacked_image/config.json.tmp"
-            {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-            """)
+    tar_process: Process = dataclasses.replace(tar, input_digest=tar_input)
+    archive = await fallible_to_exec_result_or_raise(**implicitly({tar_process: Process}))
+    launcher = await create_digest(sandboxed_modules(podman_runner))
+    digest = await merge_digests(MergeDigests([archive.output_digest, launcher]))
+    args = [
+        python.path,
+        "{chroot}/pants_backend_oci/util_rules/podman_runner.py",
+        "--podman",
+        podman.path,
+        "--cache",
+        str(caches.val / "oci_podman" / "v1"),
+        "--archive",
+        "{chroot}/image.tar",
     ]
-
-    terminal = request.target.get(ImageRunTty).value
     if request.interactive:
-        terminal = True
-
-    components.append(
-        dedent(f"""
-                jq '
-                    .process.terminal = {"true" if terminal else "false"}
-                ' "$ROOT/unpacked_image/config.json" > "$ROOT/unpacked_image/config.json.tmp"
-                {mv.path} "$ROOT/unpacked_image/config.json.tmp" "$ROOT/unpacked_image/config.json"
-                """)
-    )
-
-    rootless = "true" if oci.rootless else "false"
-    suffix = "" if request.interactive else " 0<&-"
-    container = f"pants.runc.{name}"
-    components.append(
-        dedent(f"""
-            `pwd`/{tool.exe} --root runspace --rootless {rootless} run -b unpacked_image {container}{suffix}
-            """)
-    )
-    script_digest = await create_digest(
-        CreateDigest([FileContent("run.sh", "\n".join(components).encode("utf-8"))])
-    )
-
-    immutable_input_digests = shims.immutable_input_digests
-    env = {"PATH": shims.path_component, "XDG_RUNTIME_DIR": "{chroot}/tmp"}
-    input_digest = await merge_digests(MergeDigests((rundir, tool.digest, script_digest)))
-
-    return await fuse_process(
-        FusedProcess(
-            (
-                set_cmd_process,
-                packed_image_process,
-                Process(
-                    ("/usr/bin/sh", "{chroot}/run.sh", "$*"),
-                    description=f"Running {request.target}",
-                    input_digest=input_digest,
-                    immutable_input_digests=immutable_input_digests,
-                    env=env,
-                ),
-            )
-        ),
-        **implicitly(),
-    )
+        args.append("--interactive")
+    if request.interactive or wrapped_target.target.get(ImageRunTty).value:
+        args.append("--tty")
+    args.append("--")
+    return Process(args, input_digest=digest, description=f"Running {request.target.address}")
 
 
 @rule
@@ -179,6 +142,7 @@ async def run_oci_command_target(request: RunImageBundleCommand) -> RunRequest:
 
 class OciRepl(ReplImplementation):
     name = "oci"
+    supports_args = True
 
 
 @rule

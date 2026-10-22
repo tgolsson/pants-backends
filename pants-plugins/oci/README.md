@@ -8,12 +8,35 @@ This release targets Pants **2.31.0**. Install it with
 > **Warning**
 > This plugin is in development. No stability is guaranteed! Contributions welcome.
 
-This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses four different tools:
+This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses these tools:
 
-* [umoci](https://github.com/opencontainers/umoci) for unpacking and repacking images for `pants run` and `commands=` steps
-* [runc](https://github.com/opencontainers/runc) for exeuction
+* [umoci](https://github.com/opencontainers/umoci) for unpacking and repacking images for scripted `commands=` steps
+* [runc](https://github.com/opencontainers/runc) for executing scripted build steps
+* [podman](https://podman.io/docs/installation), installed by the user, for `pants run` and OCI repl
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 * [skopeo](https://github.com/containers/skopeo) for exporting the packaged OCI layout
+
+## Running images
+
+Install [podman](https://podman.io/docs/installation) on Linux and configure rootless execution,
+including `/etc/subuid` and `/etc/subgid` mappings for your user. Run Pants as an unprivileged user.
+Declarative packaging and registry publishing do not require podman. Images with scripted
+build steps still need the legacy execution tools.
+
+`pants run examples/oci/debian:image` runs the image's entrypoint and default command.
+Arguments after `--` replace its command arguments while keeping the entrypoint, for example
+`pants run examples/oci/debian:image -- --help`. `terminal=True` allocates a TTY;
+`pants repl --shell=oci <image-target>` also attaches stdin. Repl runs the image's configured
+command, so select an image whose command provides the interaction you need.
+
+Podman uses a dedicated `oci_podman/v1` directory under Pants' named-cache directory, with
+private runtime and temporary directories under `/tmp` and the portable `vfs` storage driver.
+Runtime directories are named by user and a hash of the store path to keep podman socket paths short. Exited containers
+are removed; imported images and layers remain cached across runs. This store can grow and is
+separate from your default podman store. The legacy `[oci].rootless`, `uid_map`, and `gid_map`
+options apply to scripted build steps, not run/repl; podman manages its own rootless mappings.
+Remote connections (`CONTAINER_HOST` / `CONTAINER_CONNECTION`) are rejected. macOS support
+requires a separate load/run path through `podman machine` and is deferred.
 
 ## Tool versions
 
@@ -48,7 +71,7 @@ to `latest`.
 
 * Currently there's no support for pulling tags, as that would break determinism
 * Multi-platform SHA/.sig is untested/unsupported
-* Container execution and in-container build steps require Linux (runc).
+* Container execution requires local Linux podman; in-container build steps still require Linux (runc). Remote podman and macOS `podman machine` execution are not supported yet.
 
 ## Targets
 

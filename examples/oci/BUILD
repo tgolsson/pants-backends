@@ -1,7 +1,7 @@
 oci_pull_images(
-    name="python3-d11",
-    repository="gcr.io/distroless/python3-debian11",
-    variants={"latest": "42ff8b00a03517f39a968d2e2a6e82c6445586c95e484ff079cbf06f7590cfa7"},
+    name="python3-d12",
+    repository="gcr.io/distroless/python3-debian12",
+    variants={"latest": "87406cabca8cc6846b5ea08bd9b25960b4e29b845f76c1af0e3f4a0affd1d7b4"},
     architecture="amd64",
     os="linux",
 )
@@ -11,7 +11,7 @@ pex_binary(name="example", entry_point="example.py:main", shebang="#!/usr/bin/py
 python_sources(name="examples")
 oci_image_build(
     name="oci",
-    base=[":python3-d11#latest"],
+    base=[":python3-d12#latest"],
     packages=[
         ":example",
     ],

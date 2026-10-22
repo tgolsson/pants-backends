@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from textwrap import dedent
 
 from pants.testutil.pants_integration_test import run_pants, setup_tmpdir
@@ -13,9 +12,9 @@ def test_run_oci_container() -> None:
                 python_sources(name="examples")
 
                 oci_pull_images(
-                    name="python3-d11",
-                    repository="gcr.io/distroless/python3-debian11",
-                    variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
+                    name="python3-d12",
+                    repository="gcr.io/distroless/python3-debian12",
+                    variants=dict(latest="87406cabca8cc6846b5ea08bd9b25960b4e29b845f76c1af0e3f4a0affd1d7b4"),
                     anonymous=True,
                 )
 
@@ -23,7 +22,7 @@ def test_run_oci_container() -> None:
 
                 oci_image_build(
                     name="oci",
-                    base=[":python3-d11#latest"],
+                    base=[":python3-d12#latest"],
                     packages=[
                         ":example",
                     ],
@@ -34,23 +33,16 @@ def test_run_oci_container() -> None:
             """),
     }
 
-    uid = os.getuid()
-    gid = os.getgid()
-
     with setup_tmpdir(build_inputs) as tmpdir:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
-                f"--oci-uid-map=['0:{uid}:1']",
-                "--oci-uid-map=1:100000:65536",
-                f"--oci-gid-map=['0:{gid}:1']",
-                "--oci-gid-map=1:100000:65536",
                 "run",
                 f"{tmpdir}/oci:oci",
             ],
-            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*']"},
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.11.*']"},
         )
 
     result.assert_success()
@@ -64,9 +56,9 @@ def test_run_oci_container_file() -> None:
                 python_sources(name="examples")
 
                 oci_pull_images(
-                    name="python3-d11",
-                    repository="gcr.io/distroless/python3-debian11",
-                    variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
+                    name="python3-d12",
+                    repository="gcr.io/distroless/python3-debian12",
+                    variants=dict(latest="87406cabca8cc6846b5ea08bd9b25960b4e29b845f76c1af0e3f4a0affd1d7b4"),
                     anonymous=True,
                 )
 
@@ -76,7 +68,7 @@ def test_run_oci_container_file() -> None:
 
                 oci_image_build(
                     name="oci",
-                    base=[":python3-d11#latest"],
+                    base=[":python3-d12#latest"],
                     packages=[
                         ":example",
                         ":files",
@@ -92,9 +84,6 @@ def test_run_oci_container_file() -> None:
             """),
     }
 
-    uid = os.getuid()
-    gid = os.getgid()
-
     with setup_tmpdir(build_inputs) as tmpdir:
         result = run_pants(
             [
@@ -102,14 +91,10 @@ def test_run_oci_container_file() -> None:
                 "--backend-packages=pants.backend.python",
                 "--keep-sandboxes=on_failure",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
-                f"--oci-uid-map=['0:{uid}:1']",
-                "--oci-uid-map=1:100000:65536",
-                f"--oci-gid-map=['0:{gid}:1']",
-                "--oci-gid-map=1:100000:65536",
                 "run",
                 f"{tmpdir}/oci:oci",
             ],
-            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*']"},
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.11.*']"},
         )
 
     result.assert_success()
@@ -123,9 +108,9 @@ def test_run_oci_container_files() -> None:
                 python_sources(name="examples")
 
                 oci_pull_images(
-                    name="python3-d11",
-                    repository="gcr.io/distroless/python3-debian11",
-                    variants=dict(latest="62da909329b74929181b2eac28da3be52b816c7d3d3f676bda04887c98c41593"),
+                    name="python3-d12",
+                    repository="gcr.io/distroless/python3-debian12",
+                    variants=dict(latest="87406cabca8cc6846b5ea08bd9b25960b4e29b845f76c1af0e3f4a0affd1d7b4"),
                     anonymous=True,
                 )
 
@@ -135,7 +120,7 @@ def test_run_oci_container_files() -> None:
 
                 oci_image_build(
                     name="oci",
-                    base=[":python3-d11#latest"],
+                    base=[":python3-d12#latest"],
                     packages=[
                         ":example",
                         ":files",
@@ -151,23 +136,16 @@ def test_run_oci_container_files() -> None:
             """),
     }
 
-    uid = os.getuid()
-    gid = os.getgid()
-
     with setup_tmpdir(build_inputs) as tmpdir:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
-                f"--oci-uid-map=['0:{uid}:1']",
-                "--oci-uid-map=1:100000:65536",
-                f"--oci-gid-map=['0:{gid}:1']",
-                "--oci-gid-map=1:100000:65536",
                 "run",
                 f"{tmpdir}/oci:oci",
             ],
-            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.9.*']"},
+            extra_env={"PANTS_PYTHON_INTERPRETER_CONSTRAINTS": "['CPython==3.11.*']"},
         )
 
     result.assert_success()
