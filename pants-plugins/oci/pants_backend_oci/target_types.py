@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from pants.core.goals.package import OutputPathField
 from pants.engine.addresses import Address
 from pants.engine.target import (
     BoolField,
     Dependencies,
+    Field,
+    InvalidFieldException,
     ScalarField,
     SpecialCasedDependencies,
     StringField,
     StringSequenceField,
 )
 from pants.util.strutil import softwrap
+
+if TYPE_CHECKING:
+    from pants_backend_oci.util_rules.helper_layer_builder import GroupEntry, PasswdEntry
 
 
 class ImageBundle(StringField):
@@ -175,6 +180,82 @@ class DebLayerMergedUsrField(BoolField):
     Whether the base image uses a merged `/usr`, where `/bin`, `/sbin` and `/lib*` are symlinks
     into `/usr`. When set, package contents under those directories are written under `/usr`
     instead, so the layer doesn't replace the base image's symlinks with directories.
+    """)
+
+
+class PasswdUsersField(Field):
+    alias = "users"
+    required = True
+    value: tuple[PasswdEntry, ...]
+
+    help = softwrap("""
+    The users to write to `/etc/passwd`, in order, as dicts with `name`, `uid` and `gid`, and
+    optionally `home` (default `/home/<name>`), `shell` (default `/sbin/nologin`), `gecos` and
+    `create_home` (default `True`). Home directories are created owned by the user with mode `0700`,
+    except `/` and `/nonexistent`. The file replaces the base image's, so include `root` and any
+    other users the base image needs.
+    """)
+
+    @classmethod
+    def compute_value(cls, raw_value: Optional[object], address: Address) -> tuple[PasswdEntry, ...]:
+        # Imported here: `util_rules` imports this module.
+        from pants_backend_oci.util_rules.helper_layer_builder import (
+            HelperLayerError,
+            parse_passwd_entries,
+        )
+
+        value = super().compute_value(raw_value, address)
+        try:
+            return parse_passwd_entries(value)
+        except HelperLayerError as e:
+            raise InvalidFieldException(f"The `{cls.alias}` field of {address} is invalid: {e}") from e
+
+
+class GroupEntriesField(Field):
+    alias = "groups"
+    required = True
+    value: tuple[GroupEntry, ...]
+
+    help = softwrap("""
+    The groups to write to `/etc/group`, in order, as dicts with `name` and `gid`, and optionally
+    `members`, a list of user names. The file replaces the base image's, so include `root` and any
+    other groups the base image needs.
+    """)
+
+    @classmethod
+    def compute_value(cls, raw_value: Optional[object], address: Address) -> tuple[GroupEntry, ...]:
+        # Imported here: `util_rules` imports this module.
+        from pants_backend_oci.util_rules.helper_layer_builder import (
+            HelperLayerError,
+            parse_group_entries,
+        )
+
+        value = super().compute_value(raw_value, address)
+        try:
+            return parse_group_entries(value)
+        except HelperLayerError as e:
+            raise InvalidFieldException(f"The `{cls.alias}` field of {address} is invalid: {e}") from e
+
+
+class CaCertsPackagesField(Dependencies):
+    alias = "debs"
+    required = True
+
+    help = softwrap("""
+    Targets providing the `ca-certificates` `.deb`, like `:bookworm#amd64/ca-certificates` from a
+    `deb_packages` target. The transitive closure is searched for the `ca-certificates` package;
+    the other packages it depends on are ignored.
+    """)
+
+
+class ImageUser(StringField):
+    alias = "user"
+
+    help = softwrap("""
+    The user the image runs as: a user name, a uid, or either followed by `:` and a group name or
+    gid. It is stored in the image config as given; the container runtime looks names up in the
+    image's `/etc/passwd` and `/etc/group` (for example from `oci_passwd_layer` and
+    `oci_group_layer`) when the container starts, so a missing user only fails then.
     """)
 
 

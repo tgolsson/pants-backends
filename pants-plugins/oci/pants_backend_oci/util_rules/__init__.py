@@ -7,6 +7,7 @@ from pants_backend_oci.util_rules import (
     copy,
     deb_layer,
     empty_image_bundle,
+    helper_layer,
     image_bundle,
     jq,
     layer,
@@ -22,6 +23,7 @@ def rules():
     return [
         *copy.rules(),
         *deb_layer.rules(),
+        *helper_layer.rules(),
         *archive.rules(),
         *build_image_bundle.rules(),
         *image_bundle.rules(),

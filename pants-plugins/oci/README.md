@@ -48,7 +48,7 @@ to `latest`.
 
 ## Targets
 
-There's seven targets currently implemented, of which six are generic:
+There's ten targets currently implemented, of which nine are generic:
 
 * `oci_pull_image`
 * `oci_pull_images`
@@ -56,6 +56,9 @@ There's seven targets currently implemented, of which six are generic:
 * `oci_image_empty`
 * `oci_build_layer`
 * `oci_deb_layer`
+* `oci_passwd_layer`
+* `oci_group_layer`
+* `oci_cacerts_layer`
 
 And one with some special language semantics:
 
@@ -127,6 +130,7 @@ oci_image_build(
 | `packages`    | Packaged targets to include. The first element will be used as the entrypoint. | `[]`                                                  |
 | `repository`  | Fully qualified repository name                                                | Required when publishing                              |
 | `tag`         | Remote tag to use                                                              | Required when publishing                              |
+| `user`        | The user to run as: a name or uid, optionally `:` and a group name or gid. Not checked at build time; the runtime resolves names when the container starts. | The base image's user |
 | `decsription` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |
 
@@ -228,7 +232,7 @@ The layer gets the transitive closure of the `debs` targets. To have apt depende
 
 Things to be aware of:
 
-* No maintainer scripts run, so nothing a `postinst` would do happens: no `ldconfig`, no `update-alternatives` links, no triggers, and no generated files such as `/etc/ssl/certs/ca-certificates.crt`.
+* No maintainer scripts run, so nothing a `postinst` would do happens: no `ldconfig`, no `update-alternatives` links, no triggers, and no generated files such as `/etc/ssl/certs/ca-certificates.crt` (use `oci_cacerts_layer` for that one).
 * `dpkg` and `apt` inside the image read `/var/lib/dpkg/status`, not `status.d`, so they don't see these packages. A package that is also in the base image is reported twice by scanners.
 * `merged_usr` defaults to `True`, which is right for Debian 12 (bookworm) and later. Set it to `False` for older bases where `/bin` and `/lib` are real directories.
 
@@ -264,3 +268,70 @@ oci_image_build(
 | `decsription` | A description of the target                                                                          |                                                        |
 | `output_path` | The output path during `pants package`                                                               | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                                                         | `[]`                                                   |
+
+### `oci_passwd_layer` and `oci_group_layer`
+
+Build layers with `/etc/passwd` and `/etc/group`, the declarative replacement for `useradd` and `groupadd` in a scripted build. `oci_passwd_layer` also creates each user's home directory, owned by the user with mode `0700`; homes of `/` and `/nonexistent` are never created. Lines are written in the order given, and the layers are reproducible. Set `user` on `oci_image_build` to run as one of the users.
+
+Each file replaces the base image's, so on a Debian base also list `root` and any other users and groups the base needs. Layers apply in the order of `layers`, so put these after any layer that ships its own `/etc/passwd` or `/etc/group`, or that one wins. Only the files and home directories are written, not their parent directories, so the base image's `/etc`, `/home` and the like keep their ownership and modes; missing parents are created when the image is unpacked. No `/etc/shadow` is written; a distroless image doesn't need one to resolve users.
+
+The two targets are independent, so nothing checks that a user's `gid` or a group's `members` exist in the other.
+
+``` python
+oci_passwd_layer(
+    name="passwd",
+    users=[
+        {"name": "root", "uid": 0, "gid": 0, "home": "/root", "shell": "/bin/sh"},
+        {"name": "nonroot", "uid": 65532, "gid": 65532},
+    ],
+)
+
+oci_group_layer(
+    name="group",
+    groups=[
+        {"name": "root", "gid": 0},
+        {"name": "nonroot", "gid": 65532, "members": ["nonroot"]},
+    ],
+)
+
+oci_image_build(
+    name="image",
+    base=[":debian#bookworm-20241016-slim"],
+    layers=[":passwd", ":group"],
+    user="nonroot",
+)
+```
+
+| Argument      | Meaning                                                                                                    | Default value                                          |
+|---------------|------------------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| `name`        | The target name                                                                                            | Same as any other target, which is the directory name  |
+| `users`       | `oci_passwd_layer`: dicts with `name`, `uid`, `gid`, and optionally `home`, `shell`, `gecos`, `create_home`. | Required                                               |
+| `groups`      | `oci_group_layer`: dicts with `name`, `gid`, and optionally `members`, a list of user names.               | Required                                               |
+| `decsription` | A description of the target                                                                                |                                                        |
+| `output_path` | The output path during `pants package`                                                                     | A variant generated from the target name and directory |
+| `tags`        | List of tags                                                                                               | `[]`                                                   |
+
+A user's `home` defaults to `/home/<name>`, `shell` to `/sbin/nologin`, `gecos` to empty and `create_home` to `True`. Names must match `[a-z_][a-z0-9_.-]*`, names and ids must be unique, and no value may contain `:` or a newline.
+
+### `oci_cacerts_layer`
+
+Build a layer with the CA bundle `/etc/ssl/certs/ca-certificates.crt` from the `ca-certificates` package, without running `update-ca-certificates`: every certificate under `/usr/share/ca-certificates` is concatenated in path order, as the package's `postinst` and `update-ca-certificates` would. The package's copyright file is included too. Like distroless images, the layer has no per-certificate files or OpenSSL hash links in `/etc/ssl/certs`, so tools that look certificates up by hash in a directory rather than reading the bundle file don't find them.
+
+`debs` is searched for the `ca-certificates` package, so it can point at a target generated by `deb_packages`; the packages it depends on are ignored.
+
+The bundle is reproducible: certificates are concatenated in a bytewise sort of their paths, so it depends only on the package. It is not byte-for-byte what Debian would produce, though: the package's `postinst` sorts the list by locale, so a scripted build can order the certificates differently, and `!` deselections in `/etc/ca-certificates.conf` and certificates added under `/usr/local/share/ca-certificates` are not supported.
+
+``` python
+oci_cacerts_layer(
+    name="cacerts",
+    debs=[":bookworm#amd64/ca-certificates"],
+)
+```
+
+| Argument      | Meaning                                                                 | Default value                                          |
+|---------------|-------------------------------------------------------------------------|--------------------------------------------------------|
+| `name`        | The target name                                                         | Same as any other target, which is the directory name  |
+| `debs`        | Targets bringing exactly one `ca-certificates` `.deb`.                  | Required                                               |
+| `decsription` | A description of the target                                             |                                                        |
+| `output_path` | The output path during `pants package`                                  | A variant generated from the target name and directory |
+| `tags`        | List of tags                                                            | `[]`                                                   |

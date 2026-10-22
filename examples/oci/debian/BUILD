@@ -8,14 +8,15 @@ oci_pull_images(
     os="linux",
 )
 
-# `jq` and the libraries it needs on top of bookworm-slim, resolved from a snapshot.debian.org
-# snapshot into `bookworm.lock.json` by `pants generate-lockfiles --resolve=bookworm`.
+# `jq` and the libraries it needs on top of bookworm-slim, plus `ca-certificates` for the CA bundle,
+# resolved from a snapshot.debian.org snapshot into `bookworm.lock.json` by
+# `pants generate-lockfiles --resolve=bookworm`.
 deb_packages(
     name="bookworm",
     resolve="bookworm",
     sources=["https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main"],
     architectures=["amd64", "arm64"],
-    packages=["jq"],
+    packages=["jq", "ca-certificates"],
     # Already in the bookworm-slim base image.
     exclude=["libc6"],
 )
@@ -33,4 +34,38 @@ oci_image_build(
     tag="latest",
     entrypoint="/usr/bin/jq",
     args=["--version"],
+)
+
+# The users, groups and CA bundle `useradd`, `groupadd` and `update-ca-certificates` would create,
+# built without running anything. They replace the base image's files, so `root` is listed too.
+oci_passwd_layer(
+    name="passwd",
+    users=[
+        {"name": "root", "uid": 0, "gid": 0, "home": "/root", "shell": "/bin/sh"},
+        {"name": "nonroot", "uid": 65532, "gid": 65532, "gecos": "nonroot"},
+    ],
+)
+
+oci_group_layer(
+    name="group",
+    groups=[
+        {"name": "root", "gid": 0},
+        {"name": "nonroot", "gid": 65532, "members": ["nonroot"]},
+    ],
+)
+
+oci_cacerts_layer(
+    name="cacerts",
+    debs=[":bookworm#amd64/ca-certificates"],
+)
+
+oci_image_build(
+    name="nonroot",
+    base=[":debian#bookworm-20241016-slim"],
+    layers=[":jq", ":passwd", ":group", ":cacerts"],
+    repository="pants-backend-oci/examples/debian-nonroot",
+    tag="latest",
+    user="nonroot",
+    entrypoint="/bin/sh",
+    args=["-c", "id && grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt"],
 )

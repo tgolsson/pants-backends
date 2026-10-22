@@ -10,12 +10,14 @@ from pants.core.goals.package import BuiltPackage, OutputPathField, PackageField
 from pants.core.target_types import FileSourceField
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
-from pants.engine.fs import CreateDigest, FileContent, MergeDigests
+from pants.engine.addresses import Address
+from pants.engine.fs import CreateDigest, FileContent, MergeDigests, Snapshot
 from pants.engine.internals.graph import resolve_targets, transitive_targets
 from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import (
+    Dependencies,
     DependenciesRequest,
     InvalidFieldException,
     SourcesField,
@@ -42,14 +44,22 @@ class DebLayerPackageFieldSet(PackageFieldSet):
     output_path: OutputPathField
 
 
-@rule(desc="Package OCI layer from .deb packages", level=LogLevel.DEBUG)
-async def package_deb_layer(
-    field_set: DebLayerPackageFieldSet,
-    python: PythonBuildStandaloneBinary,
-) -> BuiltPackage:
-    # The closure of `debs`, so a target that depends on the packages it needs (like those generated
-    # from a Debian lockfile) brings them along. Targets without sources only group others.
-    direct = await resolve_targets(**implicitly(DependenciesRequest(field_set.debs)))
+@dataclass(frozen=True)
+class DebFilesRequest:
+    field: Dependencies
+    address: Address
+
+
+@dataclass(frozen=True)
+class DebFiles:
+    snapshot: Snapshot
+
+
+@rule(desc="Resolve .deb packages", level=LogLevel.DEBUG)
+async def resolve_deb_files(request: DebFilesRequest) -> DebFiles:
+    # The closure of the field, so a target that depends on the packages it needs (like those
+    # generated from a Debian lockfile) brings them along. Targets without sources only group others.
+    direct = await resolve_targets(**implicitly(DependenciesRequest(request.field)))
     closure = await transitive_targets(
         TransitiveTargetsRequest([tgt.address for tgt in direct]), **implicitly()
     )
@@ -60,7 +70,7 @@ async def package_deb_layer(
     ]
     if not_files:
         raise InvalidFieldException(
-            f"The `{DebLayerPackagesField.alias}` field of {field_set.address} must only contain "
+            f"The `{request.field.alias}` field of {request.address} must only contain "
             f"`file` targets, got: {', '.join(not_files)}"
         )
 
@@ -75,14 +85,25 @@ async def package_deb_layer(
     not_debs = [f for f in sources.files if not f.endswith(".deb")]
     if not_debs or not sources.files:
         raise InvalidFieldException(
-            f"The `{DebLayerPackagesField.alias}` field of {field_set.address} must only contain "
+            f"The `{request.field.alias}` field of {request.address} must only contain "
             f"`.deb` files, got: {', '.join(not_debs) or 'nothing'}"
         )
+
+    return DebFiles(sources.snapshot)
+
+
+@rule(desc="Package OCI layer from .deb packages", level=LogLevel.DEBUG)
+async def package_deb_layer(
+    field_set: DebLayerPackageFieldSet,
+    python: PythonBuildStandaloneBinary,
+) -> BuiltPackage:
+    debs = await resolve_deb_files(DebFilesRequest(field_set.debs, field_set.address))
+    sources = debs.snapshot
 
     # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
     builder_source = resources.files(__package__).joinpath(_BUILDER_SOURCE).read_bytes()
     script = await create_digest(CreateDigest([FileContent(f"{_BUILDER_MODULE}.py", builder_source)]))
-    input_digest = await merge_digests(MergeDigests([script, sources.snapshot.digest]))
+    input_digest = await merge_digests(MergeDigests([script, sources.digest]))
 
     relpath = field_set.output_path.value_or_default(file_ending="tar")
     argv = [python.path, "-c", _BUILDER_MAIN, "--output", relpath]

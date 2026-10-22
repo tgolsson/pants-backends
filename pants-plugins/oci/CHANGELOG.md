@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Add `oci_passwd_layer`, `oci_group_layer` and `oci_cacerts_layer`, which build `/etc/passwd`
+  (with home directories), `/etc/group` and a CA bundle from the `ca-certificates` package as
+  reproducible layers, without running `useradd` or `update-ca-certificates`.
+- Add `user` to `oci_image_build`.
 - Add `oci_deb_layer`, which builds a layer from `.deb` packages without running dpkg or
   maintainer scripts, recording each package in `/var/lib/dpkg/status.d/`. Package contents
   are streamed, files shipped identically by several packages are accepted, and extended

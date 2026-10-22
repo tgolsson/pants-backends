@@ -30,6 +30,7 @@ from pants_backend_oci.target_types import (
     ImageEntrypoint,
     ImageEnvironment,
     ImageLayersField,
+    ImageUser,
 )
 from pants_backend_oci.tools.process import FusedProcess
 from pants_backend_oci.util_rules.image_bundle import (
@@ -54,6 +55,7 @@ class BuildImageBundleFieldSet(FieldSet):
     environment: ImageEnvironment
     entrypoint: ImageEntrypoint
     args: ImageArgs
+    user: ImageUser
     layers: ImageLayersField
 
     commands: ImageBuildCommand
@@ -180,6 +182,9 @@ async def build_oci_bundle_package(
     if request.target.args.value:
         for arg in request.target.args.value:
             config.extend(["--config.cmd", arg])
+
+    if request.target.user.value:
+        config.extend(["--config.user", request.target.user.value])
 
     if request.target.entrypoint.value:
         config.extend(["--clear=config.entrypoint"])

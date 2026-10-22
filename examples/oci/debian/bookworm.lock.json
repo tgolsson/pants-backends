@@ -3,6 +3,27 @@
     "amd64": {
       "packages": [
         {
+          "architecture": "all",
+          "depends": [
+            "debconf",
+            "openssl"
+          ],
+          "name": "ca-certificates",
+          "sha256": "5308b9bd88eebe2a48be3168cb3d87677aaec5da9c63ad0cf561a29b8219115c",
+          "size": 153456,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20230311_all.deb",
+          "version": "20230311"
+        },
+        {
+          "architecture": "all",
+          "depends": [],
+          "name": "debconf",
+          "sha256": "74ab14194a3762b2fc717917dcfda42929ab98e3c59295a063344dc551cd7cc8",
+          "size": 121212,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/d/debconf/debconf_1.5.82_all.deb",
+          "version": "1.5.82"
+        },
+        {
           "architecture": "amd64",
           "depends": [
             "libjq1"
@@ -32,14 +53,56 @@
           "size": 187828,
           "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_amd64.deb",
           "version": "6.9.8-1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [],
+          "name": "libssl3",
+          "sha256": "808ed2385960ee7b3365d583680e2f7a700c410b0ab4f81cc63b8bd166f61bae",
+          "size": 2023772,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/libssl3_3.0.14-1~deb12u1_amd64.deb",
+          "version": "3.0.14-1~deb12u1"
+        },
+        {
+          "architecture": "amd64",
+          "depends": [
+            "libssl3"
+          ],
+          "name": "openssl",
+          "sha256": "6ddf252c45bca1e1b815d2e32a63e2b976b6bc9c86031c819b363907dd5045f4",
+          "size": 1422564,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/openssl_3.0.14-1~deb12u1_amd64.deb",
+          "version": "3.0.14-1~deb12u1"
         }
       ],
       "roots": [
+        "ca-certificates",
         "jq"
       ]
     },
     "arm64": {
       "packages": [
+        {
+          "architecture": "all",
+          "depends": [
+            "debconf",
+            "openssl"
+          ],
+          "name": "ca-certificates",
+          "sha256": "5308b9bd88eebe2a48be3168cb3d87677aaec5da9c63ad0cf561a29b8219115c",
+          "size": 153456,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20230311_all.deb",
+          "version": "20230311"
+        },
+        {
+          "architecture": "all",
+          "depends": [],
+          "name": "debconf",
+          "sha256": "74ab14194a3762b2fc717917dcfda42929ab98e3c59295a063344dc551cd7cc8",
+          "size": 121212,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/d/debconf/debconf_1.5.82_all.deb",
+          "version": "1.5.82"
+        },
         {
           "architecture": "arm64",
           "depends": [
@@ -70,9 +133,30 @@
           "size": 179104,
           "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_arm64.deb",
           "version": "6.9.8-1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [],
+          "name": "libssl3",
+          "sha256": "276df6a2e098a4e86742a2fd2003f9681b7fb1035ff453d2ab5a1d5f95ea4fa6",
+          "size": 1810664,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/libssl3_3.0.14-1~deb12u1_arm64.deb",
+          "version": "3.0.14-1~deb12u1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [
+            "libssl3"
+          ],
+          "name": "openssl",
+          "sha256": "a5110bbfa002cc9b55bf05b449a0cccb36efc174021e0b46d36de399e42af632",
+          "size": 1389148,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/openssl_3.0.14-1~deb12u1_arm64.deb",
+          "version": "3.0.14-1~deb12u1"
         }
       ],
       "roots": [
+        "ca-certificates",
         "jq"
       ]
     }
@@ -86,6 +170,7 @@
       "libc6"
     ],
     "packages": [
+      "ca-certificates",
       "jq"
     ],
     "sources": [

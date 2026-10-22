@@ -22,7 +22,12 @@ from pants.engine.target import (
     Target,
 )
 
-from pants_backend_oci.target_types import DebLayerPackagesField
+from pants_backend_oci.target_types import (
+    CaCertsPackagesField,
+    DebLayerPackagesField,
+    GroupEntriesField,
+    PasswdUsersField,
+)
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar, create_archive
 
 
@@ -31,6 +36,9 @@ class BuiltLayerArtifact(BuiltPackageArtifact):
 
 
 logger = logging
+
+# Targets that package into a layer themselves, rather than having their dependencies put in one.
+SELF_LAYER_FIELDS = (DebLayerPackagesField, PasswdUsersField, GroupEntriesField, CaCertsPackagesField)
 
 
 @dataclass(frozen=True)
@@ -52,8 +60,7 @@ class ImageLayer:
 
 @rule
 async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
-    if request.old_style or request.target.has_field(DebLayerPackagesField):
-        # A deb layer packages into a layer itself; its dependencies are raw `.deb` files.
+    if request.old_style or any(request.target.has_field(f) for f in SELF_LAYER_FIELDS):
         root_dependencies = [request.target]
 
     else:

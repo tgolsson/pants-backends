@@ -14,12 +14,12 @@ spirit of [rules_distroless](https://github.com/GoogleContainerTools/rules_distr
 top-level packages against an apt repository snapshot, and `pants generate-lockfiles` resolves their
 dependencies into a committed lockfile. The locked packages feed `oci_deb_layer` from
 [`pants-backend-oci`](https://pypi.org/project/pants-backend-oci), which builds a layer from them
-without running `apt`, `dpkg` or maintainer scripts.
+without running `apt`, `dpkg` or maintainer scripts. `pants-backend-oci` also has the helper layers such
+an image needs: `oci_passwd_layer`, `oci_group_layer` and `oci_cacerts_layer`.
 
 ## Planned and missing features
 
 * Verifying the GPG signature of the repository's `Release` file.
-* Helper layers for `/etc/passwd`, `/etc/group` and a CA bundle.
 * Ubuntu packages, which are zstd-compressed.
 
 ## Targets

@@ -33,7 +33,7 @@ import tarfile
 import zlib
 from dataclasses import dataclass, field
 from dataclasses import fields as dataclass_fields
-from typing import BinaryIO, Callable
+from typing import BinaryIO, Callable, Iterator
 
 STATUS_DIR = "var/lib/dpkg/status.d"
 
@@ -249,6 +249,24 @@ def load_deb(f: BinaryIO, source: str = "") -> DebPackage:
     )
 
 
+@contextlib.contextmanager
+def open_data(package: DebPackage) -> Iterator[tarfile.TarFile]:
+    """Stream a package's `data.tar.*`, turning corrupt or truncated archives into a `DebError`."""
+    what = f"{package.source or package.name}: {package.data_member}"
+    raw = io.BufferedReader(_Slice(package.fileobj, package.data_offset, package.data_size))
+    with _decompressor(package.data_member)(raw) as decompressed:
+        stream = _CheckedReader(decompressed, what)
+        try:
+            with tarfile.open(fileobj=stream, mode="r|") as data:
+                yield data
+            # Stream mode stops at the end-of-archive blocks; read on so the decompressor reaches and
+            # verifies the stream's checksum and trailer.
+            while stream.read(1 << 16):
+                pass
+        except tarfile.TarError as e:
+            raise DebError(f"{what} is corrupt: {e}") from e
+
+
 def status_entry(control: bytes) -> bytes:
     """Render a package's control paragraph as an installed dpkg status entry."""
     fields = [(k, v) for k, v in parse_control(control) if k != "Status"]
@@ -260,7 +278,7 @@ def status_entry(control: bytes) -> bytes:
     return ("\n".join(rendered) + "\n").encode("utf-8")
 
 
-def _clean(path: str) -> str:
+def clean_path(path: str) -> str:
     """Strip `./` and `/` prefixes from an archive path, rejecting `..` components."""
     while path.startswith("./"):
         path = path[2:]
@@ -281,7 +299,7 @@ def _merge_usr(path: str, merged_usr: bool) -> str:
 
 
 def _normalize(path: str, merged_usr: bool) -> str:
-    return _merge_usr(_clean(path), merged_usr)
+    return _merge_usr(clean_path(path), merged_usr)
 
 
 def _symlink_target(original: str, linkname: str, merged_usr: bool) -> str:
@@ -311,11 +329,14 @@ def _rewrite_md5sums(md5sums: bytes, merged_usr: bool) -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
-def _directory(name: str) -> tarfile.TarInfo:
+def directory_info(
+    name: str, mode: int = 0o755, uid: int = 0, gid: int = 0, uname: str = "root", gname: str = "root"
+) -> tarfile.TarInfo:
     info = tarfile.TarInfo(name)
     info.type = tarfile.DIRTYPE
-    info.mode = 0o755
-    info.uname = info.gname = "root"
+    info.mode = mode
+    info.uid, info.gid = uid, gid
+    info.uname, info.gname = uname, gname
     return info
 
 
@@ -366,7 +387,7 @@ def _sha256(f: BinaryIO) -> str:
     return digest.hexdigest()
 
 
-def _regular_file(name: str, content: bytes) -> tarfile.TarInfo:
+def file_info(name: str, content: bytes) -> tarfile.TarInfo:
     info = tarfile.TarInfo(name)
     info.size = len(content)
     info.mode = 0o644
@@ -433,61 +454,49 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
 
         for name in sorted(by_name):
             package = by_name[name]
-            what = f"{package.source or name}: {package.data_member}"
-            raw = io.BufferedReader(_Slice(package.fileobj, package.data_offset, package.data_size))
-            with _decompressor(package.data_member)(raw) as decompressed:
-                stream = _CheckedReader(decompressed, what)
-                try:
-                    with tarfile.open(fileobj=stream, mode="r|") as data:
-                        for member in data:
-                            original = _clean(member.name)
-                            path = _merge_usr(original, merged_usr)
-                            if not path:
-                                continue
+            with open_data(package) as data:
+                for member in data:
+                    original = clean_path(member.name)
+                    path = _merge_usr(original, merged_usr)
+                    if not path:
+                        continue
 
-                            xattrs = sorted(k for k in member.pax_headers if k.startswith(XATTR_HEADERS))
-                            if xattrs:
-                                raise DebError(
-                                    f"{path} in {name} has extended attributes ({', '.join(xattrs)}), "
-                                    "which deb layers do not support"
-                                )
+                    xattrs = sorted(k for k in member.pax_headers if k.startswith(XATTR_HEADERS))
+                    if xattrs:
+                        raise DebError(
+                            f"{path} in {name} has extended attributes ({', '.join(xattrs)}), "
+                            "which deb layers do not support"
+                        )
 
-                            info = tarfile.TarInfo(path)
-                            info.type = member.type
-                            info.mode = member.mode
-                            info.uid, info.gid = member.uid, member.gid
-                            info.uname, info.gname = member.uname, member.gname
-                            info.devmajor, info.devminor = member.devmajor, member.devminor
-                            if member.islnk():
-                                info.linkname = _normalize(member.linkname, merged_usr)
-                            elif member.issym():
-                                info.linkname = _symlink_target(original, member.linkname, merged_usr)
+                    info = tarfile.TarInfo(path)
+                    info.type = member.type
+                    info.mode = member.mode
+                    info.uid, info.gid = member.uid, member.gid
+                    info.uname, info.gname = member.uname, member.gname
+                    info.devmajor, info.devminor = member.devmajor, member.devminor
+                    if member.islnk():
+                        info.linkname = _normalize(member.linkname, merged_usr)
+                    elif member.issym():
+                        info.linkname = _symlink_target(original, member.linkname, merged_usr)
 
-                            content = None
-                            if member.isreg():
-                                content = data.extractfile(member)
-                                info.size = member.size
+                    content = None
+                    if member.isreg():
+                        content = data.extractfile(member)
+                        info.size = member.size
 
-                            add(info, name, content)
-
-                    # Stream mode stops at the end-of-archive blocks; read on so the decompressor
-                    # reaches and verifies the stream's checksum and trailer.
-                    while stream.read(1 << 16):
-                        pass
-                except tarfile.TarError as e:
-                    raise DebError(f"{what} is corrupt: {e}") from e
+                    add(info, name, content)
 
         parts = STATUS_DIR.split("/")
         for depth in range(1, len(parts) + 1):
-            add(_directory("/".join(parts[:depth])), "status.d")
+            add(directory_info("/".join(parts[:depth])), "status.d")
 
         for name in sorted(by_name):
             package = by_name[name]
             entry = status_entry(package.control)
-            add(_regular_file(f"{STATUS_DIR}/{name}", entry), name, io.BytesIO(entry))
+            add(file_info(f"{STATUS_DIR}/{name}", entry), name, io.BytesIO(entry))
             if package.md5sums is not None:
                 md5sums = _rewrite_md5sums(package.md5sums, merged_usr)
-                add(_regular_file(f"{STATUS_DIR}/{name}.md5sums", md5sums), name, io.BytesIO(md5sums))
+                add(file_info(f"{STATUS_DIR}/{name}.md5sums", md5sums), name, io.BytesIO(md5sums))
 
 
 def main(argv: list[str]) -> int:

@@ -12,8 +12,10 @@ from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.strutil import softwrap
 
 from pants_backend_oci.target_types import (
+    CaCertsPackagesField,
     DebLayerMergedUsrField,
     DebLayerPackagesField,
+    GroupEntriesField,
     ImageArchitectureField,
     ImageArgs,
     ImageArtifactExclusions,
@@ -33,6 +35,8 @@ from pants_backend_oci.target_types import (
     ImageRepositoryAnonymous,
     ImageRunTty,
     ImageTag,
+    ImageUser,
+    PasswdUsersField,
 )
 
 
@@ -120,6 +124,7 @@ class ImageBuild(Target):
         ImageEnvironment,
         ImageEntrypoint,
         ImageArgs,
+        ImageUser,
         OutputPathField,
         ImageBuildCommand,
     )
@@ -190,6 +195,44 @@ class DebLayer(Target):
         """)
 
 
+class PasswdLayer(Target):
+    alias = "oci_passwd_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        PasswdUsersField,
+        OutputPathField,
+    )
+    help = softwrap("""
+        A layer with `/etc/passwd` and the users' home directories, replacing `useradd` in a
+        scripted build.
+        """)
+
+
+class GroupLayer(Target):
+    alias = "oci_group_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        GroupEntriesField,
+        OutputPathField,
+    )
+    help = softwrap("""
+        A layer with `/etc/group`, replacing `groupadd` in a scripted build.
+        """)
+
+
+class CaCertsLayer(Target):
+    alias = "oci_cacerts_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        CaCertsPackagesField,
+        OutputPathField,
+    )
+    help = softwrap("""
+        A layer with the CA bundle `/etc/ssl/certs/ca-certificates.crt`, generated from the
+        `ca-certificates` package without running `update-ca-certificates`.
+        """)
+
+
 def targets():
     return [
         PullImage,
@@ -200,6 +243,9 @@ def targets():
         ImageLayer,
         ImageExtractStep,
         DebLayer,
+        PasswdLayer,
+        GroupLayer,
+        CaCertsLayer,
     ]
 
 
