@@ -65,7 +65,7 @@ A failing command or a missing output fails the build. `examples/oci/scripted` s
 
 The defaults are crane `v0.22.1` and zstd `v1.5.6-bcr2`. crane uses the official
 go-containerregistry release archives.
-zstd, used by `oci_deb_layer` and `oci_cacerts_layer` to read zstd-compressed packages such as
+zstd, used by `oci_deb_layer`, `oci_cacerts_layer` and `oci_locale_layer` to read zstd-compressed packages such as
 Ubuntu's, comes from the static builds of [aspect-build/zstd-prebuilt](https://github.com/aspect-build/zstd-prebuilt)
 for Linux/macOS on x86-64 and ARM64. It is downloaded like the other tools, not installed as a Python
 dependency.
@@ -92,7 +92,7 @@ to `latest`.
 
 ## Targets
 
-There's ten targets currently implemented, of which nine are generic:
+There's eleven targets currently implemented, of which ten are generic:
 
 * `oci_pull_image`
 * `oci_pull_images`
@@ -103,6 +103,7 @@ There's ten targets currently implemented, of which nine are generic:
 * `oci_passwd_layer`
 * `oci_group_layer`
 * `oci_cacerts_layer`
+* `oci_locale_layer`
 
 And one with some special language semantics:
 
@@ -126,7 +127,7 @@ oci_pull_image(
 | `repository`  | Fully qualified repository name                  | **Required**                                          |
 | `sha`         | The digest of the image, minus the @sha: prefix. | **Required**                                          |
 | `anonymous`   | Whether to pull the image anonymously.           | `false`                                               |
-| `decsription` | A description of the target                      |                                                       |
+| `description` | A description of the target                      |                                                       |
 | `tags`        | List of tags                                     | `[]`                                                  |
 
 ### `oci_pull_images`
@@ -150,7 +151,7 @@ oci_pull_image(
 | `repository`  | Fully qualified repository name              | **Required**                                          |
 | `variants`    | Dictionary with local tags to the remote sha | **Required**                                          |
 | `anonymous`   | Whether to pull the image anonymously        | `false`                                               |
-| `decsription` | A description of the target                  |                                                       |
+| `description` | A description of the target                  |                                                       |
 | `tags`        | List of tags                                 | `[]`                                                  |
 
 ### `oci_build_image`
@@ -175,7 +176,7 @@ oci_image_build(
 | `repository`  | Fully qualified repository name                                                | Required when publishing                              |
 | `tag`         | Remote tag to use                                                              | Required when publishing                              |
 | `user`        | The user to run as: a name or uid, optionally `:` and a group name or gid. Not checked at build time; the runtime resolves names when the container starts. | The base image's user |
-| `decsription` | A description of the target                                                    |                                                       |
+| `description` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |
 
 ### `oci_python_image`
@@ -201,7 +202,7 @@ oci_python_image(
 | `python_main` | The main file to run                                                           | The last `.pex` in the dependency list                |
 | `repository`  | Fully qualified repository name                                                | Required when publishing                              |
 | `tag`         | Remote tag to use                                                              | Required when publishing                              |
-| `decsription` | A description of the target                                                    |                                                       |
+| `description` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |
 
 ### `oci_image_empty`
@@ -217,7 +218,7 @@ oci_image_empty(
 | Argument      | Meaning                                                                        | Default value                                         |
 |---------------|--------------------------------------------------------------------------------|-------------------------------------------------------|
 | `name`        | The target name                                                                | Same as any other target, which is the directory name |
-| `decsription` | A description of the target                                                    |                                                       |
+| `description` | A description of the target                                                    |                                                       |
 | `tags`        | List of tags                                                                   | `[]`                                                  |
 
 ### `oci_extract`
@@ -238,7 +239,7 @@ oci_extract(
 | `name`        | The target name                                                                | Same as any other target, which is the directory name  |
 | `outputs`     | Paths to capture into the built layer.                                         | `[]`                                                   |
 | `exclude`     | Globs to not include in the output.                                            | `[]`                                                   |
-| `decsription` | A description of the target                                                    |                                                        |
+| `description` | A description of the target                                                    |                                                        |
 | `output_path` | The output path during `pants package`                                         | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                                   | `[]`                                                   |
 
@@ -265,7 +266,7 @@ oci_build_layer(
 | `env`         | Environment variables to set. Does not support interpolation.                  | `[]`                                                   |
 | `outputs`     | Paths to capture into the built layer.                                         | `[]`                                                   |
 | `exclude`     | Globs to not include in the output.                                            | `[]`                                                   |
-| `decsription` | A description of the target                                                    |                                                        |
+| `description` | A description of the target                                                    |                                                        |
 | `output_path` | The output path during `pants package`                                         | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                                   | `[]`                                                   |
 
@@ -310,7 +311,7 @@ oci_image_build(
 | `name`        | The target name                                                                                      | Same as any other target, which is the directory name  |
 | `debs`        | The `.deb` files to extract, with their dependencies: `deb_packages` targets or `file` targets.      | Required                                               |
 | `merged_usr`  | Write contents of `/bin`, `/sbin` and `/lib*` under `/usr`, for bases where those are symlinks.      | `True`                                                 |
-| `decsription` | A description of the target                                                                          |                                                        |
+| `description` | A description of the target                                                                          |                                                        |
 | `output_path` | The output path during `pants package`                                                               | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                                                         | `[]`                                                   |
 
@@ -352,7 +353,7 @@ oci_image_build(
 | `name`        | The target name                                                                                            | Same as any other target, which is the directory name  |
 | `users`       | `oci_passwd_layer`: dicts with `name`, `uid`, `gid`, and optionally `home`, `shell`, `gecos`, `create_home`. | Required                                               |
 | `groups`      | `oci_group_layer`: dicts with `name`, `gid`, and optionally `members`, a list of user names.               | Required                                               |
-| `decsription` | A description of the target                                                                                |                                                        |
+| `description` | A description of the target                                                                                |                                                        |
 | `output_path` | The output path during `pants package`                                                                     | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                                                               | `[]`                                                   |
 
@@ -377,6 +378,29 @@ oci_cacerts_layer(
 |---------------|-------------------------------------------------------------------------|--------------------------------------------------------|
 | `name`        | The target name                                                         | Same as any other target, which is the directory name  |
 | `debs`        | Targets bringing exactly one `ca-certificates` `.deb`.                  | Required                                               |
-| `decsription` | A description of the target                                             |                                                        |
+| `description` | A description of the target                                             |                                                        |
+| `output_path` | The output path during `pants package`                                  | A variant generated from the target name and directory |
+| `tags`        | List of tags                                                            | `[]`                                                   |
+
+### `oci_locale_layer`
+
+Build a layer with only the selected compiled locales under `/usr/lib/locale`, such as `C.utf8` from `libc-bin`, without the rest of the package and without running `locale-gen` or `localedef`. glibc only has the ASCII `C` and `POSIX` locales built in, so a program that sets `LANG=C.UTF-8` or calls `setlocale` with it needs these files, or it silently falls back to ASCII. Distroless images ship `C.utf8` the same way.
+
+`debs` is searched for packages shipping the requested locales as directories under `/usr/lib/locale`, so it can point at a target generated by `deb_packages`. Each locale must be in exactly one package, and each package a locale comes from adds its copyright file. Locales are looked up like glibc does: by the name as given, then with its codeset normalized, so `C.UTF-8` selects `C.utf8`. `C` and `POSIX` are built into glibc and rejected. Since nothing is compiled, only locales a package ships compiled can be selected: `libc-bin` ships `C.utf8` on Debian and Ubuntu, and the error lists the locales the packages do ship. A `locale-archive` file, as `locale-gen` writes, is not read. Hardlinks between locales become regular files. The locale directories are written with mode 0755, but not `/usr/lib/locale` itself, so the base image's is kept.
+
+``` python
+oci_locale_layer(
+    name="locales",
+    debs=[":bookworm#amd64/libc-bin"],
+    locales=["C.UTF-8"],
+)
+```
+
+| Argument      | Meaning                                                                 | Default value                                          |
+|---------------|-------------------------------------------------------------------------|--------------------------------------------------------|
+| `name`        | The target name                                                         | Same as any other target, which is the directory name  |
+| `debs`        | Targets bringing the `.deb`s that ship the locales.                     | Required                                               |
+| `locales`     | The compiled locales to keep.                                           | `["C.utf8"]`                                           |
+| `description` | A description of the target                                             |                                                        |
 | `output_path` | The output path during `pants package`                                  | A variant generated from the target name and directory |
 | `tags`        | List of tags                                                            | `[]`                                                   |

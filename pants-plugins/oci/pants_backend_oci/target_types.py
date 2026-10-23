@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from pants.core.goals.package import OutputPathField
 from pants.engine.addresses import Address
@@ -246,6 +246,44 @@ class CaCertsPackagesField(Dependencies):
     `deb_packages` target. The transitive closure is searched for the `ca-certificates` package;
     the other packages it depends on are ignored.
     """)
+
+
+class LocalePackagesField(Dependencies):
+    alias = "debs"
+    required = True
+
+    help = softwrap("""
+    Targets providing the `.deb` that ships the compiled locales under `/usr/lib/locale`, like
+    `:bookworm#amd64/libc-bin` from a `deb_packages` target, which ships `C.utf8`. The transitive
+    closure is searched; only the selected locales and their packages' copyright files are kept.
+    """)
+
+
+class LocalesField(StringSequenceField):
+    alias = "locales"
+    default = ("C.utf8",)
+    value: tuple[str, ...]
+
+    help = softwrap("""
+    The compiled locales to keep, by name as `setlocale` takes it. Like glibc, each is looked up by
+    the name as given, then with its codeset normalized, so `C.UTF-8` selects the `C.utf8`
+    directory. Each must already be compiled in one of the packages, since `localedef` is not run.
+    `C` and `POSIX` are built into glibc and rejected.
+    """)
+
+    @classmethod
+    def compute_value(cls, raw_value: Optional[Iterable[str]], address: Address) -> tuple[str, ...]:
+        # Imported here: `util_rules` imports this module.
+        from pants_backend_oci.util_rules.helper_layer_builder import (
+            HelperLayerError,
+            parse_locales,
+        )
+
+        value = super().compute_value(raw_value, address)
+        try:
+            return parse_locales(value)
+        except HelperLayerError as e:
+            raise InvalidFieldException(f"The `{cls.alias}` field of {address} is invalid: {e}") from e
 
 
 class ImageUser(StringField):

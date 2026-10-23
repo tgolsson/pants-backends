@@ -8,15 +8,15 @@ oci_pull_images(
     os="linux",
 )
 
-# `jq` and the libraries it needs on top of bookworm-slim, plus `ca-certificates` for the CA bundle,
-# resolved from a snapshot.debian.org snapshot into `bookworm.lock.json` by
-# `pants generate-lockfiles --resolve=bookworm`.
+# `jq` and the libraries it needs on top of bookworm-slim, plus `ca-certificates` for the CA bundle
+# and `libc-bin` for the `C.utf8` locale, resolved from a snapshot.debian.org snapshot into
+# `bookworm.lock.json` by `pants generate-lockfiles --resolve=bookworm`.
 deb_packages(
     name="bookworm",
     resolve="bookworm",
     sources=["https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main"],
     architectures=["amd64", "arm64"],
-    packages=["jq", "ca-certificates"],
+    packages=["jq", "ca-certificates", "libc-bin"],
     # Already in the bookworm-slim base image.
     exclude=["libc6"],
     # `/usr/share/keyrings/debian-archive-keyring.gpg` from the snapshot's
@@ -61,6 +61,13 @@ oci_group_layer(
 oci_cacerts_layer(
     name="cacerts",
     debs=[":bookworm#amd64/ca-certificates"],
+)
+
+# Only the compiled `C.utf8` locale from `libc-bin`, without its binaries or running `locale-gen`.
+oci_locale_layer(
+    name="locales",
+    debs=[":bookworm#amd64/libc-bin"],
+    locales=["C.UTF-8"],
 )
 
 oci_image_build(

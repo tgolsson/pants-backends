@@ -16,23 +16,29 @@ from pants.engine.fs import DigestContents
 from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
 from pants_backend_oci.subsystem import ZstdTool
-from pants_backend_oci.targets import CaCertsLayer, GroupLayer, PasswdLayer
+from pants_backend_oci.targets import CaCertsLayer, GroupLayer, LocaleLayer, PasswdLayer
 from pants_backend_oci.util_rules import archive, deb_layer, helper_layer, layer
 from pants_backend_oci.util_rules.deb_layer_builder_test import FOO
 from pants_backend_oci.util_rules.helper_layer_builder import CA_BUNDLE
-from pants_backend_oci.util_rules.helper_layer_builder_test import CERT_B, ca_certificates_deb
+from pants_backend_oci.util_rules.helper_layer_builder_test import (
+    CERT_B,
+    LC_CTYPE,
+    ca_certificates_deb,
+    libc_bin_deb,
+)
 
 FIELD_SETS = {
     "oci_passwd_layer": helper_layer.PasswdLayerFieldSet,
     "oci_group_layer": helper_layer.GroupLayerFieldSet,
     "oci_cacerts_layer": helper_layer.CaCertsLayerFieldSet,
+    "oci_locale_layer": helper_layer.LocaleLayerFieldSet,
 }
 
 
 @pytest.fixture
 def rule_runner() -> RuleRunner:
     return RuleRunner(
-        target_types=[PasswdLayer, GroupLayer, CaCertsLayer, FileTarget, GenericTarget],
+        target_types=[PasswdLayer, GroupLayer, CaCertsLayer, LocaleLayer, FileTarget, GenericTarget],
         rules=[
             *archive.rules(),
             *deb_layer.rules(),
@@ -67,6 +73,8 @@ oci_group_layer(
 file(name="foo", source="foo_1.0-1_amd64.deb")
 file(name="ca", source="ca-certificates_1.0-1_all.deb", dependencies=[":foo"])
 oci_cacerts_layer(name="cacerts", debs=[":ca"])
+file(name="libc", source="libc-bin_1.0-1_amd64.deb", dependencies=[":foo"])
+oci_locale_layer(name="locales", debs=[":libc"])
 """
 
 
@@ -75,6 +83,7 @@ def write(rule_runner: RuleRunner, build: str = BUILD) -> None:
         {
             "img/foo_1.0-1_amd64.deb": FOO,
             "img/ca-certificates_1.0-1_all.deb": ca_certificates_deb(),
+            "img/libc-bin_1.0-1_amd64.deb": libc_bin_deb(),
             "img/BUILD": build,
         }
     )
@@ -148,13 +157,57 @@ def test_cacerts_layer_requires_ca_certificates(rule_runner: RuleRunner) -> None
         package(rule_runner, "no_ca")
 
 
+def members(rule_runner: RuleRunner, built: BuiltPackage) -> list[str]:
+    (content,) = rule_runner.request(DigestContents, [built.digest])
+    with tarfile.open(fileobj=io.BytesIO(content.content)) as tar:
+        return tar.getnames()
+
+
+def test_locale_layer_defaults_to_c_utf8(rule_runner: RuleRunner) -> None:
+    write(rule_runner)
+    built = package(rule_runner, "locales")
+    assert [a.relpath for a in built.artifacts] == ["img/locales.tar"]
+    assert read(rule_runner, built, "usr/lib/locale/C.utf8/LC_CTYPE") == LC_CTYPE
+    assert not any(name.startswith("usr/lib/locale/en_US") for name in members(rule_runner, built))
+
+
+def test_locale_layer_reads_zstd_debs(rule_runner: RuleRunner) -> None:
+    write(rule_runner, BUILD + '\noci_locale_layer(name="en", debs=[":libc"], locales=["en_US.UTF-8"])\n')
+    rule_runner.write_files(
+        {
+            "img/libc-bin_1.0-1_amd64.deb": libc_bin_deb(
+                data_member="data.tar.zst", control_member="control.tar.zst"
+            )
+        }
+    )
+    built = package(rule_runner, "en")
+    assert read(rule_runner, built, "usr/lib/locale/en_US.utf8/LC_CTYPE") == LC_CTYPE
+
+
+def test_locale_layer_reports_missing_locales(rule_runner: RuleRunner) -> None:
+    write(rule_runner, BUILD + '\noci_locale_layer(name="de", debs=[":libc"], locales=["de_DE.UTF-8"])\n')
+    with engine_error(
+        contains=(
+            "Could not build the locales from the `debs` field of img:de: "
+            "no package ships locale 'de_DE.UTF-8'"
+        )
+    ):
+        package(rule_runner, "de")
+
+
+def test_invalid_locales_are_reported(rule_runner: RuleRunner) -> None:
+    write(rule_runner, 'oci_locale_layer(name="bad", debs=[], locales=["C"])\n')
+    with engine_error(contains="The `locales` field of img:bad is invalid: locale 'C' is built into glibc"):
+        rule_runner.get_target(Address("img", target_name="bad"))
+
+
 def test_invalid_users_are_reported(rule_runner: RuleRunner) -> None:
     write(rule_runner, 'oci_passwd_layer(name="bad", users=[{"name": "a", "uid": 1}])\n')
     with engine_error(contains="The `users` field of img:bad is invalid: user 'a' is missing gid"):
         rule_runner.get_target(Address("img", target_name="bad"))
 
 
-@pytest.mark.parametrize("name", ["passwd", "group", "cacerts"])
+@pytest.mark.parametrize("name", ["passwd", "group", "cacerts", "locales"])
 def test_helper_layers_are_added_as_their_own_layer(rule_runner: RuleRunner, name: str) -> None:
     write(rule_runner)
     target = rule_runner.get_target(Address("img", target_name=name))

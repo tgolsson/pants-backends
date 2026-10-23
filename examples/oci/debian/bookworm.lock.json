@@ -36,6 +36,15 @@
         },
         {
           "architecture": "amd64",
+          "depends": [],
+          "name": "libc-bin",
+          "sha256": "f42b2b73c9b800dfeeab44abc721ba527243e8a3a2b598a5f443d2e3174ca5a5",
+          "size": 607736,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/g/glibc/libc-bin_2.36-9+deb12u8_amd64.deb",
+          "version": "2.36-9+deb12u8"
+        },
+        {
+          "architecture": "amd64",
           "depends": [
             "libonig5"
           ],
@@ -77,7 +86,8 @@
       ],
       "roots": [
         "ca-certificates",
-        "jq"
+        "jq",
+        "libc-bin"
       ]
     },
     "arm64": {
@@ -113,6 +123,15 @@
           "size": 64484,
           "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/jq_1.6-2.1_arm64.deb",
           "version": "1.6-2.1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [],
+          "name": "libc-bin",
+          "sha256": "fd56a286a19fc9ab82582ea720a0e59a2a4e50931b6dbd4193248457e09c3a9f",
+          "size": 531072,
+          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/g/glibc/libc-bin_2.36-9+deb12u8_arm64.deb",
+          "version": "2.36-9+deb12u8"
         },
         {
           "architecture": "arm64",
@@ -157,7 +176,8 @@
       ],
       "roots": [
         "ca-certificates",
-        "jq"
+        "jq",
+        "libc-bin"
       ]
     }
   },
@@ -171,7 +191,8 @@
     ],
     "packages": [
       "ca-certificates",
-      "jq"
+      "jq",
+      "libc-bin"
     ],
     "sources": [
       "https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main"

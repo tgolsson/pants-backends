@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Add `oci_locale_layer`, which builds a reproducible layer with only the selected compiled
+  locales, such as `C.utf8` from `libc-bin`, without running `locale-gen` or `localedef`.
 - **Breaking:** `pants package` writes an `oci_image_build` as a deterministic OCI archive,
   `<name>.tar`, instead of an `<name>.d` OCI layout directory. The archive holds only the
   image's blobs, names the image `repository:tag` and includes a Docker `manifest.json`, so

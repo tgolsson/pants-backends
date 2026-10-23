@@ -15,7 +15,7 @@ top-level packages against an apt repository snapshot, and `pants generate-lockf
 dependencies into a committed lockfile. The locked packages feed `oci_deb_layer` from
 [`pants-backend-oci`](https://pypi.org/project/pants-backend-oci), which builds a layer from them
 without running `apt`, `dpkg` or maintainer scripts. `pants-backend-oci` also has the helper layers such
-an image needs: `oci_passwd_layer`, `oci_group_layer` and `oci_cacerts_layer`.
+an image needs: `oci_passwd_layer`, `oci_group_layer`, `oci_cacerts_layer` and `oci_locale_layer`.
 
 ## Targets
 

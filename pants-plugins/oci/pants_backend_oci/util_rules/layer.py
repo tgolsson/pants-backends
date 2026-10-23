@@ -25,6 +25,7 @@ from pants_backend_oci.target_types import (
     CaCertsPackagesField,
     DebLayerPackagesField,
     GroupEntriesField,
+    LocalePackagesField,
     PasswdUsersField,
 )
 from pants_backend_oci.util_rules.archive import CreateDeterministicTar, create_archive
@@ -37,7 +38,13 @@ class BuiltLayerArtifact(BuiltPackageArtifact):
 logger = logging
 
 # Targets that package into a layer themselves, rather than having their dependencies put in one.
-SELF_LAYER_FIELDS = (DebLayerPackagesField, PasswdUsersField, GroupEntriesField, CaCertsPackagesField)
+SELF_LAYER_FIELDS = (
+    DebLayerPackagesField,
+    PasswdUsersField,
+    GroupEntriesField,
+    CaCertsPackagesField,
+    LocalePackagesField,
+)
 
 
 @dataclass(frozen=True)

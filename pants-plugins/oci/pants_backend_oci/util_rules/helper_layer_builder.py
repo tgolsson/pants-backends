@@ -1,9 +1,10 @@
 # Copyright 2026 Tom Solberg.
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-"""Builds the small layers a distroless-style image needs instead of running `useradd`, `groupadd`
-or `update-ca-certificates` in it: `/etc/passwd` (plus home directories), `/etc/group`, and a CA
-bundle generated from the `ca-certificates` package.
+"""Builds the small layers a distroless-style image needs instead of running `useradd`, `groupadd`,
+`update-ca-certificates` or `locale-gen` in it: `/etc/passwd` (plus home directories), `/etc/group`,
+a CA bundle generated from the `ca-certificates` package, and the compiled locales selected from
+packages like `libc-bin`.
 
 Layers are deterministic: entries are written in path order with zeroed timestamps and fixed
 ownership, so the same input always gives the same bytes. Only the files and home directories
@@ -11,8 +12,8 @@ themselves are written, not their parents, so the base image's `/etc`, `/home` o
 ownership and modes; a parent missing from the base is created when the image is unpacked.
 
 This module and `deb_layer_builder` only use the standard library. The passwd and group layers are
-built in the rules; the CA bundle layer reads debs, which may need a `zstd` binary, so its rule
-copies both modules into the sandbox and calls `main`.
+built in the rules; the CA bundle and locale layers read debs, which may need a `zstd` binary, so
+their rules copy both modules into the sandbox and call `main`.
 """
 
 from __future__ import annotations
@@ -42,6 +43,16 @@ CA_CERTIFICATES = "ca-certificates"
 CA_SOURCE_DIR = "usr/share/ca-certificates"
 CA_BUNDLE = "etc/ssl/certs/ca-certificates.crt"
 CA_COPYRIGHT = "usr/share/doc/ca-certificates/copyright"
+
+# Where glibc looks for compiled locales, one directory per locale, like `libc-bin`'s `C.utf8`.
+LOCALE_DIR = "usr/lib/locale"
+DEFAULT_LOCALES = ("C.utf8",)
+# `language[_territory][.codeset][@modifier]`, as `setlocale` takes it.
+LOCALE_NAME = re.compile(
+    r"[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)?(?:@[A-Za-z0-9_-]+)?"
+)
+# Built into glibc, so no package ships them.
+BUILTIN_LOCALES = ("C", "POSIX")
 
 # Homes that conventionally mean "no home directory".
 NO_HOME = ("/", "/nonexistent")
@@ -271,13 +282,175 @@ def build_cacerts_layer(package: DebPackage, out: BinaryIO) -> None:
     _write_layer(files, out)
 
 
+def normalize_locale(name: str) -> str:
+    """Normalize a locale name's codeset like glibc does when looking it up, so `C.UTF-8` names the
+    `C.utf8` directory: lowercase, keep only letters and digits, and prefix `iso` to digits alone."""
+    rest, at, modifier = name.partition("@")
+    language, dot, codeset = rest.partition(".")
+    if dot:
+        codeset = "".join(c for c in codeset.lower() if c.isalnum())
+        codeset = f"iso{codeset}" if codeset.isdigit() else codeset
+    return f"{language}{dot}{codeset}{at}{modifier}"
+
+
+def parse_locales(raw: Any) -> tuple[str, ...]:
+    """Validate a `locales` field value: a non-empty list of distinct locale names."""
+    if not isinstance(raw, (list, tuple)) or not all(isinstance(name, str) for name in raw):
+        raise HelperLayerError("locales must be a list of strings")
+    if not raw:
+        raise HelperLayerError("locales must not be empty")
+    for name in raw:
+        if name in BUILTIN_LOCALES:
+            raise HelperLayerError(f"locale {name!r} is built into glibc, so no package ships it")
+        if not LOCALE_NAME.fullmatch(name):
+            raise HelperLayerError(
+                f"locale {name!r} must look like `language[_territory][.codeset][@modifier]`"
+            )
+    _unique("locale", (normalize_locale(name) for name in raw))
+    return tuple(raw)
+
+
+def _locale_of(member: tarfile.TarInfo, path: str) -> str | None:
+    """The locale directory `path` is or is in, if it is under `/usr/lib/locale/<locale>/`. Other
+    files directly in `/usr/lib/locale`, like a `locale-archive`, aren't locales."""
+    if not path.startswith(f"{LOCALE_DIR}/"):
+        return None
+    locale, slash, _ = path[len(LOCALE_DIR) + 1 :].partition("/")
+    return locale if locale and (slash or member.isdir()) else None
+
+
+def _locale_dirs(name: str) -> tuple[str, ...]:
+    """The directories glibc tries for a locale name, in order: as given, then normalized."""
+    return tuple(dict.fromkeys((name, normalize_locale(name))))
+
+
+def _read(data: tarfile.TarFile, member: tarfile.TarInfo) -> bytes:
+    extracted = data.extractfile(member)
+    return extracted.read() if extracted else b""
+
+
+def _package_locales(
+    package: DebPackage, locales: tuple[str, ...], available: set[str]
+) -> tuple[dict[str, str], list[tuple[tarfile.TarInfo, bytes | None]]]:
+    """Select `locales` from one package, returning the directory chosen for each locale found and
+    the layer entries for them (plus the copyright file)."""
+    source = package.source or package.name
+    candidates = {directory for name in locales for directory in _locale_dirs(name)}
+    copyright_path = f"usr/share/doc/{package.name}/copyright"
+    copyright = None
+    # Only the candidate locales' members and file contents are kept.
+    members: dict[str, dict[str, tarfile.TarInfo]] = {}
+    contents: dict[str, bytes] = {}
+    with open_data(package) as data:
+        for member in data:
+            path = clean_path(member.name)
+            if path == copyright_path and member.isreg():
+                copyright = _read(data, member)
+                continue
+            locale = _locale_of(member, path)
+            if locale is None:
+                continue
+            available.add(locale)
+            if locale not in candidates:
+                continue
+            listed = members.setdefault(locale, {})
+            if path in listed:
+                raise DebError(f"{source}: /{path} is listed twice")
+            listed[path] = member
+            if member.isreg():
+                contents[path] = _read(data, member)
+
+    chosen = {}
+    for name in locales:
+        directory = next((d for d in _locale_dirs(name) if d in members), None)
+        if directory is not None:
+            chosen[name] = directory
+    selected = [(path, member) for d in sorted(set(chosen.values())) for path, member in members[d].items()]
+
+    # Hardlinks to files outside the selected locales, like another locale's in `locales-all`, are
+    # resolved by reading the package once more for just their targets.
+    missing = {clean_path(m.linkname) for _, m in selected if m.islnk()} - contents.keys()
+    if missing:
+        with open_data(package) as data:
+            for member in data:
+                path = clean_path(member.name)
+                if path in missing and member.isreg():
+                    contents[path] = _read(data, member)
+
+    # The locale directories and those inside them are written whether or not the package lists
+    # them; their parents are not, like the other helper layers.
+    directories = {f"{LOCALE_DIR}/{d}" for d in chosen.values()}
+    entries: list[tuple[tarfile.TarInfo, bytes | None]] = []
+    for path, member in selected:
+        parent = posixpath.dirname(path)
+        while parent.count("/") > LOCALE_DIR.count("/") + 1:
+            directories.add(parent)
+            parent = posixpath.dirname(parent)
+        if member.isdir():
+            directories.add(path)
+        elif member.issym():
+            info = tarfile.TarInfo(path)
+            info.type, info.linkname = tarfile.SYMTYPE, member.linkname
+            info.mode, info.uname, info.gname = 0o777, "root", "root"
+            entries.append((info, None))
+        elif member.isreg() or member.islnk():
+            target = path if member.isreg() else clean_path(member.linkname)
+            if target not in contents:
+                raise DebError(f"{source}: /{path} links to /{target}, which isn't a file in the package")
+            entries.append(_file(path, contents[target]))
+        else:
+            raise DebError(f"{source}: /{path} is not a file, directory or symlink")
+    entries.extend((directory_info(d), None) for d in directories)
+    if chosen and copyright is not None:
+        entries.append(_file(copyright_path, copyright))
+    return chosen, entries
+
+
+def locale_files(
+    packages: Iterable[DebPackage], locales: Iterable[str]
+) -> list[tuple[tarfile.TarInfo, bytes | None]]:
+    """Select the compiled `locales` from `packages`, plus the copyright file of each package they
+    come from. Like glibc, a locale is looked up as a directory under `/usr/lib/locale` by its name
+    as given, then by its normalized name; each must be found in exactly one package. Hardlinks
+    become regular files, so the layer doesn't depend on unselected locales."""
+    locales = tuple(locales)
+    found: dict[str, str] = {}
+    available: set[str] = set()
+    entries: list[tuple[tarfile.TarInfo, bytes | None]] = []
+    for package in packages:
+        source = package.source or package.name
+        chosen, package_entries = _package_locales(package, locales, available)
+        for name in chosen:
+            if found.setdefault(name, source) != source:
+                raise DebError(f"locale {name!r} is shipped by both {found[name]} and {source}")
+        entries.extend(package_entries)
+
+    missing = [name for name in locales if name not in found]
+    if missing:
+        raise DebError(
+            f"no package ships locale {', '.join(map(repr, missing))} under /{LOCALE_DIR}; "
+            f"available: {', '.join(sorted(available)) or 'none'}"
+        )
+    return entries
+
+
+def build_locale_layer(packages: Iterable[DebPackage], locales: Iterable[str], out: BinaryIO) -> None:
+    """Write the selected compiled locales under `/usr/lib/locale`."""
+    _write_layer(locale_files(packages, locales), out)
+
+
 def main(argv: list[str]) -> int:
-    """Build the CA bundle layer from the one `ca-certificates` package among `debs`."""
-    parser = argparse.ArgumentParser(description="Build an OCI layer with the CA bundle.")
+    """Build the CA bundle layer from the one `ca-certificates` package among `debs`, or the locale
+    layer from the locales among them."""
+    parser = argparse.ArgumentParser(description="Build an OCI helper layer from debs.")
+    parser.add_argument("layer", choices=("cacerts", "locales"))
     parser.add_argument("--output", required=True)
     parser.add_argument("--zstd", help="A zstd binary, for zstd-compressed members.")
+    parser.add_argument("--locale", action="append", default=[], help="A locale to keep (repeatable).")
     parser.add_argument("debs", nargs="+")
     args = parser.parse_args(argv)
+    if args.layer == "cacerts" and args.locale:
+        parser.error("--locale only applies to the locales layer")
 
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     try:
@@ -286,13 +459,18 @@ def main(argv: list[str]) -> int:
                 load_deb(stack.enter_context(open(path, "rb")), source=path, zstd=args.zstd)
                 for path in args.debs
             ]
+            if args.layer == "locales":
+                locales = parse_locales(args.locale)
+                with open(args.output, "wb") as out:
+                    build_locale_layer(packages, locales, out)
+                return 0
             matching = [package for package in packages if package.name == CA_CERTIFICATES]
             if len(matching) != 1:
                 found = ", ".join(p.source for p in matching) or "none"
                 raise DebError(f"expected exactly one `{CA_CERTIFICATES}` package, found: {found}")
             with open(args.output, "wb") as out:
                 build_cacerts_layer(matching[0], out)
-    except DebError as e:
+    except (DebError, HelperLayerError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0

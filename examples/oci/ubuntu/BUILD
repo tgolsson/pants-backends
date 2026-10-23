@@ -8,8 +8,8 @@ oci_pull_images(
     os="linux",
 )
 
-# The Ubuntu counterpart of `examples/oci/debian`: `jq` and `ca-certificates` on top of the noble base
-# image, resolved from a snapshot.ubuntu.com snapshot into `noble.lock.json` by
+# The Ubuntu counterpart of `examples/oci/debian`: `jq`, `ca-certificates` and `libc-bin` on top of
+# the noble base image, resolved from a snapshot.ubuntu.com snapshot into `noble.lock.json` by
 # `pants generate-lockfiles --resolve=noble`. Ubuntu's debs are zstd-compressed. The snapshot serves
 # arm64 packages under `/ubuntu` too, so one set of sources covers both architectures.
 deb_packages(
@@ -21,7 +21,7 @@ deb_packages(
         "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-security main",
     ],
     architectures=["amd64", "arm64"],
-    packages=["jq", "ca-certificates"],
+    packages=["jq", "ca-certificates", "libc-bin"],
     # Already in the noble base image.
     exclude=["libc6", "debconf", "libssl3t64"],
     # `/usr/share/keyrings/ubuntu-archive-keyring.gpg` from the snapshot's
@@ -66,6 +66,13 @@ oci_group_layer(
 oci_cacerts_layer(
     name="cacerts",
     debs=[":noble#amd64/ca-certificates"],
+)
+
+# Only the compiled `C.utf8` locale from `libc-bin`, without its binaries or running `locale-gen`.
+oci_locale_layer(
+    name="locales",
+    debs=[":noble#amd64/libc-bin"],
+    locales=["C.UTF-8"],
 )
 
 oci_image_build(

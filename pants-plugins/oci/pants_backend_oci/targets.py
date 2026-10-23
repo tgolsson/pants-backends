@@ -36,6 +36,8 @@ from pants_backend_oci.target_types import (
     ImageRunTty,
     ImageTag,
     ImageUser,
+    LocalePackagesField,
+    LocalesField,
     PasswdUsersField,
 )
 
@@ -233,6 +235,20 @@ class CaCertsLayer(Target):
         """)
 
 
+class LocaleLayer(Target):
+    alias = "oci_locale_layer"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        LocalePackagesField,
+        LocalesField,
+        OutputPathField,
+    )
+    help = softwrap("""
+        A layer with only the selected compiled locales under `/usr/lib/locale`, like `C.utf8` from
+        `libc-bin`, without the rest of the package or running `locale-gen` or `localedef`.
+        """)
+
+
 def targets():
     return [
         PullImage,
@@ -246,6 +262,7 @@ def targets():
         PasswdLayer,
         GroupLayer,
         CaCertsLayer,
+        LocaleLayer,
     ]
 
 

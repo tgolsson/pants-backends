@@ -10,10 +10,16 @@ pex_binary(name="example", entry_point="example.py:main", shebang="#!/usr/bin/py
 
 python_sources(name="examples")
 
-# Golden checks on the CA bundles built from the locked Debian and Ubuntu `ca-certificates` debs.
+# Golden checks on the CA bundles and locales built from the locked Debian and Ubuntu
+# `ca-certificates` and `libc-bin` debs.
 python_tests(
     name="tests",
-    runtime_package_dependencies=["examples/oci/debian:cacerts", "examples/oci/ubuntu:cacerts"],
+    runtime_package_dependencies=[
+        "examples/oci/debian:cacerts",
+        "examples/oci/ubuntu:cacerts",
+        "examples/oci/debian:locales",
+        "examples/oci/ubuntu:locales",
+    ],
 )
 
 oci_image_build(

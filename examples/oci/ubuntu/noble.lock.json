@@ -26,6 +26,15 @@
         },
         {
           "architecture": "amd64",
+          "depends": [],
+          "name": "libc-bin",
+          "sha256": "80501c003119754ae060ecebcfedf5ab8746bb9f8bd664e6e5766106916ed8b8",
+          "size": 722214,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.3_amd64.deb",
+          "version": "2.39-0ubuntu8.3"
+        },
+        {
+          "architecture": "amd64",
           "depends": [
             "libonig5"
           ],
@@ -56,7 +65,8 @@
       ],
       "roots": [
         "ca-certificates",
-        "jq"
+        "jq",
+        "libc-bin"
       ]
     },
     "arm64": {
@@ -82,6 +92,15 @@
           "size": 64630,
           "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/jq_1.7.1-3build1_arm64.deb",
           "version": "1.7.1-3build1"
+        },
+        {
+          "architecture": "arm64",
+          "depends": [],
+          "name": "libc-bin",
+          "sha256": "fe13dac87e1943b9b90c26d69cc7d47555baa9b65e48d449301af8f980e23070",
+          "size": 631232,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.3_arm64.deb",
+          "version": "2.39-0ubuntu8.3"
         },
         {
           "architecture": "arm64",
@@ -115,7 +134,8 @@
       ],
       "roots": [
         "ca-certificates",
-        "jq"
+        "jq",
+        "libc-bin"
       ]
     }
   },
@@ -131,7 +151,8 @@
     ],
     "packages": [
       "ca-certificates",
-      "jq"
+      "jq",
+      "libc-bin"
     ],
     "sources": [
       "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble main",
