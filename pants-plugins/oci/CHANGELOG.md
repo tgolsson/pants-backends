@@ -20,13 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image's blobs, names the image `repository:tag` and includes a Docker `manifest.json`, so
   `podman load` and `docker load` keep the tag. It is written by the plugin's Python, so skopeo
   is no longer downloaded and the `[skopeo]` options are removed.
+- **Breaking:** Remove the unused `[umoci]` and `[runc]` tools and the `[oci].rootless`,
+  `uid_map` and `gid_map` options; setting them in `pants.toml` or on the command line is now an
+  error.
 - Run scripted build steps (`commands=` on `oci_image_build` and `oci_build_layer`) and
   `oci_extract` through `podman build` (podman 4.0 or newer) with `--timestamp 0` instead of
   umoci and runc. A failing command or missing output now fails the build instead of producing
   an empty artifact, and a scripted image step adds one layer on top of the unchanged base
   layers. Layer and extract outputs keep the owners and modes they have in the image, globs in
-  `outputs` keep their paths, and empty `outputs` is an error. `[oci].rootless`, `uid_map`,
-  `gid_map`, `[umoci]` and `[runc]` are no longer used.
+  `outputs` keep their paths, and empty `outputs` is an error.
 - Run images and OCI repl through user-installed rootless podman on Linux, using OCI archives
   and separate Pants-managed storage. Non-root ownership and groups are preserved. Remote
   podman and macOS execution are not supported yet.

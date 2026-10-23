@@ -51,8 +51,8 @@ def copy_root(output: str) -> str:
 
 
 def containerfile(archive: str, ref: str, run: list[str] | None, outputs: list[str]) -> str:
-    """The build stage runs `run` as root, like the old runc steps; `outputs` add a scratch stage
-    holding only what they need."""
+    """The build stage runs `run` as root; `outputs` add a scratch stage holding only what they
+    need."""
     lines = [f"FROM oci-archive:{archive}:{ref} AS build"]
     if run:
         lines += ["USER 0:0", f"RUN {json.dumps(run)}"]

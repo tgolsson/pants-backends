@@ -34,8 +34,7 @@ private runtime and temporary directories under `/tmp` and the portable `vfs` st
 Runtime directories are named by user and a hash of the store path to keep podman socket paths short. Exited containers
 are removed; imported images and layers remain cached across runs. This store can grow and is
 separate from your default podman store. Its files belong to your subordinate user ids, so clear
-it with `podman unshare rm -rf <named-caches-dir>/oci_podman`. The `[oci].rootless`, `uid_map`
-and `gid_map` options are no longer used; podman manages its own rootless mappings.
+it with `podman unshare rm -rf <named-caches-dir>/oci_podman`.
 Remote connections (`CONTAINER_HOST` / `CONTAINER_CONNECTION`) are rejected. macOS support
 requires a separate load/run path through `podman machine` and is deferred.
 
@@ -70,7 +69,7 @@ Ubuntu's, comes from the static builds of [aspect-build/zstd-prebuilt](https://g
 for Linux/macOS on x86-64 and ARM64. It is downloaded like the other tools, not installed as a Python
 dependency.
 Use `[crane].version` or `[zstd].version` to select another recorded
-version. The `[umoci]` and `[runc]` options are no longer used and will be removed.
+version.
 
 Registry credentials are read the way crane reads them, from the first of these that
 exists: `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) with its credential

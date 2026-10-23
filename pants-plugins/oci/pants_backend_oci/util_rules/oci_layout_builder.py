@@ -51,7 +51,7 @@ EPOCH = "1970-01-01T00:00:00Z"
 AUTHOR = "pants_backend_oci"
 BUILT_BY = "BUILT_BY=pants.oci"
 
-# Config fields that `clear` accepts, as `config.<Field>` like umoci's `--clear`.
+# Config fields that `clear` accepts, named `config.<Field>`.
 CLEARABLE = {
     "config.cmd": "Cmd",
     "config.entrypoint": "Entrypoint",
