@@ -22,10 +22,11 @@ from pants_backend_distroless import apt_resolver
 from pants_backend_distroless.subsystem import AptSubsystem
 from pants_backend_distroless.target_types import (
     DebPackageDependenciesField,
+    DebPackageFileSourceField,
+    DebPackageFileTarget,
     DebPackageGroupTarget,
     DebPackagesArchitecturesField,
     DebPackagesExcludeField,
-    DebPackageSourceField,
     DebPackagesPackagesField,
     DebPackagesResolveField,
     DebPackagesSourcesField,
@@ -103,24 +104,36 @@ async def generate_from_deb_packages(
     def address(name: str):
         return request.template_address.create_generated(name)
 
+    # Apt dependencies can be cyclic, which Pants doesn't allow between these targets. So each
+    # package depends on the `.deb` files of its locked closure rather than on other packages.
     generated = []
     for arch, locked in sorted(lockfile["architectures"].items()):
         for package in locked["packages"]:
+            name = package["name"]
             generated.append(
-                DebPackageTarget(
+                DebPackageFileTarget(
                     {
                         **request.template,
-                        DebPackageSourceField.alias: http_source(
+                        DebPackageFileSourceField.alias: http_source(
                             package["url"],
                             len=package["size"],
                             sha256=package["sha256"],
                             filename=os.path.basename(package["url"]),
                         ),
+                    },
+                    address(f"{arch}/{name}/deb"),
+                    union_membership,
+                )
+            )
+            generated.append(
+                DebPackageTarget(
+                    {
+                        **request.template,
                         DebPackageDependenciesField.alias: [
-                            address(f"{arch}/{dep}").spec for dep in package["depends"]
+                            address(f"{arch}/{dep}/deb").spec for dep in [name, *package["closure"]]
                         ],
                     },
-                    address(f"{arch}/{package['name']}"),
+                    address(f"{arch}/{name}"),
                     union_membership,
                 )
             )

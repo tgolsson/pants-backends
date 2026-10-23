@@ -17,6 +17,7 @@ from pants_backend_distroless.apt_resolver import (
     Relation,
     ResolveError,
     Source,
+    closures,
     compare_versions,
     fetch_index,
     fetch_release,
@@ -343,6 +344,34 @@ def test_normalize_inputs() -> None:
     }
 
 
+def test_cyclic_dependencies_resolve_and_lock_their_closures() -> None:
+    idx = index(
+        stanza("app", Depends="libc6"),
+        stanza("libc6", Depends="libgcc-s1"),
+        stanza("libgcc-s1", Depends="libc6"),
+    )
+    roots, resolved = resolve(idx, ["app"], [])
+    assert roots == ["app"]
+    assert {r.package.name: r.depends for r in resolved} == {
+        "app": ("libc6",),
+        "libc6": ("libgcc-s1",),
+        "libgcc-s1": ("libc6",),
+    }
+    assert closures(resolved) == {
+        "app": ["libc6", "libgcc-s1"],
+        "libc6": ["libgcc-s1"],
+        "libgcc-s1": ["libc6"],
+    }
+
+    inputs = normalize_inputs(["https://a b c"], ["amd64"], ["app"], [])
+    locked = lockfile(inputs, {"amd64": idx})["architectures"]["amd64"]["packages"]
+    assert [(p["name"], p["depends"], p["closure"]) for p in locked] == [
+        ("app", ["libc6"], ["libc6", "libgcc-s1"]),
+        ("libc6", ["libgcc-s1"], ["libgcc-s1"]),
+        ("libgcc-s1", ["libc6"], ["libc6"]),
+    ]
+
+
 def test_lockfile_prefixes_errors_with_arch() -> None:
     inputs = normalize_inputs(["https://a b c"], ["amd64"], ["nope"], [])
     with pytest.raises(ResolveError, match="amd64: No package named nope"):
@@ -512,10 +541,13 @@ def test_main_writes_lockfile(tmp_path: Path) -> None:
     assert main([*argv, "--keyring", str(tmp_path / "keyring.asc")]) == 0
 
     locked = json.loads(output.read_text())
-    assert locked["version"] == 1
+    assert locked["version"] == 2
     assert locked["inputs"] == inputs
     assert locked["architectures"]["amd64"]["roots"] == ["jq"]
-    assert [p["name"] for p in locked["architectures"]["amd64"]["packages"]] == ["jq", "libjq1"]
+    assert [(p["name"], p["closure"]) for p in locked["architectures"]["amd64"]["packages"]] == [
+        ("jq", ["libjq1"]),
+        ("libjq1", []),
+    ]
     assert [p["name"] for p in locked["architectures"]["arm64"]["packages"]] == ["jq"]
 
     (tmp_path / "keyring.gpg").write_bytes(fixture("ed25519.gpg"))

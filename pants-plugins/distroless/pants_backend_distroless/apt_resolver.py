@@ -39,7 +39,7 @@ from typing import Callable, Iterable, Iterator
 
 from . import openpgp
 
-LOCKFILE_VERSION = 1
+LOCKFILE_VERSION = 2
 
 
 class ResolveError(Exception):
@@ -414,6 +414,26 @@ def normalize_inputs(
     }
 
 
+def closures(resolved: Iterable[Resolved]) -> dict[str, list[str]]:
+    """The packages each resolved package transitively depends on, apart from itself.
+
+    Apt dependencies can be cyclic, like `libc6` and `libgcc-s1`, so the targets generated from the
+    lockfile depend on this closure instead of on each other.
+    """
+    depends = {r.package.name: r.depends for r in resolved}
+    result = {}
+    for name in depends:
+        seen = {name}
+        stack = list(depends[name])
+        while stack:
+            dep = stack.pop()
+            if dep not in seen:
+                seen.add(dep)
+                stack.extend(depends[dep])
+        result[name] = sorted(seen - {name})
+    return result
+
+
 def lockfile(inputs: dict, indices: dict[str, Index]) -> dict:
     architectures = {}
     for arch in inputs["architectures"]:
@@ -421,6 +441,7 @@ def lockfile(inputs: dict, indices: dict[str, Index]) -> dict:
             roots, resolved = resolve(indices[arch], inputs["packages"], inputs["exclude"])
         except ResolveError as e:
             raise ResolveError(f"{arch}: {e}") from e
+        closure = closures(resolved)
         architectures[arch] = {
             "roots": roots,
             "packages": [
@@ -432,6 +453,7 @@ def lockfile(inputs: dict, indices: dict[str, Index]) -> dict:
                     "sha256": r.package.sha256,
                     "size": r.package.size,
                     "depends": list(r.depends),
+                    "closure": closure[r.package.name],
                 }
                 for r in resolved
             ],

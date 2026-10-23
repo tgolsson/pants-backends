@@ -56,11 +56,17 @@ just that error; regenerating the lockfile fixes it.
 
 The target generates:
 
-* a `deb_package` target named `<arch>/<package>` for every locked package, which downloads the
-  pinned `.deb` and depends on the locked packages it needs, so `:bookworm#amd64/jq` brings `jq`
-  and its whole closure;
+* a `deb_package` target named `<arch>/<package>` for every locked package, which depends on the
+  pinned `.deb` of the package and of every locked package in its closure, so `:bookworm#amd64/jq`
+  brings `jq` and its whole closure;
+* a `deb_package_file` target named `<arch>/<package>/deb` for every locked package, which downloads
+  only its pinned `.deb`;
 * a `deb_package_group` target named `<arch>`, depending on all the requested packages, so
   `:bookworm#amd64` is everything.
+
+Packages don't depend on each other's targets, only on `.deb` files, and the lockfile records each
+package's closure. Apt dependency cycles are therefore fine: `libc6` and `libgcc-s1` depend on each
+other in Debian, and `:bookworm#amd64/libc6` brings both.
 
 A layer is for one architecture, so always pick one: `debs=[":bookworm"]` would bring the packages of
 every architecture, which `oci_deb_layer` rejects.

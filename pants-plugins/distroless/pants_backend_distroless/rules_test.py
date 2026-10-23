@@ -11,7 +11,13 @@ from pants.core.target_types import rules as core_target_type_rules
 from pants.core.util_rules import adhoc_binaries
 from pants.engine.addresses import Address, Addresses
 from pants.engine.fs import Digest, DigestContents
-from pants.engine.target import Dependencies, DependenciesRequest
+from pants.engine.target import (
+    Dependencies,
+    DependenciesRequest,
+    SourcesField,
+    TransitiveTargets,
+    TransitiveTargetsRequest,
+)
 from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
 from pants_backend_distroless import lockfile, subsystem, target_generation
@@ -19,8 +25,9 @@ from pants_backend_distroless.apt_resolver import normalize_inputs
 from pants_backend_distroless.apt_resolver_test import stanza, write_repo
 from pants_backend_distroless.openpgp_test import fixture
 from pants_backend_distroless.target_types import (
+    DebPackageFileSourceField,
+    DebPackageFileTarget,
     DebPackageGroupTarget,
-    DebPackageSourceField,
     DebPackagesTargetGenerator,
     DebPackageTarget,
 )
@@ -29,7 +36,12 @@ from pants_backend_distroless.target_types import (
 @pytest.fixture
 def rule_runner() -> RuleRunner:
     return RuleRunner(
-        target_types=[DebPackagesTargetGenerator, DebPackageTarget, DebPackageGroupTarget],
+        target_types=[
+            DebPackagesTargetGenerator,
+            DebPackageTarget,
+            DebPackageFileTarget,
+            DebPackageGroupTarget,
+        ],
         rules=[
             *lockfile.rules(),
             *subsystem.rules(),
@@ -40,6 +52,7 @@ def rule_runner() -> RuleRunner:
             QueryRule(GenerateLockfileResult, [lockfile.GenerateDebPackagesLockfile]),
             QueryRule(DigestContents, [Digest]),
             QueryRule(Addresses, [DependenciesRequest]),
+            QueryRule(TransitiveTargets, [TransitiveTargetsRequest]),
         ],
     )
 
@@ -59,7 +72,9 @@ deb_packages(
 URI = "https://example.com/debian"
 
 
-def locked_package(name: str, depends: list[str], arch: str = "amd64") -> dict:
+def locked_package(
+    name: str, depends: list[str], arch: str = "amd64", closure: list[str] | None = None
+) -> dict:
     return {
         "name": name,
         "version": "1.0",
@@ -68,6 +83,7 @@ def locked_package(name: str, depends: list[str], arch: str = "amd64") -> dict:
         "sha256": "a" * 64,
         "size": 100,
         "depends": depends,
+        "closure": depends if closure is None else closure,
     }
 
 
@@ -81,7 +97,7 @@ def write_project(rule_runner: RuleRunner, lockfile: dict | None, build: str = B
 
 def valid_lockfile() -> dict:
     return {
-        "version": 1,
+        "version": 2,
         "inputs": normalize_inputs([f"{URI} stable main"], ["amd64", "arm64"], ["jq"], ["libc6"]),
         "architectures": {
             "amd64": {
@@ -104,24 +120,63 @@ def test_generates_targets_from_lockfile(rule_runner: RuleRunner) -> None:
 
     jq = rule_runner.get_target(Address("debs", target_name="bookworm", generated_name="amd64/jq"))
     assert isinstance(jq, DebPackageTarget)
-    assert jq[DebPackageSourceField].value == http_source(
+    assert dependencies(rule_runner, jq.address) == [
+        "debs:bookworm#amd64/jq/deb",
+        "debs:bookworm#amd64/libjq1/deb",
+    ]
+
+    deb = rule_runner.get_target(Address("debs", target_name="bookworm", generated_name="amd64/jq/deb"))
+    assert isinstance(deb, DebPackageFileTarget)
+    assert deb[DebPackageFileSourceField].value == http_source(
         f"{URI}/pool/main/j/jq/jq_1.0_amd64.deb", len=100, sha256="a" * 64
     )
-    assert dependencies(rule_runner, jq.address) == ["debs:bookworm#amd64/libjq1"]
+    assert not deb.has_field(Dependencies)
 
     group = rule_runner.get_target(Address("debs", target_name="bookworm", generated_name="amd64"))
     assert isinstance(group, DebPackageGroupTarget)
     assert dependencies(rule_runner, group.address) == ["debs:bookworm#amd64/jq"]
 
     arm64 = Address("debs", target_name="bookworm", generated_name="arm64/jq")
-    assert dependencies(rule_runner, arm64) == []
+    assert dependencies(rule_runner, arm64) == ["debs:bookworm#arm64/jq/deb"]
+
+
+def test_cyclic_lockfile(rule_runner: RuleRunner) -> None:
+    # libc6 and libgcc-s1 depend on each other, as they do in Debian.
+    packages = [
+        locked_package("jq", ["libc6"], closure=["libc6", "libgcc-s1"]),
+        locked_package("libc6", ["libgcc-s1"]),
+        locked_package("libgcc-s1", ["libc6"]),
+    ]
+    build = BUILD.replace('["amd64", "arm64"]', '["amd64"]').replace('exclude=["libc6"]', "exclude=[]")
+    lock = {
+        "version": 2,
+        "inputs": normalize_inputs([f"{URI} stable main"], ["amd64"], ["jq"], []),
+        "architectures": {"amd64": {"roots": ["jq"], "packages": packages}},
+    }
+    write_project(rule_runner, lock, build)
+
+    def closure(generated_name: str) -> list[str]:
+        address = Address("debs", target_name="bookworm", generated_name=generated_name)
+        transitive = rule_runner.request(TransitiveTargets, [TransitiveTargetsRequest([address])])
+        # What `oci_deb_layer` needs: targets without sources only group the `.deb` files.
+        for t in transitive.closure:
+            if t.has_field(SourcesField):
+                assert t[DebPackageFileSourceField].value.filename.endswith(".deb")
+        return sorted(t.address.spec for t in transitive.closure)
+
+    debs = ["debs:bookworm#amd64/libc6/deb", "debs:bookworm#amd64/libgcc-s1/deb"]
+    assert closure("amd64/libc6") == sorted(["debs:bookworm#amd64/libc6", *debs])
+    assert closure("amd64/libgcc-s1") == sorted(["debs:bookworm#amd64/libgcc-s1", *debs])
+    assert closure("amd64") == sorted(
+        ["debs:bookworm#amd64", "debs:bookworm#amd64/jq", "debs:bookworm#amd64/jq/deb", *debs]
+    )
 
 
 @pytest.mark.parametrize(
     "lockfile, problem",
     [
         (None, "doesn't exist"),
-        ({**valid_lockfile(), "version": 2}, "has an unsupported version 2"),
+        ({**valid_lockfile(), "version": 1}, "has an unsupported version 1"),
         (
             {**valid_lockfile(), "inputs": normalize_inputs([f"{URI} stable main"], ["amd64"], ["jq"], [])},
             "is out of date",

@@ -4,6 +4,9 @@
       "packages": [
         {
           "architecture": "all",
+          "closure": [
+            "openssl"
+          ],
           "depends": [
             "openssl"
           ],
@@ -15,6 +18,10 @@
         },
         {
           "architecture": "amd64",
+          "closure": [
+            "libjq1",
+            "libonig5"
+          ],
           "depends": [
             "libjq1"
           ],
@@ -26,6 +33,7 @@
         },
         {
           "architecture": "amd64",
+          "closure": [],
           "depends": [],
           "name": "libc-bin",
           "sha256": "80501c003119754ae060ecebcfedf5ab8746bb9f8bd664e6e5766106916ed8b8",
@@ -35,6 +43,9 @@
         },
         {
           "architecture": "amd64",
+          "closure": [
+            "libonig5"
+          ],
           "depends": [
             "libonig5"
           ],
@@ -46,6 +57,7 @@
         },
         {
           "architecture": "amd64",
+          "closure": [],
           "depends": [],
           "name": "libonig5",
           "sha256": "605f42287d2bcb6c84f5a02377c7cd777090c5e857259a4030a571989f19dde2",
@@ -55,6 +67,7 @@
         },
         {
           "architecture": "amd64",
+          "closure": [],
           "depends": [],
           "name": "openssl",
           "sha256": "96243ee49f17de820bf0322fa672923c627a3013fbc6fa9eb3f570fdcdc14853",
@@ -73,6 +86,9 @@
       "packages": [
         {
           "architecture": "all",
+          "closure": [
+            "openssl"
+          ],
           "depends": [
             "openssl"
           ],
@@ -84,6 +100,10 @@
         },
         {
           "architecture": "arm64",
+          "closure": [
+            "libjq1",
+            "libonig5"
+          ],
           "depends": [
             "libjq1"
           ],
@@ -95,6 +115,7 @@
         },
         {
           "architecture": "arm64",
+          "closure": [],
           "depends": [],
           "name": "libc-bin",
           "sha256": "fe13dac87e1943b9b90c26d69cc7d47555baa9b65e48d449301af8f980e23070",
@@ -104,6 +125,9 @@
         },
         {
           "architecture": "arm64",
+          "closure": [
+            "libonig5"
+          ],
           "depends": [
             "libonig5"
           ],
@@ -115,6 +139,7 @@
         },
         {
           "architecture": "arm64",
+          "closure": [],
           "depends": [],
           "name": "libonig5",
           "sha256": "12044a8919f3aae339652bfcd8b424245d6606a6124ae3ce08682485c12b124f",
@@ -124,6 +149,7 @@
         },
         {
           "architecture": "arm64",
+          "closure": [],
           "depends": [],
           "name": "openssl",
           "sha256": "200b00590d44f47d76466b35cffdae123bb2875c0750a033e358bb6277e219dc",
@@ -160,5 +186,5 @@
       "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-security main"
     ]
   },
-  "version": 1
+  "version": 2
 }
