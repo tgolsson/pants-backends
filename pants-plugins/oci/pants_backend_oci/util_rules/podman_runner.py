@@ -45,6 +45,9 @@ def storage_args(cache: Path, runtime: Path) -> list[str]:
     """Global podman options selecting the plugin's own store."""
     return [
         "--remote=false",
+        # The private XDG_RUNTIME_DIR hides any systemd user session, which the systemd cgroup
+        # manager needs.
+        "--cgroup-manager=cgroupfs",
         "--root",
         str(cache / "storage"),
         "--runroot",
