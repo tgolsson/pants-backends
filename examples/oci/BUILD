@@ -9,6 +9,13 @@ oci_pull_images(
 pex_binary(name="example", entry_point="example.py:main", shebang="#!/usr/bin/python")
 
 python_sources(name="examples")
+
+# Golden checks on the CA bundles built from the locked Debian and Ubuntu `ca-certificates` debs.
+python_tests(
+    name="tests",
+    runtime_package_dependencies=["examples/oci/debian:cacerts", "examples/oci/ubuntu:cacerts"],
+)
+
 oci_image_build(
     name="oci",
     base=[":python3-d12#latest"],
