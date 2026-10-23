@@ -10,7 +10,7 @@ This release targets Pants **2.31.0**. Install it with
 
 This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses these tools:
 
-* [podman](https://podman.io/docs/installation), installed by the user, for `pants run`, OCI repl and scripted build steps
+* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 
 `pants package` writes each `oci_image_build` to `dist/` as an OCI archive, `<name>.tar`, with the
