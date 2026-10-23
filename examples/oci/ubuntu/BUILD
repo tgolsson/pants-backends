@@ -24,6 +24,9 @@ deb_packages(
     packages=["jq", "ca-certificates"],
     # Already in the noble base image.
     exclude=["libc6", "debconf", "libssl3t64"],
+    # `/usr/share/keyrings/ubuntu-archive-keyring.gpg` from the snapshot's
+    # `ubuntu-keyring_2023.11.28.1_all.deb` (sha256 36de43b15853ccae0028e9a767613770c704833f82586f28eb262f0311adb8a8).
+    keyrings=["ubuntu-archive-keyring.gpg"],
 )
 
 oci_deb_layer(

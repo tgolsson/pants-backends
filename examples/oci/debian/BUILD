@@ -19,6 +19,9 @@ deb_packages(
     packages=["jq", "ca-certificates"],
     # Already in the bookworm-slim base image.
     exclude=["libc6"],
+    # `/usr/share/keyrings/debian-archive-keyring.gpg` from the snapshot's
+    # `debian-archive-keyring_2023.3+deb12u1_all.deb` (sha256 c1bac61abefa0d957394d33c02b7bfb2a3ab3ce5e6d90617c4019ddea4bdbf63).
+    keyrings=["debian-archive-keyring.gpg"],
 )
 
 oci_deb_layer(

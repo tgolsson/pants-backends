@@ -13,30 +13,41 @@ from pants.core.goals.generate_lockfiles import (
     UserGenerateLockfiles,
 )
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
-from pants.engine.fs import CreateDigest, FileContent
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
+from pants.engine.fs import CreateDigest, Digest, FileContent, MergeDigests
 from pants.engine.internals.graph import find_all_unexpanded_targets
-from pants.engine.intrinsics import create_digest
+from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.target import InvalidFieldException
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
+from pants.util.strutil import softwrap
 
-from pants_backend_distroless import apt_resolver
+from pants_backend_distroless import apt_resolver, openpgp
 from pants_backend_distroless.subsystem import AptSubsystem
 from pants_backend_distroless.target_generation import lockfile_path, resolve_inputs
 from pants_backend_distroless.target_types import (
+    DebPackagesAllowUnsignedField,
+    DebPackagesKeyringsField,
     DebPackagesResolveField,
     DebPackagesTargetGenerator,
 )
 
-_RESOLVER_SOURCE = f"{apt_resolver.__name__.rpartition('.')[2]}.py"
-_RESOLVER_MODULE = "__apt_resolver"
-_RESOLVER_MAIN = f"import sys, {_RESOLVER_MODULE}; sys.exit({_RESOLVER_MODULE}.main(sys.argv[1:]))"
+# The resolver and the modules it imports, copied into the sandbox as a package.
+_RESOLVER_PACKAGE = "__distroless"
+_RESOLVER_MODULES = [m.__name__.rpartition(".")[2] for m in (apt_resolver, openpgp)]
+_RESOLVER_MAIN = (
+    f"import sys; from {_RESOLVER_PACKAGE} import {_RESOLVER_MODULES[0]} as m; sys.exit(m.main(sys.argv[1:]))"
+)
 
 
 @dataclass(frozen=True)
 class GenerateDebPackagesLockfile(GenerateLockfile):
     inputs_json: str
+    keyrings: Digest
+    keyring_paths: tuple[str, ...]
+    allow_unsigned: bool
 
 
 class KnownDebPackagesUserResolveNamesRequest(KnownUserResolveNamesRequest):
@@ -79,12 +90,27 @@ async def setup_deb_packages_lockfile_requests(
                 f"{', '.join(str(g.address) for g in generators) or 'none'}"
             )
         (generator,) = generators
+        allow_unsigned = generator[DebPackagesAllowUnsignedField].value
+        keyrings_field = generator[DebPackagesKeyringsField]
+        if bool(keyrings_field.value) == allow_unsigned:
+            raise InvalidFieldException(
+                softwrap(f"""
+                {generator.address} must set either `{DebPackagesKeyringsField.alias}`, to the OpenPGP
+                keyrings its repositories sign their `Release` files with, or
+                `{DebPackagesAllowUnsignedField.alias}=True` to resolve without verifying signatures,
+                but not both.
+                """)
+            )
+        keyrings = await determine_source_files(SourceFilesRequest([keyrings_field]))
         requests.append(
             GenerateDebPackagesLockfile(
                 resolve_name=resolve,
                 lockfile_dest=lockfile_path(generator, subsystem),
                 diff=False,
                 inputs_json=json.dumps(resolve_inputs(generator), sort_keys=True),
+                keyrings=keyrings.snapshot.digest,
+                keyring_paths=keyrings.snapshot.files,
+                allow_unsigned=allow_unsigned,
             )
         )
     return UserGenerateLockfiles(requests)
@@ -95,14 +121,26 @@ async def generate_deb_packages_lockfile(
     request: GenerateDebPackagesLockfile, python: PythonBuildStandaloneBinary
 ) -> GenerateLockfileResult:
     # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
-    resolver_source = resources.files(__package__).joinpath(_RESOLVER_SOURCE).read_bytes()
-    input_digest = await create_digest(
+    package = resources.files(__package__)
+    resolver = await create_digest(
         CreateDigest(
             [
-                FileContent(f"{_RESOLVER_MODULE}.py", resolver_source),
+                FileContent(f"{_RESOLVER_PACKAGE}/__init__.py", b""),
+                *(
+                    FileContent(
+                        f"{_RESOLVER_PACKAGE}/{module}.py", package.joinpath(f"{module}.py").read_bytes()
+                    )
+                    for module in _RESOLVER_MODULES
+                ),
                 FileContent("request.json", request.inputs_json.encode()),
             ]
         )
+    )
+    input_digest = await merge_digests(MergeDigests([resolver, request.keyrings]))
+    verification = (
+        ("--allow-unsigned",)
+        if request.allow_unsigned
+        else tuple(arg for path in request.keyring_paths for arg in ("--keyring", path))
     )
 
     # The sources are pinned to snapshots, so caching the result like any other process is correct.
@@ -117,6 +155,7 @@ async def generate_deb_packages_lockfile(
                     "request.json",
                     "--output",
                     request.lockfile_dest,
+                    *verification,
                 ),
                 input_digest=input_digest,
                 output_files=(request.lockfile_dest,),

@@ -19,6 +19,7 @@ from pants_backend_distroless.apt_resolver import (
     Source,
     compare_versions,
     fetch_index,
+    fetch_release,
     lockfile,
     main,
     normalize_inputs,
@@ -26,6 +27,8 @@ from pants_backend_distroless.apt_resolver import (
     parse_relations,
     resolve,
 )
+from pants_backend_distroless.openpgp import Keyring
+from pants_backend_distroless.openpgp_test import armor, clearsign, fixture, sign
 
 
 @pytest.mark.parametrize(
@@ -355,7 +358,10 @@ def test_source_parse() -> None:
 
 
 def write_repo(root: Path, suite: str, packages: dict[str, str], compress=lzma.compress, ext=".xz") -> None:
-    """Writes a minimal apt repository with one `Packages` index per `component/arch` key."""
+    """Writes a minimal apt repository with one `Packages` index per `component/arch` key.
+
+    Its `Release` is signed with the `rsa.asc` fixture key, both as `InRelease` and `Release.gpg`.
+    """
     dists = root / "dists" / suite
     lines = []
     for key, text in packages.items():
@@ -365,7 +371,20 @@ def write_repo(root: Path, suite: str, packages: dict[str, str], compress=lzma.c
         (dists / path).parent.mkdir(parents=True, exist_ok=True)
         (dists / path).write_bytes(data)
         lines.append(f" {hashlib.sha256(data).hexdigest()} {len(data)} {path}")
-    (dists / "Release").write_text(f"Suite: {suite}\nSHA256:\n" + "\n".join(lines) + "\n")
+    write_release(dists, f"Suite: {suite}\nSHA256:\n" + "\n".join(lines) + "\n")
+
+
+def write_release(dists: Path, release: str) -> None:
+    (dists / "Release").write_text(release)
+    (dists / "Release.gpg").write_bytes(armor(sign(release.encode())))
+    (dists / "InRelease").write_bytes(clearsign(release.encode()))
+
+
+def release_of(root: Path, suite: str) -> str:
+    return (root / "dists" / suite / "Release").read_text()
+
+
+KEYRING = Keyring.load(fixture("rsa.asc"))
 
 
 def test_fetch_does_not_retry_client_errors(tmp_path: Path, monkeypatch) -> None:
@@ -383,16 +402,95 @@ def test_fetch_does_not_retry_client_errors(tmp_path: Path, monkeypatch) -> None
 
 def test_fetch_index_verifies_and_decompresses(tmp_path: Path) -> None:
     write_repo(tmp_path, "stable", {"main/amd64": stanza("jq")}, gzip.compress, ".gz")
-    (package,) = fetch_index(Source(tmp_path.as_uri(), "stable", ("main",)), "amd64")
+    source = Source(tmp_path.as_uri(), "stable", ("main",))
+    (package,) = fetch_index(source, release_of(tmp_path, "stable"), "amd64")
     assert package.name == "jq"
     assert package.url == f"{tmp_path.as_uri()}/pool/main/j/jq/jq_1.0_amd64.deb"
 
     with pytest.raises(ResolveError, match="lists no Packages index for main/binary-arm64"):
-        fetch_index(Source(tmp_path.as_uri(), "stable", ("main",)), "arm64")
+        fetch_index(source, release_of(tmp_path, "stable"), "arm64")
 
     (tmp_path / "dists/stable/main/binary-amd64/Packages.gz").write_bytes(gzip.compress(b"tampered"))
     with pytest.raises(ResolveError, match="doesn't match the SHA256"):
-        fetch_index(Source(tmp_path.as_uri(), "stable", ("main",)), "amd64")
+        fetch_index(source, release_of(tmp_path, "stable"), "amd64")
+
+
+def test_fetch_release_verifies_inrelease(tmp_path: Path) -> None:
+    write_repo(tmp_path, "stable", {"main/amd64": stanza("jq")})
+    dists = tmp_path / "dists" / "stable"
+    source = Source(tmp_path.as_uri(), "stable", ("main",))
+    # Only `InRelease` counts when there is one, and the hashes come from its signed text.
+    (dists / "Release").write_text("Suite: stable\nSHA256:\n")
+    (dists / "Release.gpg").unlink()
+    release = fetch_release(source, KEYRING)
+    (package,) = fetch_index(source, release, "amd64")
+    assert package.name == "jq"
+
+    (dists / "InRelease").write_bytes(
+        (dists / "InRelease").read_bytes().replace(b"Suite: stable", b"Suite: other")
+    )
+    with pytest.raises(ResolveError, match=r"dists/stable/InRelease doesn't verify: Bad signature from 7B6C"):
+        fetch_release(source, KEYRING)
+
+
+@pytest.mark.parametrize("code", [403, 500])
+def test_fetch_release_falls_back_only_when_inrelease_is_missing(
+    tmp_path: Path, monkeypatch, code: int
+) -> None:
+    write_repo(tmp_path, "stable", {"main/amd64": stanza("jq")})
+    dists = tmp_path / "dists" / "stable"
+    source = Source(tmp_path.as_uri(), "stable", ("main",))
+    urlopen = urllib.request.urlopen
+
+    def failing_inrelease(url, timeout):
+        if url.endswith("/InRelease"):
+            raise urllib.error.HTTPError(url, code, "Error", {}, None)
+        return urlopen(url, timeout=timeout)
+
+    monkeypatch.setattr(urllib.request, "urlopen", failing_inrelease)
+    monkeypatch.setattr(apt_resolver.time, "sleep", lambda seconds: None)
+    with pytest.raises(ResolveError, match=f"Failed to fetch .*/InRelease: HTTP Error {code}"):
+        fetch_release(source, KEYRING)
+
+    # Nor does an `InRelease` that doesn't verify fall back to a good `Release.gpg`.
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    (dists / "InRelease").write_bytes(
+        (dists / "InRelease").read_bytes().replace(b"Suite: stable", b"Suite: other")
+    )
+    with pytest.raises(ResolveError, match="InRelease doesn't verify"):
+        fetch_release(source, KEYRING)
+
+
+def test_fetch_release_needs_utf8(tmp_path: Path) -> None:
+    dists = tmp_path / "dists" / "stable"
+    dists.mkdir(parents=True)
+    (dists / "InRelease").write_bytes(clearsign(b"Origin: \xff\n"))
+    with pytest.raises(ResolveError, match="dists/stable/InRelease isn't UTF-8"):
+        fetch_release(Source(tmp_path.as_uri(), "stable", ("main",)), KEYRING)
+
+
+def test_fetch_release_falls_back_to_release_gpg(tmp_path: Path) -> None:
+    write_repo(tmp_path, "stable", {"main/amd64": stanza("jq")})
+    dists = tmp_path / "dists" / "stable"
+    source = Source(tmp_path.as_uri(), "stable", ("main",))
+    (dists / "InRelease").unlink()
+    assert fetch_release(source, KEYRING) == release_of(tmp_path, "stable")
+
+    with pytest.raises(ResolveError, match=r"Release.gpg doesn't verify .*: No good signature"):
+        fetch_release(source, Keyring.load(fixture("ed25519.gpg")))
+
+    (dists / "Release.gpg").unlink()
+    with pytest.raises(ResolveError, match="Failed to fetch .*/Release.gpg"):
+        fetch_release(source, KEYRING)
+
+
+def test_fetch_release_unsigned(tmp_path: Path) -> None:
+    write_repo(tmp_path, "stable", {"main/amd64": stanza("jq")})
+    for name in ("InRelease", "Release.gpg"):
+        (tmp_path / "dists" / "stable" / name).unlink()
+    assert fetch_release(Source(tmp_path.as_uri(), "stable", ("main",)), None) == release_of(
+        tmp_path, "stable"
+    )
 
 
 def test_main_writes_lockfile(tmp_path: Path) -> None:
@@ -407,8 +505,11 @@ def test_main_writes_lockfile(tmp_path: Path) -> None:
     inputs = normalize_inputs([f"{(tmp_path / 'repo').as_uri()} stable main"], ["amd64", "arm64"], ["jq"], [])
     (tmp_path / "request.json").write_text(json.dumps(inputs))
 
+    (tmp_path / "keyring.asc").write_bytes(fixture("rsa.asc"))
+
     output = tmp_path / "out" / "lock.json"
-    assert main(["--request", str(tmp_path / "request.json"), "--output", str(output)]) == 0
+    argv = ["--request", str(tmp_path / "request.json"), "--output", str(output)]
+    assert main([*argv, "--keyring", str(tmp_path / "keyring.asc")]) == 0
 
     locked = json.loads(output.read_text())
     assert locked["version"] == 1
@@ -417,14 +518,31 @@ def test_main_writes_lockfile(tmp_path: Path) -> None:
     assert [p["name"] for p in locked["architectures"]["amd64"]["packages"]] == ["jq", "libjq1"]
     assert [p["name"] for p in locked["architectures"]["arm64"]["packages"]] == ["jq"]
 
+    (tmp_path / "keyring.gpg").write_bytes(fixture("ed25519.gpg"))
+    assert main([*argv, "--keyring", str(tmp_path / "keyring.gpg")]) == 1
+    assert main([*argv, "--allow-unsigned"]) == 0
+
+
+def test_main_needs_keyring_or_allow_unsigned(tmp_path: Path, capsys) -> None:
+    argv = ["--request", "request.json", "--output", "lock.json"]
+    for extra in ([], ["--keyring", "k.gpg", "--allow-unsigned"]):
+        with pytest.raises(SystemExit):
+            main([*argv, *extra])
+        assert "pass either --keyring or --allow-unsigned" in capsys.readouterr().err
+
 
 def test_main_reports_errors(tmp_path: Path, capsys) -> None:
     write_repo(tmp_path / "repo", "stable", {"main/amd64": stanza("jq")})
     inputs = normalize_inputs([f"{(tmp_path / 'repo').as_uri()} stable main"], ["amd64"], ["nope"], [])
     (tmp_path / "request.json").write_text(json.dumps(inputs))
 
-    assert main(["--request", str(tmp_path / "request.json"), "--output", str(tmp_path / "lock.json")]) == 1
+    argv = ["--request", str(tmp_path / "request.json"), "--output", str(tmp_path / "lock.json")]
+    assert main([*argv, "--allow-unsigned"]) == 1
     assert "error: amd64: No package named nope" in capsys.readouterr().err
+
+    (tmp_path / "keyring.gpg").write_bytes(b"not a keyring")
+    assert main([*argv, "--keyring", str(tmp_path / "keyring.gpg")]) == 1
+    assert f"error: Can't load {tmp_path / 'keyring.gpg'}: Malformed armor" in capsys.readouterr().err
 
 
 def test_ubuntu_t64_rename_satisfies_the_old_name() -> None:
@@ -464,13 +582,13 @@ def test_ubuntu_snapshot_layout(tmp_path: Path) -> None:
             (dists / path).parent.mkdir(parents=True, exist_ok=True)
             (dists / path).write_bytes(data)
             lines.append(f" {hashlib.sha256(data).hexdigest()} {len(data)} {path}")
-        (dists / "Release").write_text(f"Origin: Ubuntu\nSuite: {suite}\nSHA256:\n" + "\n".join(lines) + "\n")
+        write_release(dists, f"Origin: Ubuntu\nSuite: {suite}\nSHA256:\n" + "\n".join(lines) + "\n")
     # The uncompressed index no longer matches `Release`, so this also checks a compressed one is used.
     for suite in pockets:
         (root / "dists" / suite / "main/binary-amd64/Packages").write_text("garbage")
 
     sources = [Source.parse(f"{uri} {suite} main") for suite in pockets]
-    packages = [p for source in sources for p in fetch_index(source, "amd64")]
+    packages = [p for source in sources for p in fetch_index(source, fetch_release(source, KEYRING), "amd64")]
     resolved = resolve(Index(packages), ["distro-info-data", "jq"], [])[1]
     assert names(resolved) == {"distro-info-data": "0.60ubuntu0.1", "jq": "1.7.1-3build1"}
     assert {r.package.url for r in resolved} == {

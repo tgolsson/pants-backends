@@ -4,9 +4,10 @@
 """Resolves Debian packages against apt repository snapshots into a lockfile.
 
 Each source is a sources.list line without the leading `deb`: `<uri> <suite> <component>...`. The
-`Release` file of every suite is fetched, and each `Packages` index is checked against the SHA256
-it lists before being parsed. Resolution then walks the `Pre-Depends` and `Depends` of the
-requested packages, much like rules_distroless does:
+`InRelease` file of every suite is fetched and its signature verified against the given keyrings,
+falling back to `Release` and `Release.gpg` where there's no `InRelease`. Each `Packages` index is
+then checked against the SHA256 the verified file lists before being parsed. Resolution then walks
+the `Pre-Depends` and `Depends` of the requested packages, much like rules_distroless does:
 
 * a real package resolves to its highest version (across all sources) satisfying the constraint;
 * `a | b` takes the first satisfiable alternative, unless one is already in the closure;
@@ -14,10 +15,8 @@ requested packages, much like rules_distroless does:
   `Priority: required` one, then the highest version, then the first by name;
 * excluded packages count as installed (they satisfy any constraint) and are never traversed.
 
-GPG signatures on `Release` are not verified: the snapshot timestamp in the URI pins the content.
-
-This module only uses the standard library: the lockfile rules copy it into the sandbox and call
-`main`, and both the rules and the tests import it directly.
+This module only uses the standard library: the lockfile rules copy it into the sandbox together
+with `openpgp` and call `main`, and both the rules and the tests import it directly.
 """
 
 from __future__ import annotations
@@ -38,10 +37,16 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Iterable, Iterator
 
+from . import openpgp
+
 LOCKFILE_VERSION = 1
 
 
 class ResolveError(Exception):
+    pass
+
+
+class NotFound(ResolveError):
     pass
 
 
@@ -443,7 +448,12 @@ def _fetch(url: str, attempts: int = 4) -> bytes:
             with urllib.request.urlopen(url, timeout=120) as response:
                 return response.read()
         except OSError as e:
-            # Client errors such as a 404 for a mistyped suite won't go away on a retry.
+            not_found = (isinstance(e, urllib.error.HTTPError) and e.code in (404, 410)) or (
+                isinstance(e, urllib.error.URLError) and isinstance(e.reason, FileNotFoundError)
+            )
+            if not_found:
+                raise NotFound(f"Failed to fetch {url}: {e}") from e
+            # Other client errors won't go away on a retry either.
             client_error = isinstance(e, urllib.error.HTTPError) and 400 <= e.code < 500
             if client_error or attempt == attempts - 1:
                 raise ResolveError(f"Failed to fetch {url}: {e}") from e
@@ -458,9 +468,43 @@ _INDEX_FORMATS: tuple[tuple[str, Callable[[bytes], bytes]], ...] = (
 )
 
 
-def fetch_index(source: Source, arch: str, fetch: Callable[[str], bytes] = _fetch) -> list[Package]:
+def _decode(data: bytes, url: str) -> str:
+    try:
+        return data.decode()
+    except UnicodeDecodeError as e:
+        raise ResolveError(f"{url} isn't UTF-8: {e}") from e
+
+
+def fetch_release(
+    source: Source, keyring: openpgp.Keyring | None, fetch: Callable[[str], bytes] = _fetch
+) -> str:
+    """Returns the suite's `Release` content, verified against `keyring` unless that's None."""
     dists = f"{source.uri}/dists/{source.suite}"
-    hashes = parse_release_hashes(fetch(f"{dists}/Release").decode())
+    if keyring is None:
+        return _decode(fetch(f"{dists}/Release"), f"{dists}/Release")
+    try:
+        in_release = fetch(f"{dists}/InRelease")
+    except NotFound:
+        release = fetch(f"{dists}/Release")
+        try:
+            openpgp.verify_detached(release, fetch(f"{dists}/Release.gpg"), keyring)
+        except openpgp.OpenPGPError as e:
+            raise ResolveError(f"{dists}/Release.gpg doesn't verify {dists}/Release: {e}") from e
+        return _decode(release, f"{dists}/Release")
+    try:
+        # Only the signed text counts, so the hashes come from what was verified.
+        signed = openpgp.verify_cleartext(in_release, keyring)
+    except openpgp.OpenPGPError as e:
+        raise ResolveError(f"{dists}/InRelease doesn't verify: {e}") from e
+    return _decode(signed, f"{dists}/InRelease")
+
+
+def fetch_index(
+    source: Source, release: str, arch: str, fetch: Callable[[str], bytes] = _fetch
+) -> list[Package]:
+    """Fetches the `Packages` indices of `source` for `arch`, checked against its `release`."""
+    dists = f"{source.uri}/dists/{source.suite}"
+    hashes = parse_release_hashes(release)
     packages = []
     for component in source.components:
         for extension, decompress in _INDEX_FORMATS:
@@ -473,7 +517,7 @@ def fetch_index(source: Source, arch: str, fetch: Callable[[str], bytes] = _fetc
         sha256, size = hashes[path]
         if len(data) != size or hashlib.sha256(data).hexdigest() != sha256:
             raise ResolveError(f"{dists}/{path} doesn't match the SHA256 in {dists}/Release")
-        packages.extend(parse_packages(decompress(data).decode(), source.uri))
+        packages.extend(parse_packages(_decode(decompress(data), f"{dists}/{path}"), source.uri))
     return packages
 
 
@@ -481,14 +525,34 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--request", required=True, help="JSON file with the normalized inputs.")
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--keyring",
+        action="append",
+        default=[],
+        help="An OpenPGP keyring, binary or armored, to verify `Release` signatures with. Repeatable.",
+    )
+    parser.add_argument("--allow-unsigned", action="store_true", help="Don't verify signatures.")
     args = parser.parse_args(argv)
+    if bool(args.keyring) == args.allow_unsigned:
+        parser.error("pass either --keyring or --allow-unsigned")
 
     with open(args.request) as f:
         inputs = json.load(f)
     try:
+        keyring = None
+        if args.keyring:
+            keyrings = []
+            for path in args.keyring:
+                with open(path, "rb") as f:
+                    keyrings.append(f.read())
+            try:
+                keyring = openpgp.Keyring.load(*keyrings)
+            except openpgp.OpenPGPError as e:
+                raise ResolveError(f"Can't load {', '.join(args.keyring)}: {e}") from e
         sources = [Source.parse(line) for line in inputs["sources"]]
+        releases = [(source, fetch_release(source, keyring)) for source in sources]
         indices = {
-            arch: Index(p for source in sources for p in fetch_index(source, arch))
+            arch: Index(p for source, release in releases for p in fetch_index(source, release, arch))
             for arch in inputs["architectures"]
         }
         result = lockfile(inputs, indices)

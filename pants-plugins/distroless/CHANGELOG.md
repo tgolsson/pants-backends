@@ -11,3 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lockfile with `pants generate-lockfiles`, configured by `[apt].resolves`. It generates a target
   per locked package and architecture for `oci_deb_layer`.
 - Ubuntu snapshots from snapshot.ubuntu.com resolve too; the README has an example.
+- `generate-lockfiles` verifies the OpenPGP signature of every suite's `InRelease` (or `Release` and
+  `Release.gpg`) against the keyrings in the new `keyrings` field of `deb_packages`. **Breaking:**
+  `deb_packages` needs either `keyrings` or `allow_unsigned=True`.

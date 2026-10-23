@@ -4,8 +4,10 @@ from pants.core.target_types import FileSourceField
 from pants.engine.addresses import Address
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
+    BoolField,
     Dependencies,
     InvalidFieldException,
+    MultipleSourcesField,
     StringField,
     StringSequenceField,
     Target,
@@ -75,6 +77,30 @@ class DebPackagesExcludeField(StringSequenceField):
     """)
 
 
+class DebPackagesKeyringsField(MultipleSourcesField):
+    alias = "keyrings"
+    expected_file_extensions = (".gpg", ".asc")
+    help = softwrap("""
+    OpenPGP keyrings, binary (`.gpg`) or armored (`.asc`), holding the keys the repositories sign
+    their `Release` files with, e.g. the `debian-archive-keyring.gpg` of the `debian-archive-keyring`
+    package or the `ubuntu-archive-keyring.gpg` of `ubuntu-keyring`. `generate-lockfiles` fails
+    unless every suite's `InRelease` (or `Release` and `Release.gpg`) has a good signature from one
+    of their keys. Only RSA and Ed25519 keys are supported, which is what Debian and Ubuntu use.
+
+    Every key in the keyrings is trusted as given, whatever its expiry or revocation. Either this
+    or `allow_unsigned=True` is required.
+    """)
+
+
+class DebPackagesAllowUnsignedField(BoolField):
+    alias = "allow_unsigned"
+    default = False
+    help = softwrap("""
+    Resolve without verifying the signatures of the repositories' `Release` files, e.g. for an
+    unsigned internal repository. Can't be combined with `keyrings`.
+    """)
+
+
 class DebPackageSourceField(FileSourceField):
     help = "The `.deb`, as an `http_source` pinned by the lockfile."
 
@@ -120,6 +146,8 @@ class DebPackagesTargetGenerator(TargetGenerator):
         DebPackagesArchitecturesField,
         DebPackagesPackagesField,
         DebPackagesExcludeField,
+        DebPackagesKeyringsField,
+        DebPackagesAllowUnsignedField,
     )
     copied_fields = COMMON_TARGET_FIELDS
     moved_fields = ()

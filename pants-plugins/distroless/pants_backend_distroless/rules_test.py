@@ -17,6 +17,7 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 from pants_backend_distroless import lockfile, subsystem, target_generation
 from pants_backend_distroless.apt_resolver import normalize_inputs
 from pants_backend_distroless.apt_resolver_test import stanza, write_repo
+from pants_backend_distroless.openpgp_test import fixture
 from pants_backend_distroless.target_types import (
     DebPackageGroupTarget,
     DebPackageSourceField,
@@ -51,6 +52,7 @@ deb_packages(
     architectures=["amd64", "arm64"],
     packages=["jq"],
     exclude=["libc6"],
+    keyrings=["keyring.asc"],
 )
 """
 
@@ -70,7 +72,7 @@ def locked_package(name: str, depends: list[str], arch: str = "amd64") -> dict:
 
 
 def write_project(rule_runner: RuleRunner, lockfile: dict | None, build: str = BUILD) -> None:
-    files = {"debs/BUILD": build.format(uri=URI)}
+    files = {"debs/BUILD": build.format(uri=URI), "debs/keyring.asc": fixture("rsa.asc").decode()}
     if lockfile is not None:
         files["debs/bookworm.lock.json"] = json.dumps(lockfile)
     rule_runner.write_files(files)
@@ -175,6 +177,56 @@ def test_generates_lockfile(rule_runner: RuleRunner, tmp_path: Path) -> None:
     # The generated lockfile is accepted by target generation.
     rule_runner.write_files({"debs/bookworm.lock.json": content.content.decode()})
     rule_runner.get_target(Address("debs", target_name="bookworm", generated_name="amd64/libjq1"))
+
+
+def test_generate_lockfile_fails_on_unverified_release(rule_runner: RuleRunner, tmp_path: Path) -> None:
+    write_repo(
+        tmp_path, "stable", {"main/amd64": stanza("jq"), "main/arm64": stanza("jq", Architecture="arm64")}
+    )
+    write_project(rule_runner, None, BUILD.replace("{uri}", tmp_path.as_uri()))
+    rule_runner.write_files({"debs/keyring.asc": fixture("other.asc").decode()})
+
+    (request,) = rule_runner.request(
+        UserGenerateLockfiles, [lockfile.RequestedDebPackagesUserResolveNames(["bookworm"])]
+    )
+    with engine_error(contains="dists/stable/InRelease doesn't verify: No good signature"):
+        rule_runner.request(GenerateLockfileResult, [request])
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "",
+        '    keyrings=["keyring.asc"],\n    allow_unsigned=True,\n',
+    ],
+)
+def test_needs_keyrings_or_allow_unsigned(rule_runner: RuleRunner, replacement: str) -> None:
+    write_project(rule_runner, None, BUILD.replace('    keyrings=["keyring.asc"],\n', replacement))
+
+    with engine_error(contains="must set either `keyrings`"):
+        rule_runner.request(
+            UserGenerateLockfiles, [lockfile.RequestedDebPackagesUserResolveNames(["bookworm"])]
+        )
+
+
+def test_generates_lockfile_unsigned(rule_runner: RuleRunner, tmp_path: Path) -> None:
+    write_repo(
+        tmp_path, "stable", {"main/amd64": stanza("jq"), "main/arm64": stanza("jq", Architecture="arm64")}
+    )
+    for name in ("InRelease", "Release.gpg"):
+        (tmp_path / "dists" / "stable" / name).unlink()
+    write_project(
+        rule_runner,
+        None,
+        BUILD.replace("{uri}", tmp_path.as_uri()).replace('keyrings=["keyring.asc"]', "allow_unsigned=True"),
+    )
+
+    (request,) = rule_runner.request(
+        UserGenerateLockfiles, [lockfile.RequestedDebPackagesUserResolveNames(["bookworm"])]
+    )
+    result = rule_runner.request(GenerateLockfileResult, [request])
+    (content,) = rule_runner.request(DigestContents, [result.digest])
+    assert json.loads(content.content)["architectures"]["amd64"]["roots"] == ["jq"]
 
 
 def test_resolve_needs_exactly_one_target(rule_runner: RuleRunner) -> None:

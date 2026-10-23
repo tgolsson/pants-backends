@@ -17,10 +17,6 @@ dependencies into a committed lockfile. The locked packages feed `oci_deb_layer`
 without running `apt`, `dpkg` or maintainer scripts. `pants-backend-oci` also has the helper layers such
 an image needs: `oci_passwd_layer`, `oci_group_layer` and `oci_cacerts_layer`.
 
-## Planned and missing features
-
-* Verifying the GPG signature of the repository's `Release` file.
-
 ## Targets
 
 ### `deb_packages`
@@ -42,6 +38,8 @@ deb_packages(
     packages=["jq"],
     # Already in the base image.
     exclude=["libc6"],
+    # From the `debian-archive-keyring` package.
+    keyrings=["debian-archive-keyring.gpg"],
 )
 
 oci_deb_layer(
@@ -67,16 +65,18 @@ The target generates:
 A layer is for one architecture, so always pick one: `debs=[":bookworm"]` would bring the packages of
 every architecture, which `oci_deb_layer` rejects.
 
-| Argument        | Meaning                                                                                       | Default value                                         |
-|-----------------|-----------------------------------------------------------------------------------------------|-------------------------------------------------------|
-| `name`          | The target name                                                                               | Same as any other target, which is the directory name |
-| `resolve`       | The resolve name, a key of `[apt].resolves`.                                                  | Required                                              |
-| `sources`       | The repositories, each `<uri> <suite> <component>...` like a sources.list line without `deb`. | Required                                              |
-| `architectures` | The Debian architectures to lock, e.g. `amd64` and `arm64`.                                   | Required                                              |
-| `packages`      | The top-level packages.                                                                       | Required                                              |
-| `exclude`       | Packages treated as already installed, typically those the base image ships.                  | `[]`                                                  |
-| `description`   | A description of the target                                                                   |                                                       |
-| `tags`          | List of tags                                                                                  | `[]`                                                  |
+| Argument         | Meaning                                                                                       | Default value                                         |
+|------------------|-----------------------------------------------------------------------------------------------|-------------------------------------------------------|
+| `name`           | The target name                                                                               | Same as any other target, which is the directory name |
+| `resolve`        | The resolve name, a key of `[apt].resolves`.                                                  | Required                                              |
+| `sources`        | The repositories, each `<uri> <suite> <component>...` like a sources.list line without `deb`. | Required                                              |
+| `architectures`  | The Debian architectures to lock, e.g. `amd64` and `arm64`.                                   | Required                                              |
+| `packages`       | The top-level packages.                                                                       | Required                                              |
+| `exclude`        | Packages treated as already installed, typically those the base image ships.                  | `[]`                                                  |
+| `keyrings`       | OpenPGP keyrings (`.gpg` or `.asc`) to verify the repositories' `Release` signatures with.    | Required unless `allow_unsigned=True`                 |
+| `allow_unsigned` | Resolve without verifying signatures. Can't be combined with `keyrings`.                      | `False`                                               |
+| `description`    | A description of the target                                                                   |                                                       |
+| `tags`           | List of tags                                                                                  | `[]`                                                  |
 
 #### Sources
 
@@ -84,7 +84,7 @@ Pin each URI to a snapshot, such as `https://snapshot.debian.org/archive/debian/
 the lockfile can be regenerated and the packages stay downloadable. Several sources can be combined,
 for example to add `bookworm-updates`, or `bookworm-security` from
 `https://snapshot.debian.org/archive/debian-security/<timestamp>`. Every `Packages` index is checked
-against the SHA256 in its suite's `Release` file; the `Release` file's signature is not verified.
+against the SHA256 in its suite's signed `Release` file, see [Signature verification](#signature-verification).
 
 Ubuntu works the same way, from [snapshot.ubuntu.com](https://snapshot.ubuntu.com). Its updates
 and security fixes are separate suites of the same archive, and unlike the live archive, where
@@ -106,8 +106,31 @@ deb_packages(
     packages=["jq", "ca-certificates"],
     # Already in the ubuntu:noble base image.
     exclude=["libc6", "debconf", "libssl3t64"],
+    # From the `ubuntu-keyring` package.
+    keyrings=["ubuntu-archive-keyring.gpg"],
 )
 ```
+
+#### Signature verification
+
+Like rules_distroless's `gpg_keys`, `generate-lockfiles` verifies every suite's `InRelease`, or its
+`Release` and `Release.gpg` when there's no `InRelease`, against `keyrings`, and fails unless at
+least one signature is good and made by a key in them. A bad signature from one of their keys fails
+too. The hashes of the `Packages` indices are only taken from the verified file. Either `keyrings` or
+`allow_unsigned=True` must be set.
+
+Use the archive's own keyring, from the snapshot you resolve against so it's pinned too:
+`/usr/share/keyrings/debian-archive-keyring.gpg` from the `debian-archive-keyring` package, or
+`/usr/share/keyrings/ubuntu-archive-keyring.gpg` from `ubuntu-keyring`. Copy it next to the
+`deb_packages` target, since sources can't come from another directory.
+
+Verification needs no `gpgv` or `sqv`: it's built into the resolver, and supports what Debian and
+Ubuntu sign with, v4 RSA and Ed25519 keys with SHA-2 hashes. Older snapshots signed only with SHA-1
+need `allow_unsigned=True`, which turns verification off entirely. Every key in the keyrings is
+trusted as given: expiry and revocation aren't checked, since a snapshot's `Release` files are
+historical. For the same reason, neither is freshness (`Valid-Until`), nor that the signed `Release`
+is for the suite that was asked for: the snapshot URL is what pins both. The keys aren't recorded in
+the lockfile, so changing `keyrings` doesn't make it out of date.
 
 #### Resolution
 
