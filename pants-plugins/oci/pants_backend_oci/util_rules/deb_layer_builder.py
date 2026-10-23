@@ -477,6 +477,15 @@ def _sha256(f: BinaryIO) -> str:
     return digest.hexdigest()
 
 
+def symlink_info(name: str, target: str) -> tarfile.TarInfo:
+    info = tarfile.TarInfo(name)
+    info.type = tarfile.SYMTYPE
+    info.linkname = target
+    info.mode = 0o777
+    info.uname = info.gname = "root"
+    return info
+
+
 def file_info(name: str, content: bytes) -> tarfile.TarInfo:
     info = tarfile.TarInfo(name)
     info.size = len(content)
@@ -493,6 +502,8 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
     Each package's `data.tar` is streamed straight from its deb file.
     """
     seen: dict[str, _Entry] = {}
+    # Top-level directories whose contents were moved under `usr/`, which need links to `usr/`.
+    merged: set[str] = set()
     by_name: dict[str, DebPackage] = {}
     architectures: dict[str, list[str]] = {}
     for package in packages:
@@ -548,6 +559,8 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
                 for member in data:
                     original = clean_path(member.name)
                     path = _merge_usr(original, merged_usr)
+                    if path != original:
+                        merged.add(original.partition("/")[0])
                     if not path:
                         continue
 
@@ -575,6 +588,12 @@ def build_layer(packages: list[DebPackage], out: io.BufferedIOBase, merged_usr: 
                         info.size = member.size
 
                     add(info, name, content)
+
+        # Point the moved directories at `usr/`, so their contents resolve without the base image
+        # supplying the links. A package's own link or directory there is dropped above.
+        for top in sorted(merged):
+            add(directory_info(f"usr/{top}"), "merged-usr")
+            add(symlink_info(top, f"usr/{top}"), "merged-usr")
 
         parts = STATUS_DIR.split("/")
         for depth in range(1, len(parts) + 1):

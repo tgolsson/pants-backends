@@ -22,6 +22,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -389,8 +390,16 @@ def compress_layer(source: BinaryIO | _TarChecked, out: BinaryIO) -> tuple[str, 
     return f"sha256:{uncompressed.hexdigest()}", f"sha256:{writer.hash.hexdigest()}", writer.size
 
 
-def add_layer(layout: str, image: Image, path: str, history: Mapping | None) -> None:
-    blobs = os.path.join(layout, "blobs", "sha256")
+LAYER_DESCRIPTOR = "layer.json"
+
+
+def compress_to_blob(path: str, out_dir: str) -> str:
+    """Gzip the layer tar at `path` into `out_dir` as a blob plus a `layer.json` descriptor.
+
+    Compressing runs apart from assembly, so an unchanged layer's blob can be reused. Returns the
+    blob digest.
+    """
+    blobs = os.path.join(out_dir, "blobs", "sha256")
     os.makedirs(blobs, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=blobs, prefix=".tmp-")
     try:
@@ -400,13 +409,43 @@ def add_layer(layout: str, image: Image, path: str, history: Mapping | None) -> 
             except (EOFError, zlib.error, gzip.BadGzipFile) as e:
                 raise LayoutError(f"layer {path} is not a valid gzip stream: {e}") from e
         os.chmod(tmp, 0o644)
-        os.replace(tmp, blob_path(layout, digest))
+        os.replace(tmp, blob_path(out_dir, digest))
     except BaseException:
         if os.path.exists(tmp):
             os.remove(tmp)
         raise
 
-    image.manifest["layers"].append(descriptor(LAYER_MEDIA_TYPE, digest, size))
+    layer = {**descriptor(LAYER_MEDIA_TYPE, digest, size), "diff_id": diff_id}
+    _replace_file(os.path.join(out_dir, LAYER_DESCRIPTOR), _json(layer))
+    return digest
+
+
+def add_blob(layout: str, image: Image, path: str, history: Mapping | None) -> None:
+    """Add the layer compressed by `compress_to_blob`, whose descriptor is at `path`."""
+    with open(path, "rb") as f:
+        layer = json.load(f)
+    digest = layer["digest"]
+    source = blob_path(os.path.dirname(path), digest)
+    target = blob_path(layout, digest)
+    if not os.path.exists(target):
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        # A sandbox input may be a symlink into the store, which mustn't end up in the layout.
+        if os.path.islink(source):
+            shutil.copyfile(source, target)
+        else:
+            os.replace(source, target)
+    _append_layer(image, descriptor(layer["mediaType"], digest, layer["size"]), layer["diff_id"], history)
+
+
+def add_layer(layout: str, image: Image, path: str, history: Mapping | None) -> None:
+    """Compress the layer tar at `path` and add it."""
+    with tempfile.TemporaryDirectory(dir=layout, prefix=".tmp-") as tmp:
+        compress_to_blob(path, tmp)
+        add_blob(layout, image, os.path.join(tmp, LAYER_DESCRIPTOR), history)
+
+
+def _append_layer(image: Image, desc: dict, diff_id: str, history: Mapping | None) -> None:
+    image.manifest["layers"].append(desc)
     diff_ids = image.config.setdefault("rootfs", {"type": "layers", "diff_ids": []}).setdefault(
         "diff_ids", []
     )
@@ -459,7 +498,8 @@ def configure(image: Image, op: Mapping) -> None:
 def apply(layout: str, tag: str, ops: Iterable[Mapping]) -> str:
     """Apply `ops` to the image tagged `tag` and return the new manifest digest.
 
-    The ops are `init` (start from an empty image), `add_layer` and `config`.
+    The ops are `init` (start from an empty image), `add_layer` (a layer tar), `add_blob` (a layer
+    compressed by `compress_to_blob`) and `config`.
     """
     image: Image | None = None
     for op in ops:
@@ -472,6 +512,8 @@ def apply(layout: str, tag: str, ops: Iterable[Mapping]) -> str:
             image = load_image(layout, tag)
         if kind == "add_layer":
             add_layer(layout, image, op["path"], op.get("history"))
+        elif kind == "add_blob":
+            add_blob(layout, image, op["path"], op.get("history"))
         elif kind == "config":
             configure(image, op)
         else:
@@ -551,6 +593,9 @@ def main(argv: list[str]) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     apply_parser = commands.add_parser("apply", help="Apply a JSON list of ops to the image.")
     apply_parser.add_argument("spec")
+    compress_parser = commands.add_parser("compress", help="Gzip a layer tar into a blob.")
+    compress_parser.add_argument("layer")
+    compress_parser.add_argument("--out", required=True)
     commands.add_parser("normalize", help="Tag and convert a pulled layout.")
     commands.add_parser("digest", help="Print the image's manifest digest.")
     export_parser = commands.add_parser("export", help="Write the image as a named OCI archive.")
@@ -563,6 +608,8 @@ def main(argv: list[str]) -> int:
         if args.command == "apply":
             with open(args.spec, "rb") as f:
                 digest = apply(args.layout, args.tag, json.load(f))
+        elif args.command == "compress":
+            digest = compress_to_blob(args.layer, args.out)
         elif args.command == "normalize":
             digest = normalize(args.layout, args.tag)
         elif args.command == "export":

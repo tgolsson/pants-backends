@@ -177,9 +177,11 @@ class DebLayerMergedUsrField(BoolField):
     default = True
 
     help = softwrap("""
-    Whether the base image uses a merged `/usr`, where `/bin`, `/sbin` and `/lib*` are symlinks
-    into `/usr`. When set, package contents under those directories are written under `/usr`
-    instead, so the layer doesn't replace the base image's symlinks with directories.
+    Whether the image uses a merged `/usr`, where `/bin`, `/sbin` and `/lib*` are symlinks into
+    `/usr`. When set, package contents under those directories are written under `/usr` instead,
+    and the layer adds the `/bin -> usr/bin` style links for the directories it uses, so it works
+    on an empty base and doesn't replace a base image's links with directories. Unset it only for
+    a base image with real `/bin` and `/lib` directories.
     """)
 
 

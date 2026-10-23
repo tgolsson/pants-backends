@@ -39,12 +39,12 @@ def test_layer_ops_add_the_layer_then_its_config() -> None:
     address = Address("app", target_name="layer")
     layer = ImageLayer(address, EMPTY_DIGEST, "app/layer.tar", entrypoint="/app/main.pex")
 
-    add, config = layer_ops(layer, "layers/0/app/layer.tar")
+    add, config = layer_ops(layer, "layers/0/compressed/layer.json")
 
     history = f"Layer target: {address}"
     assert add == {
-        "op": "add_layer",
-        "path": "layers/0/app/layer.tar",
+        "op": "add_blob",
+        "path": "layers/0/compressed/layer.json",
         "history": {"created": EPOCH, "created_by": history, "author": AUTHOR, "comment": history},
     }
     assert config == {

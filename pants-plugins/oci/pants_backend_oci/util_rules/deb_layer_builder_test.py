@@ -362,7 +362,11 @@ def test_layer_rewrites_merged_usr_paths() -> None:
     )
     members = layer_members(layer_bytes([load(deb)]))
 
-    assert {"bin", "sbin", "lib"}.isdisjoint(members)
+    # The moved directories become links into usr/, and only those the layer used.
+    for top in ("bin", "sbin", "lib"):
+        assert members[top].issym() and members[top].linkname == f"usr/{top}"
+        assert members[f"usr/{top}"].isdir()
+    assert "lib64" not in members
     assert "usr/bin/tool" in members
     assert "usr/lib/libtool.so" in members
     assert members["usr/bin/tool-hard"].linkname == "usr/bin/tool"
@@ -375,6 +379,26 @@ def test_layer_keeps_split_usr_paths_when_disabled() -> None:
     members = layer_members(layer_bytes([load(deb)], merged_usr=False))
     assert members["bin"].isdir()
     assert "bin/tool" in members
+    assert not any(m.issym() for m in members.values())
+
+
+def test_layer_replaces_shipped_merged_usr_links() -> None:
+    # Like trixie's base-files, which ships the merged-/usr links itself.
+    deb = make_deb(
+        "libc",
+        [
+            _link("./lib64", "usr/lib64", tarfile.SYMTYPE),
+            _dir("./lib64/"),
+            ("./lib64/ld-linux-x86-64.so.2", b"\x7fELF"),
+        ],
+    )
+    layer = layer_bytes([load(deb)])
+    names = [m.name for m in tarfile.open(fileobj=io.BytesIO(layer))]
+
+    assert names.count("lib64") == 1
+    members = layer_members(layer)
+    assert members["lib64"].issym() and members["lib64"].linkname == "usr/lib64"
+    assert read_layer_file(layer, "usr/lib64/ld-linux-x86-64.so.2") == b"\x7fELF"
 
 
 def test_layer_rejects_file_conflicts() -> None:

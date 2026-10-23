@@ -14,17 +14,23 @@ from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.engine.addresses import Address
 from pants.engine.fs import AddPrefix, CreateDigest, Digest, FileContent, MergeDigests
 from pants.engine.intrinsics import add_prefix, create_digest, execute_process, merge_digests
-from pants.engine.process import Process
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.util_rules import oci_layout_builder
 from pants_backend_oci.util_rules.image_bundle import FallibleImageBundle, ImageBundle
 from pants_backend_oci.util_rules.layer import ImageLayer
-from pants_backend_oci.util_rules.oci_layout_builder import AUTHOR, BUILT_BY, EPOCH
+from pants_backend_oci.util_rules.oci_layout_builder import (
+    AUTHOR,
+    BUILT_BY,
+    EPOCH,
+    LAYER_DESCRIPTOR,
+)
 from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
 
 _SPEC = "__oci_layout_spec.json"
+_COMPRESSED = "compressed"
 
 
 @dataclass(frozen=True)
@@ -74,7 +80,8 @@ AssembleOp = Union[InitImage, ConfigEdit, ImageLayer]
 
 
 def layer_ops(layer: ImageLayer, path: str) -> list[dict]:
-    """Add `layer`, found at `path` in the sandbox, and apply the config it brings."""
+    """Add `layer`, compressed with its descriptor at `path` in the sandbox, and apply the config
+    it brings."""
     target = f"Layer target: {layer.address}"
     created_by = layer.created_by or target
     history = {"created": EPOCH, "created_by": created_by, "author": AUTHOR, "comment": target}
@@ -84,7 +91,49 @@ def layer_ops(layer: ImageLayer, path: str) -> list[dict]:
         author=AUTHOR,
         created=EPOCH,
     )
-    return [{"op": "add_layer", "path": path, "history": history}, config.to_json()]
+    return [{"op": "add_blob", "path": path, "history": history}, config.to_json()]
+
+
+@dataclass(frozen=True)
+class CompressLayerRequest:
+    layer: ImageLayer
+
+
+@dataclass(frozen=True)
+class CompressedLayer:
+    """The gzipped layer blob and its descriptor, under `compressed/`."""
+
+    digest: Digest
+
+
+@rule(desc="Compress OCI layer", level=LogLevel.DEBUG)
+async def compress_image_layer(
+    request: CompressLayerRequest, python: PythonBuildStandaloneBinary
+) -> CompressedLayer:
+    # Only the layer and the builder are inputs, so an unchanged layer is compressed once and its
+    # blob reused by every image that adds it.
+    builder = await create_digest(sandboxed_modules(oci_layout_builder))
+    input_digest = await merge_digests(MergeDigests([builder, request.layer.digest]))
+    result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                argv=(
+                    python.path,
+                    "-c",
+                    module_main(oci_layout_builder),
+                    "compress",
+                    request.layer.path,
+                    "--out",
+                    _COMPRESSED,
+                ),
+                input_digest=input_digest,
+                output_directories=(_COMPRESSED,),
+                description=f"Compress OCI layer: {request.layer.address}",
+                level=LogLevel.DEBUG,
+            )
+        )
+    )
+    return CompressedLayer(result.output_digest)
 
 
 @dataclass(frozen=True)
@@ -100,23 +149,28 @@ class AssembleImageRequest:
 async def assemble_image(
     request: AssembleImageRequest, python: PythonBuildStandaloneBinary
 ) -> FallibleImageBundle:
+    layers = [op for op in request.ops if isinstance(op, ImageLayer)]
+    compressed = await concurrently(
+        compress_image_layer(CompressLayerRequest(layer), **implicitly()) for layer in layers
+    )
+
     spec: list[dict] = []
     prefixed = []
     for op in request.ops:
         if isinstance(op, ImageLayer):
-            # Layers are prefixed by position, since different layers may share a file name.
+            # Layers are prefixed by position, since different layers may hold the same blob.
             prefix = f"layers/{len(prefixed)}"
-            prefixed.append(add_prefix(AddPrefix(op.digest, prefix)))
-            spec.extend(layer_ops(op, f"{prefix}/{op.path}"))
+            prefixed.append(add_prefix(AddPrefix(compressed[len(prefixed)].digest, prefix)))
+            spec.extend(layer_ops(op, f"{prefix}/{_COMPRESSED}/{LAYER_DESCRIPTOR}"))
         else:
             spec.append(op.to_json())
 
-    builder, spec_digest, *layers = await concurrently(
+    builder, spec_digest, *layer_digests = await concurrently(
         create_digest(sandboxed_modules(oci_layout_builder)),
         create_digest(CreateDigest([FileContent(_SPEC, json.dumps(spec).encode())])),
         *prefixed,
     )
-    input_digest = await merge_digests(MergeDigests([request.base, builder, spec_digest, *layers]))
+    input_digest = await merge_digests(MergeDigests([request.base, builder, spec_digest, *layer_digests]))
 
     result = await execute_process(
         Process(

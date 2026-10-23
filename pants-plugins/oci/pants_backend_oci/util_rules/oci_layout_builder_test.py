@@ -107,6 +107,88 @@ def test_add_layer_is_deterministic(tmp_path: Path) -> None:
     assert blobs(tmp_path / "one") == blobs(tmp_path / "two")
 
 
+@pytest.mark.parametrize("compressed", [False, True])
+def test_compress_then_add_blob_matches_add_layer(tmp_path: Path, compressed: bool) -> None:
+    tar = make_tar({"a": b"a" * 100_000, "b": os.urandom(1000)})
+    layer = write(tmp_path / "layer.tar", gzip.compress(tar, mtime=1234) if compressed else tar)
+    history = {"created_by": "Layer target: //:layer"}
+
+    assert b.main(["compress", layer, "--out", str(tmp_path / "out")]) == 0
+    descriptor = json.loads((tmp_path / "out" / b.LAYER_DESCRIPTOR).read_bytes())
+    blob = (tmp_path / "out" / "blobs" / "sha256" / descriptor["digest"][7:]).read_bytes()
+    assert descriptor == {
+        "mediaType": b.LAYER_MEDIA_TYPE,
+        "digest": sha(blob),
+        "size": len(blob),
+        "diff_id": sha(tar),
+    }
+
+    path = str(tmp_path / "out" / b.LAYER_DESCRIPTOR)
+    from_blob = b.apply(
+        str(tmp_path / "one"), "build", [INIT, {"op": "add_blob", "path": path, "history": history}]
+    )
+    from_tar = b.apply(
+        str(tmp_path / "two"), "build", [INIT, {"op": "add_layer", "path": layer, "history": history}]
+    )
+
+    assert from_blob == from_tar
+    assert blobs(tmp_path / "one") == blobs(tmp_path / "two")
+
+
+def test_add_blob_already_in_the_layout(tmp_path: Path) -> None:
+    layer = write(tmp_path / "layer.tar", make_tar({"a": b"a"}))
+    b.compress_to_blob(layer, str(tmp_path / "first"))
+    b.compress_to_blob(layer, str(tmp_path / "second"))
+    ops = [
+        INIT,
+        {"op": "add_blob", "path": str(tmp_path / "first" / b.LAYER_DESCRIPTOR), "history": None},
+        {"op": "add_blob", "path": str(tmp_path / "second" / b.LAYER_DESCRIPTOR), "history": None},
+    ]
+
+    b.apply(str(tmp_path / "build"), "build", ops)
+
+    _, manifest, config = image(tmp_path / "build")
+    assert len(manifest["layers"]) == 2
+    assert manifest["layers"][0] == manifest["layers"][1]
+    assert config["rootfs"]["diff_ids"] == [sha(Path(layer).read_bytes())] * 2
+
+
+def test_add_blob_copies_a_symlinked_blob(tmp_path: Path) -> None:
+    layer = write(tmp_path / "layer.tar", make_tar({"a": b"a"}))
+    digest = b.compress_to_blob(layer, str(tmp_path / "store"))
+    # Like a sandbox input linked to a file in the store.
+    linked = tmp_path / "sandbox" / "blobs" / "sha256" / digest[7:]
+    linked.parent.mkdir(parents=True)
+    linked.symlink_to(tmp_path / "store" / "blobs" / "sha256" / digest[7:])
+    (tmp_path / "sandbox" / b.LAYER_DESCRIPTOR).write_bytes(
+        (tmp_path / "store" / b.LAYER_DESCRIPTOR).read_bytes()
+    )
+
+    path = str(tmp_path / "sandbox" / b.LAYER_DESCRIPTOR)
+    b.apply(str(tmp_path / "build"), "build", [INIT, {"op": "add_blob", "path": path, "history": None}])
+
+    blob = tmp_path / "build" / "blobs" / "sha256" / digest[7:]
+    assert blob.is_file() and not blob.is_symlink()
+    assert sha(blob.read_bytes()) == digest
+
+
+@pytest.mark.parametrize(
+    "data, error",
+    [
+        (b"\x1f\x8b" + b"not gzip at all", "not a valid gzip stream"),
+        (b"\x28\xb5\x2f\xfd" + b"\0" * 600, "zstd-compressed"),
+        (b"hello, not a tar" * 100, "not a tar archive"),
+    ],
+)
+def test_compress_rejects_bad_input(tmp_path: Path, data: bytes, error: str, capsys) -> None:
+    path = write(tmp_path / "layer.tar", data)
+
+    assert b.main(["compress", path, "--out", str(tmp_path / "out")]) == 1
+
+    assert error in capsys.readouterr().err
+    assert os.listdir(tmp_path / "out" / "blobs" / "sha256") == []
+
+
 def test_layers_are_appended_in_order(tmp_path: Path) -> None:
     layout = tmp_path / "build"
     one = write(tmp_path / "one.tar", make_tar({"one": b"1"}))

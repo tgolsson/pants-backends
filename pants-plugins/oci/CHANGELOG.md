@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- `deb_layer` with `merged_usr=True` (the default) writes the `/bin -> usr/bin` style links for
+  the directories it moves under `/usr`, so it works on an empty base. Before, an image built
+  only from deb layers had no `/lib64` and its dynamic loader couldn't be found.
+- Compress each layer once, in its own cached process, so assembly only links existing blobs.
+  Editing one layer no longer re-compresses the unchanged ones, such as a large dependencies
+  layer.
 - Add `oci_locale_layer`, which builds a reproducible layer with only the selected compiled
   locales, such as `C.utf8` from `libc-bin`, without running `locale-gen` or `localedef`.
 - **Breaking:** `pants package` writes an `oci_image_build` as a deterministic OCI archive,
