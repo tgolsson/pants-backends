@@ -1,5 +1,6 @@
 # Scripted build steps: an escape hatch that runs commands in the image with `podman build`.
-# They need a shell in the base image, so these use Debian rather than distroless.
+# String commands run through a shell, so these use Debian rather than distroless; a list of strings
+# runs without one (see examples/oci/multistage).
 
 file(name="greeting_file", source="greeting.txt")
 

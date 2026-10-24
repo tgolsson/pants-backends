@@ -46,9 +46,24 @@ reproducible. A scripted step is only as reproducible as its command.
 
 Scripted steps run through `podman build`, from the image as an OCI archive and with
 `--timestamp 0`, as root inside the container. They need the same local, rootless Linux podman as
-`pants run` and share its store. The command runs through `[oci].command_shell`
-(`/bin/sh -c` by default), so the base image must have that shell; distroless images don't, and
-the step then fails. Network access follows podman's defaults.
+`pants run` and share its store. Network access follows podman's defaults.
+
+A string command runs through `[oci].command_shell` (`/bin/sh -c` by default), so the base image
+must have that shell. On a base without one, such as a distroless image, give a list of strings
+instead: like a Dockerfile's exec-form `RUN`, it runs as that argv with no shell, so there are no
+pipes, `&&` or variable expansion, and the program is looked up on the image's `PATH`.
+`examples/oci/multistage` builds a PEX venv this way on the distroless Python base:
+
+```python
+oci_build_layer(
+    name="app-deps",
+    base=["//examples/oci:python3-d12#latest"],
+    packages=[":binary-deps"],
+    commands=["python", "/examples.oci.multistage/binary-deps.pex", "venv", "--scope=deps", "--compile", "/bin/app"],
+    env=["PEX_TOOLS=1"],
+    outputs=["bin/app"],
+)
+```
 
 - `oci_build_layer` keeps only its `outputs` and packages them as a layer tarball for other images,
   with the owners and modes they have in the image and zeroed timestamps. An output may be a glob,

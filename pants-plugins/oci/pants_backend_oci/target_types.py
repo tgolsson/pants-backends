@@ -124,12 +124,31 @@ class ImageEnvironment(StringSequenceField):
         """)
 
 
-class ImageBuildCommand(StringField):
+class ImageBuildCommand(Field):
     alias = "commands"
+    default = None
+    value: str | tuple[str, ...] | None
 
     help = softwrap("""
-        Globs to capture as outputs from the build step.
+        The command a scripted build step runs inside the image. A string runs through
+        `[oci].command_shell` (`/bin/sh -c` by default), so the image needs that shell. A list of
+        strings runs as that argv with no shell, like a Dockerfile's exec-form `RUN`, for images
+        such as distroless ones that have no shell.
         """)
+
+    @classmethod
+    def compute_value(
+        cls, raw_value: str | Iterable[str] | None, address: Address
+    ) -> str | tuple[str, ...] | None:
+        value = super().compute_value(raw_value, address)
+        if value is None or isinstance(value, str):
+            return value
+        if isinstance(value, (list, tuple)) and value and all(isinstance(arg, str) for arg in value):
+            return tuple(value)
+        raise InvalidFieldException(
+            f"The `{cls.alias}` field of {address} must be a string or a non-empty list of strings,"
+            f" got {value!r}."
+        )
 
 
 class ImageEntrypoint(StringField):

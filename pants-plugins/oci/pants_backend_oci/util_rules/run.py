@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from dataclasses import dataclass
 
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
@@ -102,8 +103,13 @@ async def podman_build(
     return await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
 
 
-def _run_args(oci: OciSubsystem, command: str | None) -> tuple[str, ...]:
-    return ("--run", json.dumps([*oci.command_shell, command])) if command else ()
+def _argv(oci: OciSubsystem, command: str | tuple[str, ...]) -> list[str]:
+    """A string runs through the shell; a list is exec form and runs as it is."""
+    return [*oci.command_shell, command] if isinstance(command, str) else list(command)
+
+
+def _run_args(oci: OciSubsystem, command: str | tuple[str, ...] | None) -> tuple[str, ...]:
+    return ("--run", json.dumps(_argv(oci, command))) if command else ()
 
 
 @dataclass(frozen=True)
@@ -111,7 +117,7 @@ class ScriptedLayerRequest:
     """The layer `command` adds when run in `bundle`, for the rules to append to it."""
 
     bundle: ImageBundle
-    command: str
+    command: str | tuple[str, ...]
     address: Address
 
 
@@ -126,8 +132,9 @@ async def run_scripted_layer(request: ScriptedLayerRequest, oci: OciSubsystem) -
         ),
         **implicitly(),
     )
+    command = request.command if isinstance(request.command, str) else shlex.join(request.command)
     return ImageLayer(
-        request.address, result.output_digest, _SCRIPTED_LAYER, created_by=f"Build step: {request.command}"
+        request.address, result.output_digest, _SCRIPTED_LAYER, created_by=f"Build step: {command}"
     )
 
 
@@ -138,7 +145,7 @@ class ImageFilesRequest:
     address: Address
     tar_name: str
     bundle: ImageBundle
-    command: str | None
+    command: str | tuple[str, ...] | None
     outputs: tuple[str, ...]
     exclude_patterns: tuple[str, ...] = ()
     description: str = "Copy files out of OCI image"

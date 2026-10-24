@@ -14,7 +14,10 @@ class OciSubsystem(Subsystem):
     command_shell = StrListOption(
         default=["/bin/sh", "-c"],
         advanced=True,
-        help="The shell that runs `commands=` in scripted build steps. It must exist in the base image.",
+        help=(
+            "The shell that runs string `commands=` in scripted build steps. It must exist in the base"
+            " image. A list of strings runs without it."
+        ),
     )
 
     empty_image_target = StrOption(

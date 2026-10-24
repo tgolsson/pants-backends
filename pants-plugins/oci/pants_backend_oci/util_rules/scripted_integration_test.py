@@ -144,3 +144,44 @@ def test_failing_command_fails_the_build() -> None:
     assert "Run build step for" in failed.stderr
     missing.assert_failure()
     assert "not/there" in missing.stderr
+
+
+def test_list_commands_run_without_a_shell() -> None:
+    build_inputs = {
+        "BUILD_ROOT": "",
+        "oci/BUILD": DEBIAN
+        + dedent("""\
+            oci_build_layer(
+                name="layer",
+                base=[":debian#slim"],
+                commands=["/usr/bin/install", "-D", "/etc/debian_version", "/out/version"],
+                outputs=["out"],
+            )
+
+            oci_image_build(
+                name="image",
+                base=[":debian#slim"],
+                commands=["/bin/rm", "-rf", "/var/lib/apt/lists"],
+            )
+            """),
+    }
+
+    with setup_tmpdir(build_inputs) as tmpdir:
+        # A shell that doesn't exist: list commands must not go through it.
+        result = pants(
+            tmpdir,
+            "--oci-command-shell=['/no/such/shell']",
+            "package",
+            f"{tmpdir}/oci:layer",
+            f"{tmpdir}/oci:image",
+        )
+        result.assert_success()
+        dist = Path(tmpdir, "dist")
+        with tarfile.open(next(dist.glob("*/layer.tar.gz"))) as tar:
+            assert tar.getnames() == [".", "./out", "./out/version"]
+        assert top_layer(next(dist.glob("*/image.tar"))) == [
+            "var",
+            "var/lib",
+            "var/lib/apt",
+            "var/lib/apt/.wh.lists",
+        ]

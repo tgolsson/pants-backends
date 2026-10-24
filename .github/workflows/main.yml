@@ -64,8 +64,7 @@ jobs:
         docker run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:22.04 cat /proc/self/gid_map
         docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:22.04 cat /proc/self/uid_map
 
-        # The multistage example's build steps need a shell its distroless base doesn't have.
-        /home/runner/bin/pants --filter-address-regex='^((?!multistage).)*$' package ::
+        /home/runner/bin/pants package ::
 
   package-examples:
 
@@ -106,11 +105,12 @@ jobs:
         podman run --rm --cap-drop all --cap-add CAP_SETGID ubuntu:22.04 cat /proc/self/gid_map || true
         podman run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:22.04 cat /proc/self/uid_map || true
 
-        # Scripted build steps need local Linux podman, which macOS runners don't have.
+        # Scripted build steps need local Linux podman, which macOS runners don't have; the
+        # multistage and scripted examples use them.
         if [ "$RUNNER_OS" = "macOS" ]; then
           pants --filter-address-regex='^((?!multistage|scripted).)*$' package examples::
         else
-          pants --filter-address-regex='^((?!multistage).)*$' package examples::
+          pants package examples::
         fi
 
   check-and-lint:

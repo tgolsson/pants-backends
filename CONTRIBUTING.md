@@ -6,7 +6,7 @@ Run `bash pre-commit.sh` from the repo root; it rewrites files (`update-build-fi
 checking. At minimum, `pants fmt lint test ::` and `pants package ::` must pass. When touching plugin rules, also run:
 
 ```
-pants --filter-address-regex='^((?!multistage).)*$' package examples::
+pants package examples::
 pants package docs:docs
 ```
 

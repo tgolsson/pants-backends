@@ -21,11 +21,19 @@ pex_binary(
     interpreter_constraints=[">=3.11,<3.12"],
 )
 
+# The distroless base has no shell, so the build steps' commands are lists, run without one.
 oci_build_layer(
     name="app-deps",
     base=["//examples/oci:python3-d12#latest"],
     packages=[":binary-deps"],
-    commands="python /examples.oci.multistage/binary-deps.pex venv --scope=deps --compile /bin/app",
+    commands=[
+        "python",
+        "/examples.oci.multistage/binary-deps.pex",
+        "venv",
+        "--scope=deps",
+        "--compile",
+        "/bin/app",
+    ],
     env=[
         "PEX_TOOLS=1",
         "PY=python3.11",
@@ -47,7 +55,14 @@ oci_build_layer(
     name="app-srcs",
     base=["//examples/oci:python3-d12#latest"],
     packages=[":binary-srcs"],
-    commands="python /examples.oci.multistage/binary-srcs.pex venv --scope=srcs --compile /bin/app",
+    commands=[
+        "python",
+        "/examples.oci.multistage/binary-srcs.pex",
+        "venv",
+        "--scope=srcs",
+        "--compile",
+        "/bin/app",
+    ],
     env=[
         "PEX_TOOLS=1",
         "PY=python3.11",
