@@ -2,16 +2,16 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 """Rules for the declarative helper layers: `oci_passwd_layer`, `oci_group_layer`,
-`oci_cacerts_layer` and `oci_locale_layer`. The passwd and group layers are small, so they are built
-in the rule rather than a process. The CA bundle and locales are built in a process, since reading
-zstd-compressed debs needs a `zstd` binary."""
+`oci_cacerts_layer` and `oci_locale_layer`. Every layer is built by `helper_layer_builder` in a
+sandboxed process; the CA bundle and locale layers also get a `zstd` binary for zstd-compressed
+debs."""
 
 from __future__ import annotations
 
-import io
+import dataclasses
+import json
 import os
 from dataclasses import dataclass
-from typing import BinaryIO, Callable
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
 from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
@@ -43,8 +43,8 @@ from pants_backend_oci.util_rules import deb_layer_builder, helper_layer_builder
 from pants_backend_oci.util_rules.deb_layer import DebFilesRequest, resolve_deb_files
 from pants_backend_oci.util_rules.helper_layer_builder import (
     CA_CERTIFICATES,
-    build_group_layer,
-    build_passwd_layer,
+    GroupEntry,
+    PasswdEntry,
 )
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
 from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
@@ -52,6 +52,7 @@ from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_module
 # The builders are copied into the sandbox under their package path, so their imports still resolve.
 _BUILDER_MODULES = (deb_layer_builder, helper_layer_builder)
 _BUILDER_MAIN = module_main(helper_layer_builder)
+_SPEC = "__helper_layer_spec.json"
 
 
 @dataclass(frozen=True)
@@ -87,25 +88,85 @@ class LocaleLayerFieldSet(PackageFieldSet):
     output_path: OutputPathField
 
 
-def _layer(output_path: OutputPathField, build: Callable[[BinaryIO], None]) -> tuple[str, CreateDigest]:
-    out = io.BytesIO()
-    build(out)
-    relpath = output_path.value_or_default(file_ending="tar")
-    return relpath, CreateDigest([FileContent(relpath, out.getvalue())])
+@dataclass(frozen=True)
+class HelperLayerRequest:
+    """Build a helper layer with `helper_layer_builder.main <layer> --output <path> <args>`."""
+
+    layer: str
+    inputs: Digest
+    args: tuple[str, ...]
+    output_path: OutputPathField
+    field_alias: str
+    address: Address
+    what: str
+
+
+@rule(desc="Build OCI helper layer", level=LogLevel.DEBUG)
+async def build_helper_layer(
+    request: HelperLayerRequest, python: PythonBuildStandaloneBinary
+) -> BuiltPackage:
+    builders = await create_digest(sandboxed_modules(*_BUILDER_MODULES))
+    input_digest = await merge_digests(MergeDigests([builders, request.inputs]))
+
+    relpath = request.output_path.value_or_default(file_ending="tar")
+    result = await execute_process(
+        Process(
+            argv=(python.path, "-c", _BUILDER_MAIN, request.layer, "--output", relpath, *request.args),
+            input_digest=input_digest,
+            output_files=(relpath,),
+            description=f"Build OCI layer with {request.what}: {request.address}",
+            level=LogLevel.DEBUG,
+        ),
+        **implicitly(),
+    )
+    if result.exit_code != 0:
+        error = result.stderr.decode(errors="replace").strip().removeprefix("error: ")
+        raise InvalidFieldException(
+            f"Could not build {request.what} from the `{request.field_alias}` field of "
+            f"{request.address}: {error}"
+        )
+
+    return BuiltPackage(result.output_digest, (BuiltLayerArtifact(relpath=relpath),))
+
+
+def _entries_spec(entries: tuple[PasswdEntry, ...] | tuple[GroupEntry, ...]) -> CreateDigest:
+    # The field has already validated the entries; they're written back in the form it accepts.
+    spec = json.dumps([dataclasses.asdict(e) for e in entries], sort_keys=True, separators=(",", ":"))
+    return CreateDigest([FileContent(_SPEC, spec.encode())])
 
 
 @rule(desc="Package OCI layer with /etc/passwd", level=LogLevel.DEBUG)
 async def package_passwd_layer(field_set: PasswdLayerFieldSet) -> BuiltPackage:
-    relpath, layer = _layer(field_set.output_path, lambda out: build_passwd_layer(field_set.users.value, out))
-    digest = await create_digest(layer)
-    return BuiltPackage(digest, (BuiltLayerArtifact(relpath=relpath),))
+    spec = await create_digest(_entries_spec(field_set.users.value))
+    return await build_helper_layer(
+        HelperLayerRequest(
+            layer="passwd",
+            inputs=spec,
+            args=(_SPEC,),
+            output_path=field_set.output_path,
+            field_alias=PasswdUsersField.alias,
+            address=field_set.address,
+            what="/etc/passwd",
+        ),
+        **implicitly(),
+    )
 
 
 @rule(desc="Package OCI layer with /etc/group", level=LogLevel.DEBUG)
 async def package_group_layer(field_set: GroupLayerFieldSet) -> BuiltPackage:
-    relpath, layer = _layer(field_set.output_path, lambda out: build_group_layer(field_set.groups.value, out))
-    digest = await create_digest(layer)
-    return BuiltPackage(digest, (BuiltLayerArtifact(relpath=relpath),))
+    spec = await create_digest(_entries_spec(field_set.groups.value))
+    return await build_helper_layer(
+        HelperLayerRequest(
+            layer="group",
+            inputs=spec,
+            args=(_SPEC,),
+            output_path=field_set.output_path,
+            field_alias=GroupEntriesField.alias,
+            address=field_set.address,
+            what="/etc/group",
+        ),
+        **implicitly(),
+    )
 
 
 @dataclass(frozen=True)
@@ -124,45 +185,22 @@ class DebHelperLayerRequest:
 
 @rule(desc="Build OCI helper layer from debs", level=LogLevel.DEBUG)
 async def build_deb_helper_layer(
-    request: DebHelperLayerRequest,
-    python: PythonBuildStandaloneBinary,
-    zstd_tool: ZstdTool,
-    platform: Platform,
+    request: DebHelperLayerRequest, zstd_tool: ZstdTool, platform: Platform
 ) -> BuiltPackage:
     zstd = await download_external_tool(zstd_tool.get_request(platform))
-    builders = await create_digest(sandboxed_modules(*_BUILDER_MODULES))
-    input_digest = await merge_digests(MergeDigests([builders, request.debs, zstd.digest]))
-
-    relpath = request.output_path.value_or_default(file_ending="tar")
-    result = await execute_process(
-        Process(
-            argv=(
-                python.path,
-                "-c",
-                _BUILDER_MAIN,
-                request.layer,
-                "--output",
-                relpath,
-                "--zstd",
-                zstd.exe,
-                *request.args,
-                *request.deb_files,
-            ),
-            input_digest=input_digest,
-            output_files=(relpath,),
-            description=f"Build OCI layer with {request.what}: {request.address}",
-            level=LogLevel.DEBUG,
+    inputs = await merge_digests(MergeDigests([request.debs, zstd.digest]))
+    return await build_helper_layer(
+        HelperLayerRequest(
+            layer=request.layer,
+            inputs=inputs,
+            args=("--zstd", zstd.exe, *request.args, *request.deb_files),
+            output_path=request.output_path,
+            field_alias=request.field_alias,
+            address=request.address,
+            what=request.what,
         ),
         **implicitly(),
     )
-    if result.exit_code != 0:
-        error = result.stderr.decode(errors="replace").strip().removeprefix("error: ")
-        raise InvalidFieldException(
-            f"Could not build {request.what} from the `{request.field_alias}` field of "
-            f"{request.address}: {error}"
-        )
-
-    return BuiltPackage(result.output_digest, (BuiltLayerArtifact(relpath=relpath),))
 
 
 @rule(desc="Package OCI layer with a CA bundle", level=LogLevel.DEBUG)

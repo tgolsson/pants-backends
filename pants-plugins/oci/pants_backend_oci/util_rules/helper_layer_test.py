@@ -19,7 +19,11 @@ from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.targets import CaCertsLayer, GroupLayer, LocaleLayer, PasswdLayer
 from pants_backend_oci.util_rules import deb_layer, helper_layer, layer
 from pants_backend_oci.util_rules.deb_layer_builder_test import FOO
-from pants_backend_oci.util_rules.helper_layer_builder import CA_BUNDLE
+from pants_backend_oci.util_rules.helper_layer_builder import (
+    CA_BUNDLE,
+    build_passwd_layer,
+    parse_passwd_entries,
+)
 from pants_backend_oci.util_rules.helper_layer_builder_test import (
     CERT_B,
     LC_CTYPE,
@@ -116,6 +120,18 @@ def test_packages_group_layer(rule_runner: RuleRunner) -> None:
     built = package(rule_runner, "group")
     assert [a.relpath for a in built.artifacts] == ["img/group.tar"]
     assert read(rule_runner, built, "etc/group") == b"root:x:0:\nnonroot:x:65532:nonroot\n"
+
+
+def test_passwd_layer_matches_builder(rule_runner: RuleRunner) -> None:
+    users = [
+        {"name": "root", "uid": 0, "gid": 0, "home": "/root", "shell": "/bin/sh"},
+        {"name": "app", "uid": 10, "gid": 10, "gecos": "App", "create_home": False},
+    ]
+    write(rule_runner, f"oci_passwd_layer(name='passwd', users={users!r})\n")
+    (content,) = rule_runner.request(DigestContents, [package(rule_runner, "passwd").digest])
+    out = io.BytesIO()
+    build_passwd_layer(parse_passwd_entries(users), out)
+    assert content.content == out.getvalue()
 
 
 def test_cacerts_layer_picks_ca_certificates_from_closure(rule_runner: RuleRunner) -> None:

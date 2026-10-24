@@ -11,9 +11,9 @@ ownership, so the same input always gives the same bytes. Only the files and hom
 themselves are written, not their parents, so the base image's `/etc`, `/home` or `/tmp` keep their
 ownership and modes; a parent missing from the base is created when the image is unpacked.
 
-This module and `deb_layer_builder` only use the standard library. The passwd and group layers are
-built in the rules; the CA bundle and locale layers read debs, which may need a `zstd` binary, so
-their rules copy both modules into the sandbox and call `main`.
+This module and `deb_layer_builder` only use the standard library. The rules copy both modules into
+the sandbox and call `main` for every layer; the CA bundle and locale layers read debs, which may
+need a `zstd` binary.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import os
 import posixpath
 import re
@@ -440,20 +441,38 @@ def build_locale_layer(packages: Iterable[DebPackage], locales: Iterable[str], o
 
 
 def main(argv: list[str]) -> int:
-    """Build the CA bundle layer from the one `ca-certificates` package among `debs`, or the locale
-    layer from the locales among them."""
-    parser = argparse.ArgumentParser(description="Build an OCI helper layer from debs.")
-    parser.add_argument("layer", choices=("cacerts", "locales"))
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--zstd", help="A zstd binary, for zstd-compressed members.")
-    parser.add_argument("--locale", action="append", default=[], help="A locale to keep (repeatable).")
-    parser.add_argument("debs", nargs="+")
+    """Build the CA bundle layer from the one `ca-certificates` package among `debs`, the locale
+    layer from the locales among them, or the passwd or group layer from a JSON list of entries."""
+    parser = argparse.ArgumentParser(description="Build an OCI helper layer.")
+    output = argparse.ArgumentParser(add_help=False)
+    output.add_argument("--output", required=True)
+    debs = argparse.ArgumentParser(add_help=False, parents=[output])
+    debs.add_argument("--zstd", help="A zstd binary, for zstd-compressed members.")
+    debs.add_argument("debs", nargs="+")
+    layers = parser.add_subparsers(dest="layer", required=True)
+    layers.add_parser("cacerts", parents=[debs], help="The CA bundle from `ca-certificates`.")
+    locales_parser = layers.add_parser("locales", parents=[debs], help="Compiled locales.")
+    locales_parser.add_argument(
+        "--locale", action="append", default=[], help="A locale to keep (repeatable)."
+    )
+    for layer in ("passwd", "group"):
+        layers.add_parser(layer, parents=[output], help=f"/etc/{layer}.").add_argument("spec")
     args = parser.parse_args(argv)
-    if args.layer == "cacerts" and args.locale:
-        parser.error("--locale only applies to the locales layer")
 
-    os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     try:
+        os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+        if args.layer in ("passwd", "group"):
+            with open(args.spec, "rb") as f:
+                raw = json.load(f)
+            if args.layer == "passwd":
+                users = parse_passwd_entries(raw)
+                with open(args.output, "wb") as out:
+                    build_passwd_layer(users, out)
+            else:
+                groups = parse_group_entries(raw)
+                with open(args.output, "wb") as out:
+                    build_group_layer(groups, out)
+            return 0
         with contextlib.ExitStack() as stack:
             packages = [
                 load_deb(stack.enter_context(open(path, "rb")), source=path, zstd=args.zstd)
@@ -470,7 +489,8 @@ def main(argv: list[str]) -> int:
                 raise DebError(f"expected exactly one `{CA_CERTIFICATES}` package, found: {found}")
             with open(args.output, "wb") as out:
                 build_cacerts_layer(matching[0], out)
-    except (DebError, HelperLayerError) as e:
+    # `ValueError` covers `HelperLayerError` and malformed or non-UTF-8 JSON.
+    except (DebError, ValueError, OSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0

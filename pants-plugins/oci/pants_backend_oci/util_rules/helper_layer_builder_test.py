@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import tarfile
 from pathlib import Path
 
@@ -403,6 +404,37 @@ def test_main_requires_locales(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert "locales must not be empty" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         main(["cacerts", "--output", str(tmp_path / "cacerts.tar"), "--locale", "C.utf8", str(deb)])
+
+
+@pytest.mark.parametrize(
+    "layer_name, raw, parse, build",
+    [
+        ("passwd", USERS, parse_passwd_entries, build_passwd_layer),
+        ("group", GROUPS, parse_group_entries, build_group_layer),
+    ],
+)
+def test_main_builds_entries_layer(tmp_path: Path, layer_name: str, raw, parse, build) -> None:
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps(raw))
+    output = tmp_path / "out" / f"{layer_name}.tar"
+    assert main([layer_name, "--output", str(output), str(spec)]) == 0
+    assert output.read_bytes() == layer(build, parse(raw))
+
+
+def test_main_reports_invalid_entries(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps([{"name": "app", "uid": 1}]))
+    assert main(["passwd", "--output", str(tmp_path / "passwd.tar"), str(spec)]) == 1
+    assert capsys.readouterr().err.startswith("error: ")
+
+
+@pytest.mark.parametrize("spec", [b"not json", b"\xff", None])
+def test_main_reports_unreadable_spec(tmp_path: Path, capsys: pytest.CaptureFixture[str], spec) -> None:
+    path = tmp_path / "spec.json"
+    if spec is not None:
+        path.write_bytes(spec)
+    assert main(["group", "--output", str(tmp_path / "group.tar"), str(path)]) == 1
+    assert capsys.readouterr().err.startswith("error: ")
 
 
 @pytest.mark.parametrize(

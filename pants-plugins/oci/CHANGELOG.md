@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- `oci_passwd_layer` and `oci_group_layer` are built in a sandboxed process instead of in the
+  rule. Their layer digests are unchanged.
+
 - `commands=` on `oci_image_build` and `oci_build_layer` also takes a list of strings, run as
   that argv without `[oci].command_shell`, so scripted steps work on bases with no shell, such as
   distroless ones. A string still runs through the shell. `examples/oci/multistage` uses it and
