@@ -1,5 +1,4 @@
 from pants_backend_oci.util_rules import (
-    archive,
     assemble,
     binaries,
     build_image_artifact,
@@ -18,7 +17,6 @@ def rules():
     return [
         *deb_layer.rules(),
         *helper_layer.rules(),
-        *archive.rules(),
         *build_image_bundle.rules(),
         *image_bundle.rules(),
         *layer.rules(),

@@ -17,7 +17,7 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
 from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.targets import CaCertsLayer, GroupLayer, LocaleLayer, PasswdLayer
-from pants_backend_oci.util_rules import archive, deb_layer, helper_layer, layer
+from pants_backend_oci.util_rules import deb_layer, helper_layer, layer
 from pants_backend_oci.util_rules.deb_layer_builder_test import FOO
 from pants_backend_oci.util_rules.helper_layer_builder import CA_BUNDLE
 from pants_backend_oci.util_rules.helper_layer_builder_test import (
@@ -40,7 +40,6 @@ def rule_runner() -> RuleRunner:
     return RuleRunner(
         target_types=[PasswdLayer, GroupLayer, CaCertsLayer, LocaleLayer, FileTarget, GenericTarget],
         rules=[
-            *archive.rules(),
             *deb_layer.rules(),
             *helper_layer.rules(),
             *layer.rules(),

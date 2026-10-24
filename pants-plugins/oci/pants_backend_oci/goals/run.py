@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 
 from pants.core.goals.repl import ReplImplementation, ReplRequest
@@ -18,12 +17,9 @@ from pants.engine.target import Target, WrappedTargetRequest
 from pants.engine.unions import UnionRule
 from pants.option.global_options import NamedCachesDirOption
 
+from pants_backend_oci.goals.package import OciArchiveRequest, package_oci_archive
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
 from pants_backend_oci.util_rules import podman_runner
-from pants_backend_oci.util_rules.archive import (
-    CreateDeterministicDirectoryTar,
-    tar_directory_process,
-)
 from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     ImageBundleRequest,
@@ -69,14 +65,14 @@ async def prepare_run_image_bundle(
     if image.exit_code != 0 or image.dependency_failed or image.output is None:
         raise ValueError(f"Failed preparing OCI image {request.target.address}: {image.stderr}")
 
-    tar = await tar_directory_process(
-        CreateDeterministicDirectoryTar("build", "image.tar", gzip=False), **implicitly()
+    # Only the image's own blobs go to podman, in an OCI archive it reads directly.
+    archive_process = await package_oci_archive(
+        OciArchiveRequest(
+            image.output.digest, "image.tar", None, f"Archive {request.target.address} for podman"
+        ),
+        **implicitly(),
     )
-    tar_input = await merge_digests(
-        MergeDigests([image.output.digest] + ([tar.input_digest] if tar.input_digest else []))
-    )
-    tar_process: Process = dataclasses.replace(tar, input_digest=tar_input)
-    archive = await fallible_to_exec_result_or_raise(**implicitly({tar_process: Process}))
+    archive = await fallible_to_exec_result_or_raise(**implicitly({archive_process: Process}))
     launcher = await create_digest(sandboxed_modules(podman_runner))
     digest = await merge_digests(MergeDigests([archive.output_digest, launcher]))
     args = [

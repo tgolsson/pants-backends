@@ -17,7 +17,7 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
 from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.targets import DebLayer
-from pants_backend_oci.util_rules import archive, deb_layer, layer
+from pants_backend_oci.util_rules import deb_layer, layer
 from pants_backend_oci.util_rules.deb_layer_builder_test import BAR, FOO, FOO_DATA, _dir, make_deb
 
 
@@ -26,7 +26,6 @@ def rule_runner() -> RuleRunner:
     return RuleRunner(
         target_types=[DebLayer, FileTarget, GenericTarget, ResourceTarget],
         rules=[
-            *archive.rules(),
             *deb_layer.rules(),
             *layer.rules(),
             *package_goal.rules(),

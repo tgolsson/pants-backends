@@ -601,3 +601,90 @@ def test_main_exports_an_archive(
     with tarfile.open(tmp_path / "dist" / "image.tar") as tar:
         (entry,) = json.load(tar.extractfile("index.json"))["manifests"]
     assert entry["annotations"][b.REF_NAME] == "app:1"
+
+
+def files_tree(root: Path, mtime: int) -> dict[str, bool]:
+    long_name = f"deep/{'d' * 60}/{'f' * 60}.txt"
+    write(root / "app" / "run.sh", b"#!/bin/sh\n")
+    write(root / "app" / "data.txt", b"data")
+    write(root / long_name, b"long")
+    (root / "app" / "link").symlink_to("run.sh")
+    for path in root.rglob("*"):
+        os.utime(path, (mtime, mtime), follow_symlinks=False)
+    return {"app/run.sh": True, long_name: False, "app/link": False, "app/data.txt": False}
+
+
+def test_files_tar_takes_modes_from_the_executable_bit_and_zeroes_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    files = files_tree(tmp_path, 1_700_000_000)
+    # Like a large file hardlinked from the Pants store, whatever its executable bit.
+    (tmp_path / "app" / "data.txt").chmod(0o555)
+
+    b.write_files_tar(files, "layers/image_bundle.tar")
+
+    with tarfile.open(tmp_path / "layers" / "image_bundle.tar") as tar:
+        members = {m.name: m for m in tar.getmembers()}
+        assert list(members) == sorted(files)
+        assert {(m.mtime, m.uid, m.gid, m.uname, m.gname) for m in members.values()} == {(0, 0, 0, "", "")}
+        assert members["app/run.sh"].mode == 0o755
+        assert members["app/data.txt"].mode == 0o644
+        assert members["app/link"].issym() and members["app/link"].linkname == "run.sh"
+        assert tar.extractfile(f"deep/{'d' * 60}/{'f' * 60}.txt").read() == b"long"
+
+
+def test_files_tar_writes_hardlinked_paths_as_copies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    write(tmp_path / "a", b"same")
+    os.link(tmp_path / "a", tmp_path / "b")
+
+    b.write_files_tar({"a": False, "b": False}, "out.tar")
+
+    with tarfile.open(tmp_path / "out.tar") as tar:
+        assert all(m.isreg() for m in tar.getmembers())
+        assert tar.extractfile("b").read() == b"same"
+
+
+def test_files_tar_is_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    outputs = []
+    for run, mtime in enumerate((1_600_000_000, 1_700_000_000)):
+        root = tmp_path / str(run)
+        root.mkdir()
+        monkeypatch.chdir(root)
+        files = files_tree(root, mtime)
+        (root / "app" / "run.sh").chmod(0o700 if run else 0o555)
+        b.write_files_tar(files if run else dict(reversed(files.items())), "out.tar")
+        outputs.append((root / "out.tar").read_bytes())
+    assert outputs[0] == outputs[1]
+
+
+def test_files_tar_rejects_directories(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "dir").mkdir()
+    with pytest.raises(b.LayoutError, match="not a file or symlink"):
+        b.write_files_tar({"dir": False}, "out.tar")
+
+
+def test_main_writes_a_files_tar(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    files = files_tree(tmp_path, 0)
+    write(tmp_path / "list", "\n".join(f"{'x' if x else '-'}\t{name}" for name, x in files.items()).encode())
+
+    assert b.main(["tar", "layers/image_bundle.tar", "--files-from", "list"]) == 0
+    assert capsys.readouterr().out == ""
+    with tarfile.open(tmp_path / "layers" / "image_bundle.tar") as tar:
+        assert {m.name: m.mode == 0o755 for m in tar.getmembers() if m.isreg()} == {
+            name: x for name, x in files.items() if name != "app/link"
+        }
+
+
+def test_main_rejects_a_bad_files_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    write(tmp_path / "list", b"app/run.sh\n")
+    assert b.main(["tar", "out.tar", "--files-from", "list"]) == 1
+    assert "bad files list line" in capsys.readouterr().err

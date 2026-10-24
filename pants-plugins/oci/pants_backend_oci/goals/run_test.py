@@ -18,12 +18,12 @@ from pants_backend_oci.util_rules.run import PodmanBinary, find_podman
 def test_prepare_archives_image_before_launch(interactive, terminal):
     target = ImageBuild({"terminal": terminal}, Address("image"))
     image = FallibleImageBundle(ImageBundle(EMPTY_DIGEST, "sha256:abc", True))
-    tar_requests = []
+    archive_requests = []
     executions = []
 
-    def tar(request, **kwargs):
-        tar_requests.append(request)
-        return Process(("tar", "-cf", "image.tar"), description="archive", output_files=("image.tar",))
+    def archive(request, **kwargs):
+        archive_requests.append(request)
+        return Process(("python", "export", "image.tar"), description="archive", output_files=("image.tar",))
 
     def execute(process, **kwargs):
         executions.append(process)
@@ -46,15 +46,15 @@ def test_prepare_archives_image_before_launch(interactive, terminal):
                 request=object()
             ),
             "pants_backend_oci.util_rules.image_bundle.resolve_image_bundle": lambda *args, **kwargs: image,
-            "pants_backend_oci.util_rules.archive.tar_directory_process": tar,
+            "pants_backend_oci.goals.package.package_oci_archive": archive,
             "pants.engine.intrinsics.merge_digests": lambda *args: EMPTY_DIGEST,
             "pants.engine.intrinsics.create_digest": lambda *args: EMPTY_DIGEST,
             "pants.engine.process.fallible_to_exec_result_or_raise": execute,
         },
     )
     assert len(executions) == 1
-    assert tar_requests[0].directory == "build"
-    assert not tar_requests[0].gzip
+    assert archive_requests[0].input_digest == image.output.digest
+    assert archive_requests[0].output_filename == "image.tar"
     assert result.argv[-1] == "--"
     assert ("--interactive" in result.argv) == interactive
     assert ("--tty" in result.argv) == (interactive or terminal)

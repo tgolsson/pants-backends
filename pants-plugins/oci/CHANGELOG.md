@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Write the packaged-files layer (`layers/image_bundle.tar`) and the archive `pants run` hands to
+  podman with the plugin's Python instead of the host `tar`. GNU tar before 1.35 exits 1 with
+  "file changed as we read it" when Pants hardlinks the same large file into another sandbox
+  while it is read, which failed cold builds of large images intermittently. macOS no longer
+  needs `gtar` for this. Files in the layer are 0755 or 0644 by their executable bit; before,
+  files of 512KB or more came out 0555 from the Pants store. Hardlinked paths are stored as
+  copies. The packaged-files layer's digest changes once. `[oci].unsafe_tar_ignore_file_changed`
+  is deprecated and has no effect.
+
 - `deb_layer` with `merged_usr=True` (the default) writes the `/bin -> usr/bin` style links for
   the directories it moves under `/usr`, so it works on an empty base. Before, an image built
   only from deb layers had no `/lib64` and its dynamic loader couldn't be found.

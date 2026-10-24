@@ -7,11 +7,26 @@ from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackageArtifact, PackageFieldSet, build_package
 from pants.core.target_types import FileSourceField
+from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
-from pants.engine.fs import Digest, MergeDigests
+from pants.engine.fs import (
+    CreateDigest,
+    Digest,
+    FileContent,
+    FileEntry,
+    MergeDigests,
+    Snapshot,
+    SymlinkEntry,
+)
 from pants.engine.internals.graph import find_valid_field_sets, resolve_targets
-from pants.engine.intrinsics import digest_to_snapshot
+from pants.engine.intrinsics import (
+    create_digest,
+    digest_to_snapshot,
+    get_digest_entries,
+    merge_digests,
+)
+from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     Dependencies,
@@ -20,7 +35,9 @@ from pants.engine.target import (
     SourcesField,
     Target,
 )
+from pants.util.logging import LogLevel
 
+from pants_backend_oci.subsystem import OciSubsystem
 from pants_backend_oci.target_types import (
     CaCertsPackagesField,
     DebLayerPackagesField,
@@ -28,7 +45,8 @@ from pants_backend_oci.target_types import (
     LocalePackagesField,
     PasswdUsersField,
 )
-from pants_backend_oci.util_rules.archive import CreateDeterministicTar, create_archive
+from pants_backend_oci.util_rules import oci_layout_builder
+from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
 
 
 class BuiltLayerArtifact(BuiltPackageArtifact):
@@ -36,6 +54,8 @@ class BuiltLayerArtifact(BuiltPackageArtifact):
 
 
 logger = logging
+
+_FILE_LIST = "__pants_archive_filelist__"
 
 # Targets that package into a layer themselves, rather than having their dependencies put in one.
 SELF_LAYER_FIELDS = (
@@ -64,6 +84,55 @@ class ImageLayer:
     entrypoint: str | None = None
     # What made the layer, for its history; the target's address if unset.
     created_by: str | None = None
+
+
+@dataclass(frozen=True)
+class FilesTarRequest:
+    """A deterministic tar at `output_filename` of every file in `snapshot`."""
+
+    snapshot: Snapshot
+    output_filename: str
+
+
+@rule(desc="Creating a layer tar", level=LogLevel.DEBUG)
+async def create_files_tar(
+    request: FilesTarRequest, python: PythonBuildStandaloneBinary, oci: OciSubsystem
+) -> Digest:
+    if oci.unsafe_tar_ignore_file_changed:
+        logger.warning("`[oci].unsafe_tar_ignore_file_changed` is deprecated and has no effect.")
+    # The paths go in a file, as a long argument list can exceed the OS limit. Modes come from the
+    # executable bit, as a large file's sandbox mode is that of its hardlinked store copy.
+    entries = await get_digest_entries(request.snapshot.digest)
+    lines = [
+        f"{'x' if isinstance(entry, FileEntry) and entry.is_executable else '-'}\t{entry.path}"
+        for entry in entries
+        if isinstance(entry, (FileEntry, SymlinkEntry))
+    ]
+    file_list = FileContent(_FILE_LIST, "\n".join(lines).encode("utf-8"))
+    builder, file_list_digest = await concurrently(
+        create_digest(sandboxed_modules(oci_layout_builder)), create_digest(CreateDigest([file_list]))
+    )
+    input_digest = await merge_digests(MergeDigests([builder, file_list_digest, request.snapshot.digest]))
+    result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            Process(
+                argv=(
+                    python.path,
+                    "-c",
+                    module_main(oci_layout_builder),
+                    "tar",
+                    request.output_filename,
+                    "--files-from",
+                    _FILE_LIST,
+                ),
+                input_digest=input_digest,
+                output_files=(request.output_filename,),
+                description=f"Create {request.output_filename}",
+                level=LogLevel.DEBUG,
+            )
+        )
+    )
+    return result.output_digest
 
 
 @rule
@@ -137,10 +206,8 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     if all_digests:
         snapshot = await digest_to_snapshot(**implicitly(MergeDigests(all_digests)))
 
-        raw_layer_digest = await create_archive(
-            CreateDeterministicTar(snapshot, "layers/image_bundle.tar"), **implicitly()
-        )
         layer_name = "layers/image_bundle.tar"
+        raw_layer_digest = await create_files_tar(FilesTarRequest(snapshot, layer_name), **implicitly())
         real_layers.append(
             (
                 raw_layer_digest,

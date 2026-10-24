@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 """Writes OCI image layouts: creating an empty image, adding layers, editing the config,
-normalising pulled layouts and exporting an image as an OCI archive.
+normalising pulled layouts, exporting an image as an OCI archive and writing files as a layer tar.
 
 This module runs inside a sandboxed process, with the rules only deciding what to do, so it uses
 only the standard library and never imports Pants.
@@ -270,6 +270,48 @@ def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
         for file_name, data in sorted(files.items()):
             tar.addfile(_archive_info(file_name, len(data)), io.BytesIO(data))
     return desc["digest"]
+
+
+def write_files_tar(files: Mapping[str, bool], out: str) -> None:
+    """Write `files`, paths relative to the current directory mapped to whether they're executable,
+    as a layer tar at `out`.
+
+    Entries are sorted, owned by 0:0 with empty names and zeroed times, and files are 0755 or 0644
+    by the executable bit Pants records, never their sandbox mode: Pants hardlinks large files from
+    its store, where every file is 0555. Symlinks are stored as links, and hardlinked paths as full
+    copies. Only the files get entries; their parent directories are implied, as with
+    `tar --files-from`. GNU tar isn't used because before 1.35 it exits 1 when a file's ctime
+    changes mid-read, which happens whenever Pants hardlinks the same store file into another
+    sandbox.
+    """
+    if os.path.dirname(out):
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+    with tarfile.TarFile(out, "w", format=tarfile.GNU_FORMAT, copybufsize=1 << 20) as tar:
+        for name, executable in sorted(files.items()):
+            info = tarfile.TarInfo(name)
+            if os.path.islink(name):
+                info.type, info.linkname, info.mode = tarfile.SYMTYPE, os.readlink(name), 0o777
+                tar.addfile(info)
+            elif os.path.isfile(name):
+                info.mode = 0o755 if executable else 0o644
+                with open(name, "rb") as f:
+                    info.size = os.fstat(f.fileno()).st_size
+                    tar.addfile(info, f)
+            else:
+                raise LayoutError(f"{name} is not a file or symlink")
+
+
+def read_files_list(path: str) -> dict[str, bool]:
+    """Read a `tar --files-from` list of `x<TAB>path` (executable) and `-<TAB>path` lines."""
+    files = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f.read().splitlines():
+            if line:
+                flag, sep, name = line.partition("\t")
+                if not sep or flag not in ("x", "-"):
+                    raise LayoutError(f"bad files list line: {line!r}")
+                files[name] = flag == "x"
+    return files
 
 
 # -- images ------------------------------------------------------------------------------------
@@ -601,6 +643,9 @@ def main(argv: list[str]) -> int:
     export_parser = commands.add_parser("export", help="Write the image as a named OCI archive.")
     export_parser.add_argument("archive")
     export_parser.add_argument("--name")
+    tar_parser = commands.add_parser("tar", help="Write the listed files as a layer tar.")
+    tar_parser.add_argument("out")
+    tar_parser.add_argument("--files-from", required=True, help="`x<TAB>path` or `-<TAB>path` lines.")
     commands.add_parser("set-cmd", help="Replace the image's cmd with the args after `--`, if any.")
     args = parser.parse_args(argv)
 
@@ -614,6 +659,9 @@ def main(argv: list[str]) -> int:
             digest = normalize(args.layout, args.tag)
         elif args.command == "export":
             digest = write_archive(args.layout, args.tag, args.archive, args.name)
+        elif args.command == "tar":
+            write_files_tar(read_files_list(args.files_from), args.out)
+            return 0
         elif args.command == "set-cmd":
             ops = [{"op": "config", "cmd": cmd}] if cmd else []
             digest = apply(args.layout, args.tag, ops)

@@ -27,12 +27,9 @@ class OciSubsystem(Subsystem):
         default=False,
         advanced=True,
         help=softwrap("""
-        Adds `--warning=no-file-changed` to tar calls.
-
-        When working with large files, Pants will use symlinks instead of copying files into the
-        sandboxes. Unfortunately, creating a symlink *modifies the target file*, which means
-        that tar can detect that the file was linked into another sandbox and fail with  a "file changed"
-        warning."""),
+        Deprecated, and has no effect: layers are written by the plugin's Python instead of `tar`,
+        so a file Pants hardlinks into another sandbox mid-read no longer fails the build. This
+        option will be removed in a future release."""),
     )
 
 
