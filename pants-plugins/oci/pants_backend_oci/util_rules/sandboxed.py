@@ -31,6 +31,7 @@ from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.util.logging import LogLevel
 
+from pants_backend_oci.subsystem import OciSubsystem
 from pants_backend_oci.util_rules import (
     builder_main,
     deb_layer_builder,
@@ -54,11 +55,6 @@ _SOURCES = "__oci_builder_src"
 _OUTPUT = "__oci_builder"
 _EXE = f"{_OUTPUT}/oci-builder"
 _CACHE = "oci_builder"
-
-# The scie's Python, independent of the Python running Pants, so a Pants upgrade doesn't change
-# what the builders write (layer compression depends on its zlib).
-_PBS_RELEASE = "20241008"
-_PYTHON_VERSION = "3.11.10"
 
 
 def sandboxed_modules(*modules: ModuleType) -> CreateDigest:
@@ -122,7 +118,7 @@ class OciBuilder:
 
 @rule(desc="Build oci-builder", level=LogLevel.DEBUG)
 async def build_oci_builder(
-    system_binaries: SystemBinariesSubsystem.EnvironmentAware, platform: Platform
+    oci: OciSubsystem, system_binaries: SystemBinariesSubsystem.EnvironmentAware, platform: Platform
 ) -> OciBuilder:
     sources = await create_digest(sandboxed_modules(*_MODULES))
     sources = await add_prefix(AddPrefix(sources, _SOURCES))
@@ -143,8 +139,10 @@ async def build_oci_builder(
                     "--venv",
                     "--scie=eager",
                     "--scie-only",
-                    f"--scie-pbs-release={_PBS_RELEASE}",
-                    f"--scie-python-version={_PYTHON_VERSION}",
+                    # Its own Python, independent of the one running Pants, so a Pants upgrade
+                    # doesn't change what the builders write (layer compression uses its zlib).
+                    f"--scie-pbs-release={oci.builder_pbs_release}",
+                    f"--scie-python-version={oci.builder_python_version}",
                 ),
                 additional_input_digest=sources,
                 # Building the scie runs `ldd` to find the host's libc.

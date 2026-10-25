@@ -8,14 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - The sandboxed builders run as one `oci-builder` executable, a scie built in the rules with pex
-  from the plugin's builder scripts and a pinned python-build-standalone Python (3.11.10), instead
+  from the plugin's builder scripts and a pinned python-build-standalone Python (3.11.17), instead
   of as scripts run by Pants' own Python at its absolute path under the user's home. Builder
   processes now name nothing on the host, so their cache keys are the same on every machine and
   builds share remote-cache hits; only building `oci-builder` itself, once per machine, does not.
   Building it downloads that Python and pex's `science` tool from GitHub the first time. It unpacks
   once per machine into the new `oci_builder` named cache, so builders need no home directory. Layer
   compression no longer depends on the Python Pants runs on. The plugin registers Pants' pex
-  rules for this. Image digests are unchanged.
+  rules for this. Image digests are unchanged. `[oci].builder_python_version` and
+  `[oci].builder_pbs_release` select that Python.
 
 - New `deb-layer-overwrites` linter: `pants lint` fails when an `oci_deb_layer` in an
   `oci_image_build` replaces a regular file from a lower layer, such as the base image, with

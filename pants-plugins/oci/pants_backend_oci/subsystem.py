@@ -26,6 +26,24 @@ class OciSubsystem(Subsystem):
         help="The name of the synthetic target for an empty base image.",
     )
 
+    builder_pbs_release = StrOption(
+        default="20261009",
+        advanced=True,
+        help=softwrap("""
+        The python-build-standalone release `oci-builder` takes its Python from, such as
+        `20261009`. Layer compression depends on that Python's zlib, so changing it may change
+        layer digests."""),
+    )
+
+    builder_python_version = StrOption(
+        default="3.11.17",
+        advanced=True,
+        help=softwrap("""
+        The Python version, `<major>.<minor>.<patch>`, `oci-builder` runs on. It must be in
+        `[oci].builder_pbs_release`. Layer compression depends on its zlib, so changing it may
+        change layer digests."""),
+    )
+
     unsafe_tar_ignore_file_changed = BoolOption(
         default=False,
         advanced=True,

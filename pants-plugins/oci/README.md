@@ -87,6 +87,14 @@ dependency.
 Use `[crane].version` or `[zstd].version` to select another recorded
 version.
 
+`oci-builder` runs on CPython `3.11.17` from python-build-standalone release `20261009`; set
+`[oci].builder_python_version` and `[oci].builder_pbs_release` to use another. Layer compression
+depends on that Python's zlib, so a different one may change layer digests (older ones may also be
+slower: 3.11.10 from `20241008` gzips at about half the speed). Unlike crane and zstd, which
+Pants checks against the hashes recorded in `known_versions`, the Python and pex's `science` tool
+are checked only against the checksum files published in the same GitHub releases, through pex;
+no hash in this repository or in `pants.toml` pins them.
+
 Registry credentials are read the way crane reads them, from the first of these that
 exists: `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) with its credential
 helpers, then `$REGISTRY_AUTH_FILE`, then podman's `containers/auth.json` under
