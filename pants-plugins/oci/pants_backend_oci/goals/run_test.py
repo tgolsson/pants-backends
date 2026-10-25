@@ -57,7 +57,7 @@ def test_prepare_archives_image_before_launch(interactive, terminal):
     assert result.argv[-1] == "--"
     assert ("--interactive" in result.argv) == interactive
     assert ("--tty" in result.argv) == (interactive or terminal)
-    assert "/caches/oci_podman/v1" in result.argv
+    assert "/caches/oci_podman/v2" in result.argv
     assert result.argv[:2] == ("{chroot}/" + OciBuilder.exe, "podman_runner")
 
 
@@ -70,14 +70,14 @@ def test_missing_podman_error():
     with pytest.raises(Exception, match="Install podman: https://podman.io/docs/installation"):
         run_rule_with_mocks(
             find_podman,
-            rule_args=[SimpleNamespace(system_binary_paths=("/empty",)), Platform.linux_x86_64],
+            rule_args=[SimpleNamespace(system_binary_paths=("/empty",)), Platform.linux_x86_64, None],
             mock_calls={"pants.core.util_rules.system_binaries.find_binary": missing},
         )
 
 
 def test_macos_rejected():
     with pytest.raises(ValueError, match="podman machine is not supported"):
-        run_rule_with_mocks(find_podman, rule_args=[SimpleNamespace(), Platform.macos_arm64])
+        run_rule_with_mocks(find_podman, rule_args=[SimpleNamespace(), Platform.macos_arm64, None])
 
 
 @pytest.mark.parametrize("exit_code,dependency_failed", [(1, False), (0, True)])

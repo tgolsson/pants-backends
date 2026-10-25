@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import pwd
 import re
 import sys
 import tarfile
@@ -211,6 +212,8 @@ from pants_backend_oci.util_rules import oci_layout_builder as b
 args = sys.argv[1:]
 with open({log!r}, "a") as f:
     f.write(json.dumps(args) + "\\n")
+with open({log!r} + ".home", "a") as f:
+    f.write(os.environ["HOME"] + "\\n")
 if "build" in args:
     for arg in args:
         if arg.startswith("--iidfile="):
@@ -233,9 +236,10 @@ if "save" in args:
 def sandbox(tmp_path, monkeypatch):
     if sys.platform != "linux" or os.geteuid() == 0:
         pytest.skip("requires an unprivileged Linux user")
-    monkeypatch.delenv("CONTAINER_HOST", raising=False)
-    monkeypatch.delenv("CONTAINER_CONNECTION", raising=False)
     monkeypatch.delenv("FAKE_BUILD_STATUS", raising=False)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "xdg"))
+    # As in a builder process, which runs without a HOME.
+    monkeypatch.delenv("HOME", raising=False)
     work = tmp_path / "sandbox"
     work.mkdir()
     monkeypatch.chdir(work)
@@ -262,6 +266,13 @@ def test_files_writes_outputs_and_removes_the_image(sandbox):
     containerfile = (work / "podman-context" / "Containerfile").read_text()
     digest = b.image_digest(str(work / "build"), "build").removeprefix("sha256:")
     assert containerfile.startswith(f"FROM oci-archive:{work / 'image.tar'}:pants-{digest} AS build\n")
+
+
+def test_podman_gets_the_users_home(sandbox, tmp_path):
+    _, common, _ = sandbox
+    assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
+    homes = set((tmp_path / "podman.log.home").read_text().splitlines())
+    assert homes == {pwd.getpwuid(os.getuid()).pw_dir}
 
 
 def test_missing_output_fails(sandbox, capsys):

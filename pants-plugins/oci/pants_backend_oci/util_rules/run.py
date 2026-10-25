@@ -9,6 +9,8 @@ import json
 import shlex
 from dataclasses import dataclass
 
+from pants.core.environments.target_types import EnvironmentTarget
+from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.core.util_rules.system_binaries import (
     BinaryPath,
     BinaryPathRequest,
@@ -16,6 +18,7 @@ from pants.core.util_rules.system_binaries import (
     find_binary,
 )
 from pants.engine.addresses import Address
+from pants.engine.env_vars import EnvironmentVarsRequest
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
@@ -31,7 +34,7 @@ _LINUX_ONLY = "OCI containers require local Linux podman; podman machine is not 
 
 # Shared with `pants run`, which reaches the same named cache by its absolute path.
 PODMAN_CACHE = "oci_podman"
-PODMAN_STORE_VERSION = "v1"
+PODMAN_STORE_VERSION = "v2"
 
 _SCRIPTED_LAYER = "scripted-layer.tar"
 
@@ -44,17 +47,32 @@ class PodmanBinary(BinaryPath):
 async def find_podman(
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
     platform: Platform,
+    env_target: EnvironmentTarget,
 ) -> PodmanBinary:
     if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
         raise ValueError(_LINUX_ONLY)
-    # Do not execute podman during discovery: even --version can initialize its host runtime.
     request = BinaryPathRequest(binary_name="podman", search_path=system_binaries.system_binary_paths)
     paths = await find_binary(request, **implicitly())
     binary = paths.first_path_or_raise(
         request,
         rationale="run OCI images. Install podman: https://podman.io/docs/installation",
     )
-    return PodmanBinary(binary.path, binary.fingerprint)
+    # Do not execute podman during discovery: even --version can initialize its host runtime. Its
+    # hash is the fingerprint instead, so build steps rerun when podman is upgraded.
+    sha256sum_request = BinaryPathRequest(
+        binary_name="sha256sum", search_path=system_binaries.system_binary_paths
+    )
+    sha256sum = (await find_binary(sha256sum_request, **implicitly())).first_path_or_raise(
+        sha256sum_request, rationale="fingerprint podman"
+    )
+    process = Process(
+        (sha256sum.path, binary.path),
+        description=f"Fingerprint {binary.path}",
+        level=LogLevel.DEBUG,
+        cache_scope=env_target.executable_search_path_cache_scope(),
+    )
+    result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
+    return PodmanBinary(binary.path, result.stdout.split()[0].decode())
 
 
 @dataclass(frozen=True)
@@ -75,6 +93,9 @@ async def podman_build(
     builder: OciBuilder,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
 ) -> ProcessResult:
+    # The user's runtime directory, as `pants run` sees it: the store's runroot is derived from it,
+    # and must be the same for both.
+    runtime = await environment_vars_subset(EnvironmentVarsRequest(["XDG_RUNTIME_DIR"]), **implicitly())
     process = builder.process(
         podman_builder,
         "--podman",
@@ -84,8 +105,13 @@ async def podman_build(
         *request.args,
         input_digest=request.bundle.digest,
         append_only_caches={PODMAN_CACHE: f".{PODMAN_CACHE}"},
-        # Podman finds newuidmap, conmon and its OCI runtime on the PATH.
-        env={"PATH": ":".join(system_binaries.system_binary_paths)},
+        env={
+            # Podman finds newuidmap, conmon and its OCI runtime on the PATH.
+            "PATH": ":".join(system_binaries.system_binary_paths),
+            # Unread: it puts the podman binary in the cache key, so an upgrade reruns build steps.
+            "__OCI_PODMAN_FINGERPRINT": podman.fingerprint,
+            **runtime,
+        },
         output_files=request.output_files,
         output_directories=request.output_directories,
         description=request.description,

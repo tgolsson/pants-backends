@@ -22,6 +22,7 @@ import fnmatch
 import gzip
 import json
 import os
+import pwd
 import re
 import shutil
 import subprocess
@@ -213,10 +214,9 @@ def main(argv: list[str]) -> int:
     except podman_runner.PodmanUnavailable as e:
         print(e, file=sys.stderr)
         return 1
-    # Sandboxed processes get no HOME, which podman wants for its per-user configuration.
-    if "HOME" not in env:
-        env["HOME"] = str(runtime / "home")
-        os.makedirs(env["HOME"], mode=0o700, exist_ok=True)
+    # Builders run without a HOME. Podman reads its per-user configuration from the user's home, as
+    # it does for `pants run`; looking it up here keeps it out of the cache key.
+    env["HOME"] = pwd.getpwuid(os.getuid()).pw_dir
     storage = podman_runner.storage_args(cache, runtime)
 
     archive = os.path.abspath(_ARCHIVE)

@@ -30,14 +30,28 @@ Arguments after `--` replace its command arguments while keeping the entrypoint,
 `pants repl --shell=oci <image-target>` also attaches stdin. Repl runs the image's configured
 command, so select an image whose command provides the interaction you need.
 
-Podman uses a dedicated `oci_podman/v1` directory under Pants' named-cache directory, with
-private runtime and temporary directories under `/tmp` and the portable `vfs` storage driver.
-Runtime directories are named by user and a hash of the store path to keep podman socket paths short. Exited containers
-are removed; imported images and layers remain cached across runs. This store can grow and is
-separate from your default podman store. Its files belong to your subordinate user ids, so clear
-it with `podman unshare rm -rf <named-caches-dir>/oci_podman`.
-Remote connections (`CONTAINER_HOST` / `CONTAINER_CONNECTION`) are rejected. macOS support
-requires a separate load/run path through `podman machine` and is deferred.
+Podman uses a dedicated `oci_podman/v2` store under Pants' named-cache directory, with the
+portable `vfs` storage driver. Its runtime state lives in your runtime directory,
+`$XDG_RUNTIME_DIR` (or `/run/user/<uid>`), named by a hash of the store path to keep podman's
+paths short; podman ties a store to that location, so `pants run` and scripted build steps must
+see the same `XDG_RUNTIME_DIR`. Exited containers are removed; imported images and layers remain
+cached across runs. This store can grow and is separate from your default podman store. A run or
+build step that is interrupted (Ctrl-C, a timeout) can also leave its container and image behind.
+To clear all of it, imported bases included, run this while no Pants build is running; the files
+belong to your subordinate user ids, hence `podman unshare`:
+
+```shell
+podman unshare rm -rf <named-caches-dir>/oci_podman
+```
+
+The plugin's own flags select the store, runtime directory, `vfs` driver and `cgroupfs`
+cgroup manager, and override any podman configuration. Otherwise `pants run` and scripted
+build steps read the same podman configuration: the system files and your
+`~/.config/containers`. Scripted build steps don't see environment variables that select
+other configuration files, such as `CONTAINERS_CONF` or `XDG_CONFIG_HOME`. Configuration isn't
+part of a build step's cache key, so after changing it, rebuild with `--no-local-cache`.
+Podman always runs locally: `CONTAINER_HOST` and `CONTAINER_CONNECTION` are ignored. macOS
+support requires a separate load/run path through `podman machine` and is deferred.
 
 ## Scripted build steps
 

@@ -10,14 +10,13 @@ from pants_backend_oci.util_rules import podman_runner
 
 
 @pytest.fixture
-def local_user(monkeypatch):
+def local_user(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "xdg"))
     uid = os.getuid()
     if uid == 0:
         pytest.skip("requires an unprivileged user for runtime directory ownership")
     monkeypatch.setattr(os, "geteuid", lambda: uid)
-    monkeypatch.delenv("CONTAINER_HOST", raising=False)
-    monkeypatch.delenv("CONTAINER_CONNECTION", raising=False)
 
 
 def launch_args(tmp_path):
@@ -35,7 +34,6 @@ def launch_args(tmp_path):
 def test_launcher_preserves_args_and_isolates_storage(tmp_path, monkeypatch, local_user, interactive, tty):
     captured = []
     monkeypatch.setattr(os, "execve", lambda *args: captured.append(args))
-    monkeypatch.setenv("XDG_RUNTIME_DIR", "/unwritable-host-runtime")
     monkeypatch.setenv("PATH", "/host/bin:/usr/bin")
     flags = (["--interactive"] if interactive else []) + (["--tty"] if tty else [])
     command_args = ["-c", 'printf "%s\\n" "$1"', "shell", "a b", "$(touch bad)", "", "--tty"]
@@ -50,19 +48,38 @@ def test_launcher_preserves_args_and_isolates_storage(tmp_path, monkeypatch, loc
     assert "--rm" in options and "--quiet" in options
     cache = tmp_path / "cache"
     assert options[options.index("--root") + 1] == str(cache / "storage")
-    runtime = Path(env["XDG_RUNTIME_DIR"])
-    assert options[options.index("--runroot") + 1] == str(runtime / "runroot")
-    assert len(str(runtime / "runroot")) <= 50
+    runroot = Path(options[options.index("--runroot") + 1])
+    assert runroot.parent.parent == tmp_path / "xdg"
+    assert runroot.stat().st_mode & 0o777 == 0o700
+    assert env["XDG_RUNTIME_DIR"] == str(tmp_path / "xdg")
     assert env["PATH"] == "/host/bin:/usr/bin"
-    assert runtime.stat().st_mode & 0o777 == 0o700
 
 
-@pytest.mark.parametrize("remote", ["CONTAINER_HOST", "CONTAINER_CONNECTION"])
-def test_remote_rejected_before_storage_creation(tmp_path, monkeypatch, local_user, capsys, remote):
-    monkeypatch.setenv(remote, "remote")
+def test_runroot_is_the_same_for_every_run_on_a_store(tmp_path, local_user):
+    first = podman_runner.prepare_store(tmp_path / "cache")[1]
+    assert podman_runner.prepare_store(tmp_path / "cache")[1] == first
+    assert podman_runner.prepare_store(tmp_path / "other")[1] != first
+    # Podman rejects runroots over 50 characters, so the runroot adds a fixed 21 to the runtime
+    # directory, not the store's path.
+    assert len(str(first / "run")) == len(str(tmp_path / "xdg")) + 21
+
+
+def test_runtime_directory_is_required(tmp_path, monkeypatch, local_user, capsys):
+    monkeypatch.delenv("XDG_RUNTIME_DIR")
+    monkeypatch.setattr(os, "geteuid", lambda: 2**31)
     assert podman_runner.main(launch_args(tmp_path)) == 1
-    assert "local Linux podman" in capsys.readouterr().err
-    assert not (tmp_path / "cache").exists()
+    assert "set XDG_RUNTIME_DIR" in capsys.readouterr().err
+
+
+def test_remote_connection_is_ignored(tmp_path, monkeypatch, local_user):
+    captured = []
+    monkeypatch.setattr(os, "execve", lambda *args: captured.append(args))
+    monkeypatch.setenv("CONTAINER_HOST", "ssh://remote/run/podman.sock")
+    monkeypatch.setenv("CONTAINER_CONNECTION", "remote")
+    podman_runner.main(launch_args(tmp_path))
+    _, argv, env = captured[0]
+    assert "--remote=false" in argv
+    assert "CONTAINER_HOST" not in env and "CONTAINER_CONNECTION" not in env
 
 
 def test_root_rejected(tmp_path, monkeypatch, local_user, capsys):
@@ -86,11 +103,6 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
     fake = tmp_path / "podman"
     fake.write_text(f"#!{sys.executable}\nimport sys,json\nprint(json.dumps(sys.argv[1:]))\nsys.exit(23)\n")
     fake.chmod(0o755)
-    env = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in ("CONTAINER_HOST", "CONTAINER_CONNECTION")
-    }
     result = subprocess.run(
         [
             sys.executable,
@@ -106,7 +118,7 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
             "",
             "$HOME",
         ],
-        env=env,
+        env={**os.environ, "XDG_RUNTIME_DIR": str(tmp_path / "xdg")},
         capture_output=True,
         text=True,
     )

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Scripted build steps rerun when the podman binary changes, instead of reusing layers cached
+  with the old podman. They also read podman's configuration from your home directory, like
+  `pants run`, instead of from an empty private one. `pants run` no longer rejects
+  `CONTAINER_HOST` / `CONTAINER_CONNECTION`: both it and build steps ignore them and run podman
+  locally. Podman's runtime state moves from private directories under `/tmp` to your runtime
+  directory (`$XDG_RUNTIME_DIR`, else `/run/user/<uid>`), which build steps now see (it is part of their cache key); the store
+  moves to `oci_podman/v2` to go with it, so bases are imported again once. Remove the old
+  `oci_podman/v1` store and `/tmp/oci-podman-*` directories with
+  `podman unshare rm -rf <named-caches-dir>/oci_podman/v1 /tmp/oci-podman-$(id -u)-*`. The README
+  shows how to clear the store, including what an interrupted build leaves behind.
+
 - The sandboxed builders run as one `oci-builder` executable, a scie built in the rules with pex
   from the plugin's builder scripts and a pinned python-build-standalone Python (3.11.17), instead
   of as scripts run by Pants' own Python at its absolute path under the user's home. Builder
