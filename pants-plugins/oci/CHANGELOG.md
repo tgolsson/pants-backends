@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- New `deb-layer-overwrites` linter: `pants lint` fails when an `oci_deb_layer` in an
+  `oci_image_build` replaces a regular file from a lower layer, such as the base image, with
+  different content, naming the packages and versions involved. Identical files aren't reported.
+  Each layer is indexed once, in its own cached process. Linting builds or pulls the base of every
+  image with a deb layer.
+
 - `oci_passwd_layer` and `oci_group_layer` are built in a sandboxed process instead of in the
   rule. Their layer digests are unchanged.
 

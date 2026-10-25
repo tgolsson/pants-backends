@@ -295,6 +295,7 @@ Things to be aware of:
 * No maintainer scripts run, so nothing a `postinst` would do happens: no `ldconfig`, no `update-alternatives` links, no triggers, and no generated files such as `/etc/ssl/certs/ca-certificates.crt` (use `oci_cacerts_layer` for that one).
 * `dpkg` and `apt` inside the image read `/var/lib/dpkg/status`, not `status.d`, so they don't see these packages. A package that is also in the base image is reported twice by scanners.
 * `merged_usr` defaults to `True`, which is right for Debian 12 (bookworm) and later. Set it to `False` for older bases where `/bin` and `/lib` are real directories.
+* A package that is also in the base image replaces the base's files silently. If the two were built from different archive states, the image then mixes package versions. `pants lint` checks every `oci_image_build` for this (the `deb-layer-overwrites` linter): it fails when a deb layer replaces a regular file from a lower layer with different content, and names the packages and versions on both sides. Identical files aren't reported. Each layer, including each of the base image's, is indexed once in its own cached process, so a pinned base is only read the first time. dpkg's own records under `/var/lib/dpkg` aren't compared. The check builds (or pulls) the base of every image with a deb layer, so `pants lint` needs the same access as `pants package` for those. Skip it with `--deb-layer-overwrites-skip`.
 
 ``` python
 file(

@@ -57,10 +57,23 @@ class BuildImageBundleRequest(FallibleImageBundleRequest):
     field_set_type = BuildImageBundleFieldSet
 
 
-@rule(desc="Build OCI image", level=LogLevel.DEBUG)
-async def build_oci_bundle_package(request: BuildImageBundleRequest) -> FallibleImageBundle:
+@dataclass(frozen=True)
+class ImageLayersRequest:
+    """The base and layers of an `oci_image_build`, in the order they're stacked."""
+
+    field_set: BuildImageBundleFieldSet
+
+
+@dataclass(frozen=True)
+class ImageLayerRequests:
+    base: FallibleImageBundleRequest
+    layers: tuple[ImageLayerRequest, ...]
+
+
+@rule
+async def image_layer_requests(request: ImageLayersRequest) -> ImageLayerRequests:
     base = await resolve_unparsed_address_inputs(
-        request.target.base.to_unparsed_address_inputs(), **implicitly()
+        request.field_set.base.to_unparsed_address_inputs(), **implicitly()
     )
 
     wrapped_target = await resolve_target(
@@ -70,23 +83,32 @@ async def build_oci_bundle_package(request: BuildImageBundleRequest) -> Fallible
     build_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
 
     layer_requests = []
-    if request.target.layers:
-        layer_dependencies = await resolve_targets(**implicitly(DependenciesRequest(request.target.layers)))
+    if request.field_set.layers:
+        layer_dependencies = await resolve_targets(
+            **implicitly(DependenciesRequest(request.field_set.layers))
+        )
 
         for dependency in layer_dependencies:
-            layer_requests.append(build_image_layer(ImageLayerRequest(dependency, old_style=False)))
+            layer_requests.append(ImageLayerRequest(dependency, old_style=False))
 
-    if request.target.dependencies:
+    if request.field_set.dependencies:
         root_dependencies = await resolve_targets(
-            **implicitly(DependenciesRequest(request.target.dependencies))
+            **implicitly(DependenciesRequest(request.field_set.dependencies))
         )
 
         for dependency in root_dependencies:
-            layer_requests.append(build_image_layer(ImageLayerRequest(dependency)))
+            layer_requests.append(ImageLayerRequest(dependency))
+
+    return ImageLayerRequests(build_request.request, tuple(layer_requests))
+
+
+@rule(desc="Build OCI image", level=LogLevel.DEBUG)
+async def build_oci_bundle_package(request: BuildImageBundleRequest) -> FallibleImageBundle:
+    requests = await image_layer_requests(ImageLayersRequest(request.target), **implicitly())
 
     maybe_built_base, *layers = await concurrently(
-        resolve_image_bundle(**implicitly({build_request.request: FallibleImageBundleRequest})),
-        *layer_requests,
+        resolve_image_bundle(**implicitly({requests.base: FallibleImageBundleRequest})),
+        *(build_image_layer(layer_request) for layer_request in requests.layers),
     )
 
     if maybe_built_base.output is None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.option.option_types import BoolOption, StrListOption, StrOption
+from pants.option.option_types import BoolOption, SkipOption, StrListOption, StrOption
 from pants.option.subsystem import Subsystem
 from pants.util.strutil import softwrap
 
@@ -34,6 +34,19 @@ class OciSubsystem(Subsystem):
         so a file Pants hardlinks into another sandbox mid-read no longer fails the build. This
         option will be removed in a future release."""),
     )
+
+
+class DebLayerOverwrites(Subsystem):
+    options_scope = "deb-layer-overwrites"
+    name = "deb-layer-overwrites"
+    help = softwrap("""
+    A lint over `oci_image_build` targets that fails when an `oci_deb_layer` overwrites regular
+    files from the layers below it, such as its base image, with different content. That mixes
+    package versions, as when the base was built from a different archive state than the
+    snapshot the layer's packages come from. Identical files aren't reported.
+    """)
+
+    skip = SkipOption("lint")
 
 
 class CraneTool(ExternalTool):
@@ -108,4 +121,5 @@ def rules():
         *CraneTool.rules(),
         *ZstdTool.rules(),
         *OciSubsystem.rules(),
+        *DebLayerOverwrites.rules(),
     ]
