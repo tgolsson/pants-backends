@@ -14,7 +14,6 @@ import os
 from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.addresses import Address
 from pants.engine.fs import CreateDigest, Digest, DigestSubset, FileContent, MergeDigests, PathGlobs
@@ -25,7 +24,6 @@ from pants.engine.intrinsics import (
     merge_digests,
 )
 from pants.engine.platform import Platform
-from pants.engine.process import Process
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import InvalidFieldException
 from pants.engine.unions import UnionRule
@@ -39,7 +37,7 @@ from pants_backend_oci.target_types import (
     LocalesField,
     PasswdUsersField,
 )
-from pants_backend_oci.util_rules import deb_layer_builder, helper_layer_builder
+from pants_backend_oci.util_rules import helper_layer_builder
 from pants_backend_oci.util_rules.deb_layer import DebFilesRequest, resolve_deb_files
 from pants_backend_oci.util_rules.helper_layer_builder import (
     CA_CERTIFICATES,
@@ -47,11 +45,8 @@ from pants_backend_oci.util_rules.helper_layer_builder import (
     PasswdEntry,
 )
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
-# The builders are copied into the sandbox under their package path, so their imports still resolve.
-_BUILDER_MODULES = (deb_layer_builder, helper_layer_builder)
-_BUILDER_MAIN = module_main(helper_layer_builder)
 _SPEC = "__helper_layer_spec.json"
 
 
@@ -102,17 +97,16 @@ class HelperLayerRequest:
 
 
 @rule(desc="Build OCI helper layer", level=LogLevel.DEBUG)
-async def build_helper_layer(
-    request: HelperLayerRequest, python: PythonBuildStandaloneBinary
-) -> BuiltPackage:
-    builders = await create_digest(sandboxed_modules(*_BUILDER_MODULES))
-    input_digest = await merge_digests(MergeDigests([builders, request.inputs]))
-
+async def build_helper_layer(request: HelperLayerRequest, builder: OciBuilder) -> BuiltPackage:
     relpath = request.output_path.value_or_default(file_ending="tar")
     result = await execute_process(
-        Process(
-            argv=(python.path, "-c", _BUILDER_MAIN, request.layer, "--output", relpath, *request.args),
-            input_digest=input_digest,
+        builder.process(
+            helper_layer_builder,
+            request.layer,
+            "--output",
+            relpath,
+            *request.args,
+            input_digest=request.inputs,
             output_files=(relpath,),
             description=f"Build OCI layer with {request.what}: {request.address}",
             level=LogLevel.DEBUG,

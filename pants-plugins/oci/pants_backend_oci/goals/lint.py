@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from pants.core.goals.lint import LintResult, LintTargetsRequest
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.partitions import PartitionerType
 from pants.engine.fs import (
     AddPrefix,
@@ -29,13 +28,12 @@ from pants.engine.intrinsics import (
     execute_process,
     merge_digests,
 )
-from pants.engine.process import Process
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import DebLayerOverwrites
 from pants_backend_oci.target_types import DebLayerPackagesField
-from pants_backend_oci.util_rules import layer_index, oci_layout_builder
+from pants_backend_oci.util_rules import layer_index
 from pants_backend_oci.util_rules.build_image_bundle import (
     BuildImageBundleFieldSet,
     ImageLayersRequest,
@@ -46,7 +44,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.layer import build_image_layer
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 _INDEX = "__layer_index.json"
 _SPEC = "__overwrites_spec.json"
@@ -76,14 +74,16 @@ class LayerIndex:
 
 
 @rule(desc="Index OCI layer", level=LogLevel.DEBUG)
-async def index_layer(request: LayerIndexRequest, python: PythonBuildStandaloneBinary) -> LayerIndex:
+async def index_layer(request: LayerIndexRequest, builder: OciBuilder) -> LayerIndex:
     # Only the builder and the layer are inputs, so each layer is indexed once.
-    builder = await create_digest(sandboxed_modules(layer_index, oci_layout_builder))
-    input_digest = await merge_digests(MergeDigests([builder, request.inputs]))
     result = await execute_process(
-        Process(
-            argv=(python.path, "-c", module_main(layer_index), "index-layer", request.path, "--out", _INDEX),
-            input_digest=input_digest,
+        builder.process(
+            layer_index,
+            "index-layer",
+            request.path,
+            "--out",
+            _INDEX,
+            input_digest=request.inputs,
             output_files=(_INDEX,),
             description=request.description,
             level=LogLevel.DEBUG,
@@ -110,13 +110,13 @@ class BaseLayers:
 
 
 @rule(desc="List OCI image layers", level=LogLevel.DEBUG)
-async def base_layers(request: BaseLayersRequest, python: PythonBuildStandaloneBinary) -> BaseLayers:
-    builder = await create_digest(sandboxed_modules(layer_index, oci_layout_builder))
-    input_digest = await merge_digests(MergeDigests([builder, request.layout]))
+async def base_layers(request: BaseLayersRequest, builder: OciBuilder) -> BaseLayers:
     result = await execute_process(
-        Process(
-            argv=(python.path, "-c", module_main(layer_index), "layer-blobs", "build"),
-            input_digest=input_digest,
+        builder.process(
+            layer_index,
+            "layer-blobs",
+            "build",
+            input_digest=request.layout,
             description=f"List the layers of OCI image: {request.address}",
             level=LogLevel.DEBUG,
         ),
@@ -136,7 +136,7 @@ async def base_layers(request: BaseLayersRequest, python: PythonBuildStandaloneB
 @rule(desc="Check .deb layers for overwritten files", level=LogLevel.DEBUG)
 async def lint_deb_layer_overwrites(
     request: DebLayerOverwritesRequest.Batch[BuildImageBundleFieldSet, Any],
-    python: PythonBuildStandaloneBinary,
+    builder: OciBuilder,
 ) -> LintResult:
     (field_set,) = request.elements
     requests = await image_layer_requests(ImageLayersRequest(field_set), **implicitly())
@@ -151,9 +151,8 @@ async def lint_deb_layer_overwrites(
     checked = checked[: len(checked) - checked[::-1].index(True)]
 
     base_address = str(requests.base.target.address)
-    base, builder, *layers = await concurrently(
+    base, *layers = await concurrently(
         resolve_image_bundle(**implicitly({requests.base: FallibleImageBundleRequest})),
-        create_digest(sandboxed_modules(layer_index, oci_layout_builder)),
         *(build_image_layer(r) for r in requests.layers[: len(checked)]),
     )
     if base.output is None:
@@ -202,11 +201,13 @@ async def lint_deb_layer_overwrites(
         create_digest(CreateDigest([FileContent(_SPEC, json.dumps(spec).encode())])),
         *(add_prefix(AddPrefix(index.digest, f"indexes/{i}")) for i, index in enumerate(indexes)),
     )
-    input_digest = await merge_digests(MergeDigests([builder, spec_digest, *prefixed]))
+    input_digest = await merge_digests(MergeDigests([spec_digest, *prefixed]))
 
     result = await execute_process(
-        Process(
-            argv=(python.path, "-c", module_main(layer_index), "check", _SPEC),
+        builder.process(
+            layer_index,
+            "check",
+            _SPEC,
             input_digest=input_digest,
             description=f"Check .deb layers for overwritten files: {field_set.address}",
             level=LogLevel.DEBUG,

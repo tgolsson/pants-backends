@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackageArtifact, PackageFieldSet, build_package
 from pants.core.target_types import FileSourceField
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
 from pants.engine.fs import (
@@ -46,7 +45,7 @@ from pants_backend_oci.target_types import (
     PasswdUsersField,
 )
 from pants_backend_oci.util_rules import oci_layout_builder
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
 class BuiltLayerArtifact(BuiltPackageArtifact):
@@ -95,9 +94,7 @@ class FilesTarRequest:
 
 
 @rule(desc="Creating a layer tar", level=LogLevel.DEBUG)
-async def create_files_tar(
-    request: FilesTarRequest, python: PythonBuildStandaloneBinary, oci: OciSubsystem
-) -> Digest:
+async def create_files_tar(request: FilesTarRequest, builder: OciBuilder, oci: OciSubsystem) -> Digest:
     if oci.unsafe_tar_ignore_file_changed:
         logger.warning("`[oci].unsafe_tar_ignore_file_changed` is deprecated and has no effect.")
     # The paths go in a file, as a long argument list can exceed the OS limit. Modes come from the
@@ -109,29 +106,20 @@ async def create_files_tar(
         if isinstance(entry, (FileEntry, SymlinkEntry))
     ]
     file_list = FileContent(_FILE_LIST, "\n".join(lines).encode("utf-8"))
-    builder, file_list_digest = await concurrently(
-        create_digest(sandboxed_modules(oci_layout_builder)), create_digest(CreateDigest([file_list]))
+    file_list_digest = await create_digest(CreateDigest([file_list]))
+    input_digest = await merge_digests(MergeDigests([file_list_digest, request.snapshot.digest]))
+    process = builder.process(
+        oci_layout_builder,
+        "tar",
+        request.output_filename,
+        "--files-from",
+        _FILE_LIST,
+        input_digest=input_digest,
+        output_files=(request.output_filename,),
+        description=f"Create {request.output_filename}",
+        level=LogLevel.DEBUG,
     )
-    input_digest = await merge_digests(MergeDigests([builder, file_list_digest, request.snapshot.digest]))
-    result = await fallible_to_exec_result_or_raise(
-        **implicitly(
-            Process(
-                argv=(
-                    python.path,
-                    "-c",
-                    module_main(oci_layout_builder),
-                    "tar",
-                    request.output_filename,
-                    "--files-from",
-                    _FILE_LIST,
-                ),
-                input_digest=input_digest,
-                output_files=(request.output_filename,),
-                description=f"Create {request.output_filename}",
-                level=LogLevel.DEBUG,
-            )
-        )
-    )
+    result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
     return result.output_digest
 
 

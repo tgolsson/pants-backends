@@ -6,10 +6,7 @@ from dataclasses import dataclass
 
 from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
-from pants.engine.fs import MergeDigests
 from pants.engine.internals.graph import resolve_target
-from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
@@ -27,7 +24,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.run import PODMAN_CACHE, PODMAN_STORE_VERSION, PodmanBinary
-from pants_backend_oci.util_rules.sandboxed import sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
 @dataclass(frozen=True)
@@ -50,7 +47,7 @@ class RunImageBundleProcessRequest:
 async def prepare_run_image_bundle(
     request: RunImageBundleProcessRequest,
     podman: PodmanBinary,
-    python: PythonBuildStandaloneBinary,
+    builder: OciBuilder,
     caches: NamedCachesDirOption,
     platform: Platform,
 ) -> Process:
@@ -73,24 +70,29 @@ async def prepare_run_image_bundle(
         **implicitly(),
     )
     archive = await fallible_to_exec_result_or_raise(**implicitly({archive_process: Process}))
-    launcher = await create_digest(sandboxed_modules(podman_runner))
-    digest = await merge_digests(MergeDigests([archive.output_digest, launcher]))
-    args = [
-        python.path,
-        "{chroot}/pants_backend_oci/util_rules/podman_runner.py",
+    exe, *runner_args = builder.argv(
+        podman_runner,
         "--podman",
         podman.path,
         "--cache",
         str(caches.val / PODMAN_CACHE / PODMAN_STORE_VERSION),
         "--archive",
         "{chroot}/image.tar",
-    ]
+    )
+    # The run happens outside the sandbox, so the builder is addressed through `{chroot}`. It
+    # unpacks under the user's own `~/.cache`, as the run isn't cached.
+    args = [f"{{chroot}}/{exe}", *runner_args]
     if request.interactive:
         args.append("--interactive")
     if request.interactive or wrapped_target.target.get(ImageRunTty).value:
         args.append("--tty")
     args.append("--")
-    return Process(args, input_digest=digest, description=f"Running {request.target.address}")
+    return Process(
+        args,
+        input_digest=archive.output_digest,
+        immutable_input_digests=builder.immutable_input_digests,
+        description=f"Running {request.target.address}",
+    )
 
 
 @rule

@@ -10,6 +10,8 @@ import os
 import sys
 from pathlib import Path
 
+_LAUNCHER_ENV = frozenset({"PEX", "SCIE", "SCIE_ARGV0", "VIRTUAL_ENV"})
+
 
 class PodmanUnavailable(Exception):
     pass
@@ -37,7 +39,9 @@ def prepare_store(cache: Path) -> tuple[Path, Path, dict[str, str]]:
     runtime.chmod(0o700)
     for directory in (cache, runtime / "runroot", runtime / "tmp"):
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    env = {**os.environ, "XDG_RUNTIME_DIR": str(runtime), "TMPDIR": str(runtime / "tmp")}
+    # Drop what launching `oci-builder` set, which names host paths.
+    env = {k: v for k, v in os.environ.items() if k not in _LAUNCHER_ENV and not k.startswith("__PEX_")}
+    env.update(XDG_RUNTIME_DIR=str(runtime), TMPDIR=str(runtime / "tmp"))
     return cache, runtime, env
 
 

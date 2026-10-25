@@ -3,13 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.env_vars import EnvironmentVars as Environment
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
-from pants.engine.fs import MergeDigests
-from pants.engine.intrinsics import create_digest, execute_process, merge_digests
+from pants.engine.intrinsics import execute_process
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import collect_rules, implicitly, rule
@@ -31,7 +29,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     ImageBundle,
 )
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
 @dataclass(frozen=True)
@@ -63,7 +61,7 @@ async def pull_oci_image(
     request: ImageBundlePullRequest,
     crane_tool: CraneTool,
     platform: Platform,
-    python: PythonBuildStandaloneBinary,
+    builder: OciBuilder,
 ) -> FallibleImageBundle:
     crane = await download_external_tool(crane_tool.get_request(platform))
     image_ref = f"{request.target.repository.value}@sha256:{request.target.digest.value}"
@@ -99,11 +97,11 @@ async def pull_oci_image(
 
     # crane leaves the manifest unnamed and in its registry format; the rest of the backend
     # addresses an OCI manifest as `build:build`.
-    builder = await create_digest(sandboxed_modules(oci_layout_builder))
     normalized = await execute_process(
-        Process(
-            argv=(python.path, "-c", module_main(oci_layout_builder), "normalize"),
-            input_digest=await merge_digests(MergeDigests([result.output_digest, builder])),
+        builder.process(
+            oci_layout_builder,
+            "normalize",
+            input_digest=result.output_digest,
             description=f"Normalise OCI image {image_ref}",
             output_directories=("build",),
             level=LogLevel.DEBUG,

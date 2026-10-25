@@ -8,10 +8,8 @@ from pants.core.goals.package import (
     OutputPathField,
     PackageFieldSet,
 )
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
-from pants.engine.fs import Digest, MergeDigests
+from pants.engine.fs import Digest
 from pants.engine.internals.graph import resolve_target
-from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import InvalidTargetException, WrappedTargetRequest
@@ -26,7 +24,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     ibr_to_fibr,
     resolve_image_bundle,
 )
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
 @dataclass(frozen=True)
@@ -58,13 +56,14 @@ class OciArchiveRequest:
 
 
 @rule(desc="Convert OCI Image to Archive", level=LogLevel.DEBUG)
-async def package_oci_archive(request: OciArchiveRequest, python: PythonBuildStandaloneBinary) -> Process:
-    builder = await create_digest(sandboxed_modules(oci_layout_builder))
-    sandbox_input = await merge_digests(MergeDigests([builder, request.input_digest]))
+async def package_oci_archive(request: OciArchiveRequest, builder: OciBuilder) -> Process:
     name = ("--name", request.name) if request.name else ()
-    return Process(
-        input_digest=sandbox_input,
-        argv=(python.path, "-c", module_main(oci_layout_builder), "export", request.output_filename, *name),
+    return builder.process(
+        oci_layout_builder,
+        "export",
+        request.output_filename,
+        *name,
+        input_digest=request.input_digest,
         description=request.description,
         output_files=(request.output_filename,),
     )

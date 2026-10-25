@@ -17,7 +17,7 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
 from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.targets import DebLayer
-from pants_backend_oci.util_rules import deb_layer, layer
+from pants_backend_oci.util_rules import deb_layer, layer, sandboxed
 from pants_backend_oci.util_rules.deb_layer_builder_test import BAR, FOO, FOO_DATA, _dir, make_deb
 
 
@@ -30,6 +30,7 @@ def rule_runner() -> RuleRunner:
             *layer.rules(),
             *package_goal.rules(),
             *adhoc_binaries.rules(),
+            *sandboxed.rules(),
             *source_files.rules(),
             *external_tool.rules(),
             *pants_archive.rules(),

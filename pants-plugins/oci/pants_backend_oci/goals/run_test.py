@@ -12,6 +12,7 @@ from pants_backend_oci.goals.run import RunImageBundleProcessRequest, prepare_ru
 from pants_backend_oci.targets import ImageBuild
 from pants_backend_oci.util_rules.image_bundle import FallibleImageBundle, ImageBundle
 from pants_backend_oci.util_rules.run import PodmanBinary, find_podman
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
 @pytest.mark.parametrize("interactive,terminal", [(False, False), (False, True), (True, False)])
@@ -34,7 +35,7 @@ def test_prepare_archives_image_before_launch(interactive, terminal):
         rule_args=[
             RunImageBundleProcessRequest(target, interactive),
             PodmanBinary("/bin/podman", "abc"),
-            SimpleNamespace(path="/python"),
+            OciBuilder(EMPTY_DIGEST),
             SimpleNamespace(val=PurePath("/caches")),
             Platform.linux_x86_64,
         ],
@@ -47,8 +48,6 @@ def test_prepare_archives_image_before_launch(interactive, terminal):
             ),
             "pants_backend_oci.util_rules.image_bundle.resolve_image_bundle": lambda *args, **kwargs: image,
             "pants_backend_oci.goals.package.package_oci_archive": archive,
-            "pants.engine.intrinsics.merge_digests": lambda *args: EMPTY_DIGEST,
-            "pants.engine.intrinsics.create_digest": lambda *args: EMPTY_DIGEST,
             "pants.engine.process.fallible_to_exec_result_or_raise": execute,
         },
     )
@@ -59,6 +58,7 @@ def test_prepare_archives_image_before_launch(interactive, terminal):
     assert ("--interactive" in result.argv) == interactive
     assert ("--tty" in result.argv) == (interactive or terminal)
     assert "/caches/oci_podman/v1" in result.argv
+    assert result.argv[:2] == ("{chroot}/" + OciBuilder.exe, "podman_runner")
 
 
 def test_missing_podman_error():
@@ -89,7 +89,7 @@ def test_failed_image_does_not_start_archive(exit_code, dependency_failed):
             rule_args=[
                 RunImageBundleProcessRequest(target),
                 PodmanBinary("/podman", "abc"),
-                SimpleNamespace(path="/python"),
+                OciBuilder(EMPTY_DIGEST),
                 SimpleNamespace(val=PurePath("/caches")),
                 Platform.linux_x86_64,
             ],

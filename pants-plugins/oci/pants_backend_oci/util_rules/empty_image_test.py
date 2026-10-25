@@ -6,7 +6,7 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner
 
 from pants_backend_oci import synthetic_targets
 from pants_backend_oci.targets import ImageEmpty
-from pants_backend_oci.util_rules import assemble, empty_image_bundle, image_bundle
+from pants_backend_oci.util_rules import assemble, empty_image_bundle, image_bundle, sandboxed
 
 # The empty image is for the host's architecture.
 GOLDEN = {
@@ -23,6 +23,7 @@ def test_empty_image_has_fixed_sha() -> None:
             *external_tool.rules(),
             *assemble.rules(),
             *adhoc_binaries.rules(),
+            *sandboxed.rules(),
             *process.rules(),
             *synthetic_targets.rules(),
             QueryRule(

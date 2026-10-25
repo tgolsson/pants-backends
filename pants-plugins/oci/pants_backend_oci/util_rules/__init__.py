@@ -10,6 +10,7 @@ from pants_backend_oci.util_rules import (
     layer,
     pull_image_bundle,
     run,
+    sandboxed,
 )
 
 
@@ -26,4 +27,5 @@ def rules():
         *binaries.rules(),
         *build_image_artifact.rules(),
         *run.rules(),
+        *sandboxed.rules(),
     ]

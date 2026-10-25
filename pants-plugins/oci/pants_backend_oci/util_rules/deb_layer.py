@@ -7,13 +7,12 @@ from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackage, OutputPathField, PackageFieldSet
 from pants.core.target_types import FileSourceField
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
 from pants.engine.fs import MergeDigests, Snapshot
 from pants.engine.internals.graph import resolve_targets, transitive_targets
-from pants.engine.intrinsics import create_digest, merge_digests
+from pants.engine.intrinsics import merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
@@ -31,9 +30,7 @@ from pants_backend_oci.subsystem import ZstdTool
 from pants_backend_oci.target_types import DebLayerMergedUsrField, DebLayerPackagesField
 from pants_backend_oci.util_rules import deb_layer_builder
 from pants_backend_oci.util_rules.layer import BuiltLayerArtifact
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
-
-_BUILDER_MAIN = module_main(deb_layer_builder)
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
 @dataclass(frozen=True)
@@ -96,7 +93,7 @@ async def resolve_deb_files(request: DebFilesRequest) -> DebFiles:
 @rule(desc="Package OCI layer from .deb packages", level=LogLevel.DEBUG)
 async def package_deb_layer(
     field_set: DebLayerPackageFieldSet,
-    python: PythonBuildStandaloneBinary,
+    builder: OciBuilder,
     zstd_tool: ZstdTool,
     platform: Platform,
 ) -> BuiltPackage:
@@ -104,25 +101,23 @@ async def package_deb_layer(
     sources = debs.snapshot
     zstd = await download_external_tool(zstd_tool.get_request(platform))
 
-    script = await create_digest(sandboxed_modules(deb_layer_builder))
-    input_digest = await merge_digests(MergeDigests([script, sources.digest, zstd.digest]))
+    input_digest = await merge_digests(MergeDigests([sources.digest, zstd.digest]))
 
     relpath = field_set.output_path.value_or_default(file_ending="tar")
-    argv = [python.path, "-c", _BUILDER_MAIN, "--output", relpath, "--zstd", zstd.exe]
+    args = ["--output", relpath, "--zstd", zstd.exe]
     if not field_set.merged_usr.value:
-        argv.append("--no-merged-usr")
+        args.append("--no-merged-usr")
 
-    result = await fallible_to_exec_result_or_raise(
-        **implicitly(
-            Process(
-                argv=(*argv, *sources.files),
-                input_digest=input_digest,
-                output_files=(relpath,),
-                description=f"Build OCI layer from .deb packages: {field_set.address}",
-                level=LogLevel.DEBUG,
-            )
-        )
+    process = builder.process(
+        deb_layer_builder,
+        *args,
+        *sources.files,
+        input_digest=input_digest,
+        output_files=(relpath,),
+        description=f"Build OCI layer from .deb packages: {field_set.address}",
+        level=LogLevel.DEBUG,
     )
+    result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
 
     return BuiltPackage(result.output_digest, (BuiltLayerArtifact(relpath=relpath),))
 

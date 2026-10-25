@@ -9,7 +9,6 @@ import json
 import shlex
 from dataclasses import dataclass
 
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.system_binaries import (
     BinaryPath,
     BinaryPathRequest,
@@ -17,18 +16,16 @@ from pants.core.util_rules.system_binaries import (
     find_binary,
 )
 from pants.engine.addresses import Address
-from pants.engine.fs import MergeDigests
-from pants.engine.intrinsics import create_digest, merge_digests
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import OciSubsystem
-from pants_backend_oci.util_rules import oci_layout_builder, podman_builder, podman_runner
+from pants_backend_oci.util_rules import podman_builder
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.layer import ImageLayer
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 _LINUX_ONLY = "OCI containers require local Linux podman; podman machine is not supported yet."
 
@@ -75,23 +72,17 @@ class PodmanBuildRequest:
 async def podman_build(
     request: PodmanBuildRequest,
     podman: PodmanBinary,
-    python: PythonBuildStandaloneBinary,
+    builder: OciBuilder,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
 ) -> ProcessResult:
-    builder = await create_digest(sandboxed_modules(podman_builder, podman_runner, oci_layout_builder))
-    input_digest = await merge_digests(MergeDigests([request.bundle.digest, builder]))
-    process = Process(
-        argv=(
-            python.path,
-            "-c",
-            module_main(podman_builder),
-            "--podman",
-            podman.path,
-            "--cache",
-            f".{PODMAN_CACHE}/{PODMAN_STORE_VERSION}",
-            *request.args,
-        ),
-        input_digest=input_digest,
+    process = builder.process(
+        podman_builder,
+        "--podman",
+        podman.path,
+        "--cache",
+        f".{PODMAN_CACHE}/{PODMAN_STORE_VERSION}",
+        *request.args,
+        input_digest=request.bundle.digest,
         append_only_caches={PODMAN_CACHE: f".{PODMAN_CACHE}"},
         # Podman finds newuidmap, conmon and its OCI runtime on the PATH.
         env={"PATH": ":".join(system_binaries.system_binary_paths)},

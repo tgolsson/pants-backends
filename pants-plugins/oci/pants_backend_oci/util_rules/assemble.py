@@ -10,7 +10,6 @@ import json
 from dataclasses import dataclass
 from typing import Union
 
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.engine.addresses import Address
 from pants.engine.fs import AddPrefix, CreateDigest, Digest, FileContent, MergeDigests
 from pants.engine.intrinsics import add_prefix, create_digest, execute_process, merge_digests
@@ -27,7 +26,7 @@ from pants_backend_oci.util_rules.oci_layout_builder import (
     EPOCH,
     LAYER_DESCRIPTOR,
 )
-from pants_backend_oci.util_rules.sandboxed import module_main, sandboxed_modules
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 _SPEC = "__oci_layout_spec.json"
 _COMPRESSED = "compressed"
@@ -107,32 +106,21 @@ class CompressedLayer:
 
 
 @rule(desc="Compress OCI layer", level=LogLevel.DEBUG)
-async def compress_image_layer(
-    request: CompressLayerRequest, python: PythonBuildStandaloneBinary
-) -> CompressedLayer:
+async def compress_image_layer(request: CompressLayerRequest, builder: OciBuilder) -> CompressedLayer:
     # Only the layer and the builder are inputs, so an unchanged layer is compressed once and its
     # blob reused by every image that adds it.
-    builder = await create_digest(sandboxed_modules(oci_layout_builder))
-    input_digest = await merge_digests(MergeDigests([builder, request.layer.digest]))
-    result = await fallible_to_exec_result_or_raise(
-        **implicitly(
-            Process(
-                argv=(
-                    python.path,
-                    "-c",
-                    module_main(oci_layout_builder),
-                    "compress",
-                    request.layer.path,
-                    "--out",
-                    _COMPRESSED,
-                ),
-                input_digest=input_digest,
-                output_directories=(_COMPRESSED,),
-                description=f"Compress OCI layer: {request.layer.address}",
-                level=LogLevel.DEBUG,
-            )
-        )
+    process = builder.process(
+        oci_layout_builder,
+        "compress",
+        request.layer.path,
+        "--out",
+        _COMPRESSED,
+        input_digest=request.layer.digest,
+        output_directories=(_COMPRESSED,),
+        description=f"Compress OCI layer: {request.layer.address}",
+        level=LogLevel.DEBUG,
     )
+    result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
     return CompressedLayer(result.output_digest)
 
 
@@ -146,9 +134,7 @@ class AssembleImageRequest:
 
 
 @rule(desc="Assemble OCI image", level=LogLevel.DEBUG)
-async def assemble_image(
-    request: AssembleImageRequest, python: PythonBuildStandaloneBinary
-) -> FallibleImageBundle:
+async def assemble_image(request: AssembleImageRequest, builder: OciBuilder) -> FallibleImageBundle:
     layers = [op for op in request.ops if isinstance(op, ImageLayer)]
     compressed = await concurrently(
         compress_image_layer(CompressLayerRequest(layer), **implicitly()) for layer in layers
@@ -165,16 +151,17 @@ async def assemble_image(
         else:
             spec.append(op.to_json())
 
-    builder, spec_digest, *layer_digests = await concurrently(
-        create_digest(sandboxed_modules(oci_layout_builder)),
+    spec_digest, *layer_digests = await concurrently(
         create_digest(CreateDigest([FileContent(_SPEC, json.dumps(spec).encode())])),
         *prefixed,
     )
-    input_digest = await merge_digests(MergeDigests([request.base, builder, spec_digest, *layer_digests]))
+    input_digest = await merge_digests(MergeDigests([request.base, spec_digest, *layer_digests]))
 
     result = await execute_process(
-        Process(
-            argv=(python.path, "-c", module_main(oci_layout_builder), "apply", _SPEC),
+        builder.process(
+            oci_layout_builder,
+            "apply",
+            _SPEC,
             input_digest=input_digest,
             output_directories=("build",),
             description=request.description,

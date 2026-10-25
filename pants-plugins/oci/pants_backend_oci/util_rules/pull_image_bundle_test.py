@@ -13,6 +13,7 @@ from pants_backend_oci.util_rules.pull_image_bundle import (
     ImageBundlePullRequest,
     pull_oci_image,
 )
+from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 DIGEST = "42ff8b00a03517f39a968d2e2a6e82c6445586c95e484ff079cbf06f7590cfa7"
 
@@ -45,7 +46,7 @@ def test_pull_runs_crane(fields, platform, expected_platform, anonymous) -> None
             ImageBundlePullRequest(ImageBundlePullFieldSet.create(target)),
             SimpleNamespace(get_request=lambda _: None),
             platform,
-            SimpleNamespace(path="/python"),
+            OciBuilder(EMPTY_DIGEST),
         ],
         mock_calls={
             "pants.core.util_rules.external_tool.download_external_tool": lambda request: SimpleNamespace(
@@ -87,22 +88,19 @@ def run_pull(results: list, processes: list):
             ImageBundlePullRequest(ImageBundlePullFieldSet.create(target)),
             SimpleNamespace(get_request=lambda _: None),
             Platform.linux_x86_64,
-            SimpleNamespace(path="/python"),
+            OciBuilder(BUILDER),
         ],
         mock_calls={
             "pants.core.util_rules.external_tool.download_external_tool": lambda request: SimpleNamespace(
                 exe="./crane", digest=EMPTY_DIGEST
             ),
             "pants.engine.intrinsics.execute_process": execute,
-            "pants.engine.intrinsics.create_digest": lambda request: BUILDER,
-            "pants.engine.intrinsics.merge_digests": lambda request: MERGED,
         },
     )
 
 
 PULLED = Digest("1" * 64, 1)
 BUILDER = Digest("2" * 64, 2)
-MERGED = Digest("3" * 64, 3)
 NORMALIZED = Digest("4" * 64, 4)
 
 
@@ -122,9 +120,9 @@ def test_pull_normalizes_the_layout_in_a_sandbox() -> None:
     assert result.output.image_sha == f"sha256:{DIGEST}"
     assert not result.output.is_local
     _, normalize = processes
-    assert normalize.argv[0] == "/python"
-    assert normalize.argv[-1] == "normalize"
-    assert normalize.input_digest == MERGED
+    assert normalize.argv[:3] == (OciBuilder.exe, "oci_layout_builder", "normalize")
+    assert normalize.input_digest == PULLED
+    assert normalize.immutable_input_digests == {"__oci_builder": BUILDER}
     assert normalize.output_directories == ("build",)
 
 
