@@ -17,3 +17,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `deb_packages` needs either `keyrings` or `allow_unsigned=True`.
 - `generate-lockfiles` fails unless each suite's `Release` names it as its `Suite` or `Codename`, by
   apt's rule (where apt only warns).
+- The README covers moving from a Python base image: the `/usr/bin/python3.X` pex shebang and
+  pex's harmless `ldd` warning.

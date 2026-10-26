@@ -110,6 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   defaults to `linux`.
 - `oci_mirror_image` now copies the whole manifest list and keeps the source digest,
   instead of a single re-encoded platform image.
+- The README explains how rebuilding large images grows the Pants store, and suggests a lower
+  `local_store_files_max_size_bytes`.
 
 ## 0.10.0 - 2026-10-17
 

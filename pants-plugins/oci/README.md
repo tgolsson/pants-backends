@@ -53,6 +53,24 @@ part of a build step's cache key, so after changing it, rebuild with `--no-local
 Podman always runs locally: `CONTAINER_HOST` and `CONTAINER_CONNECTION` are ignored. macOS
 support requires a separate load/run path through `podman machine` and is deferred.
 
+## Pants store size
+
+Every layer and image the plugin builds is a file in the Pants store (`~/.cache/pants/lmdb_store`,
+or your `local_store_dir`), and every rebuild after a change adds new ones. With multi-GB images
+that adds up quickly: one repo went from 27 GB to 80 GB while benchmarking. Only `pantsd` trims
+the store: an hour after it starts and hourly after that, it shrinks the store to a tenth of the
+store limits combined, about 29 GB by default. With `--no-pantsd`, as is common in CI, it is never
+trimmed. Lowering the files limit lowers that target:
+
+``` toml
+[GLOBAL]
+local_store_files_max_size_bytes = 64_000_000_000
+```
+
+This trims the store to about 10 GB. Files over 512 KiB, such as layers, are kept outside the
+store's LMDB shards, so the limit doesn't cap the size of a single layer. To reclaim the space at
+once, delete the store directory while no Pants process is running.
+
 ## Scripted build steps
 
 `commands=` on `oci_image_build` and `oci_build_layer` runs a command inside the image. It is an
@@ -318,6 +336,7 @@ Things to be aware of:
 * No maintainer scripts run, so nothing a `postinst` would do happens: no `ldconfig`, no `update-alternatives` links, no triggers, and no generated files such as `/etc/ssl/certs/ca-certificates.crt` (use `oci_cacerts_layer` for that one).
 * `dpkg` and `apt` inside the image read `/var/lib/dpkg/status`, not `status.d`, so they don't see these packages. A package that is also in the base image is reported twice by scanners.
 * `merged_usr` defaults to `True`, which is right for Debian 12 (bookworm) and later. Set it to `False` for older bases where `/bin` and `/lib` are real directories.
+* Moving a Python app from a `python` base to one built from packages changes the interpreter's path; see "Moving from a Python base image" in the [`pants-backend-distroless`](https://pypi.org/project/pants-backend-distroless) README.
 * A package that is also in the base image replaces the base's files silently. If the two were built from different archive states, the image then mixes package versions. `pants lint` checks every `oci_image_build` for this (the `deb-layer-overwrites` linter): it fails when a deb layer replaces a regular file from a lower layer with different content, and names the packages and versions on both sides. Identical files aren't reported. Each layer, including each of the base image's, is indexed once in its own cached process, so a pinned base is only read the first time. dpkg's own records under `/var/lib/dpkg` aren't compared. The check builds (or pulls) the base of every image with a deb layer, so `pants lint` needs the same access as `pants package` for those. Skip it with `--deb-layer-overwrites-skip`.
 
 ``` python

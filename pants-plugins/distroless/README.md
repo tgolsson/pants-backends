@@ -163,3 +163,47 @@ can mix versions when the base image was built from a different archive state th
 List such packages in `exclude`: they count as installed, satisfy any dependency on them, and are not
 traversed, so whatever only they need is left out as well. Images built on an empty base leave
 `exclude` empty.
+
+## Moving from a Python base image
+
+A few things change when a Python app moves from a pulled base such as `python:3.11-slim` to one
+built from Debian or Ubuntu packages.
+
+**The interpreter is `/usr/bin/python3.X`.** The official Python images install it under
+`/usr/local/bin` and have `/usr/bin/env`. A package's interpreter is `/usr/bin/python3.X`, where
+`3.X` is the suite's Python: 3.11 in Debian bookworm, 3.13 in trixie, 3.12 in Ubuntu noble. Build
+the pex for that version, since its interpreter constraints and wheels must match. An image built
+from packages has no `env` unless it locks `coreutils`, and a pex's default shebang is
+`#!/usr/bin/env python3.X`, so the pex fails to start. Point the shebang at the interpreter, and
+make the pex the entrypoint with `oci_image_build`, whose first package is the entrypoint:
+
+``` python
+pex_binary(
+    name="app",
+    entry_point="app.py:main",
+    shebang="/usr/bin/python3.11",
+)
+
+oci_image_build(
+    name="image",
+    base=[...],
+    layers=[":python"],
+    packages=[":app"],
+)
+```
+
+`oci_python_image` doesn't use the shebang: it runs the pex as `python <pex>`, and no Debian or
+Ubuntu package but `python-is-python3` provides `/usr/bin/python`. Lock that package to keep using
+`oci_python_image`. `python3-minimal`, which `python3` pre-depends on, adds `/usr/bin/python3`.
+
+**pex warns that `ldd` is missing.** On startup a pex may print `Failed to detect if this
+interpreter is running under musl libc: [Errno 2] No such file or directory: 'ldd'`. pex runs `ldd`
+to tell musl from glibc and, when it can't, assumes glibc, which is right for Debian and Ubuntu.
+The warning is harmless. To hide it, set `emit_warnings=False` on the `pex_binary`, or
+`PEX_EMIT_WARNINGS=false` in the image's environment; either hides all of pex's warnings. Locking
+`libc-bin` doesn't help in an image without a shell, since Debian's `ldd` is a bash script.
+
+**The Pants store grows quickly.** Rebuilding multi-GB images adds new layers to the Pants store on
+every change. See
+[Pants store size](https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/oci#pants-store-size)
+in the OCI README for a setting that keeps it in check.
