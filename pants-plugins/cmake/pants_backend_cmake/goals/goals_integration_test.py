@@ -9,19 +9,25 @@ from pants.core.goals import package as core_package
 from pants.core.goals import test as core_test
 from pants.core.goals.package import BuiltPackage
 from pants.core.goals.test import TestResult
-from pants.core.target_types import FilesGeneratorTarget
+from pants.core.target_types import FilesGeneratorTarget, RelocatedFiles
 from pants.core.util_rules import env_vars, external_tool, source_files, system_binaries
 from pants.engine.addresses import Address, Addresses
-from pants.engine.fs import DigestContents
+from pants.engine.fs import CreateDigest, DigestContents, FileContent
+from pants.engine.internals.parametrize import Parametrize
 from pants.engine.internals.scheduler import ExecutionError
-from pants.engine.rules import QueryRule
-from pants.engine.target import Dependencies, DependenciesRequest
+from pants.engine.intrinsics import create_digest
+from pants.engine.rules import QueryRule, rule
+from pants.engine.target import Dependencies, DependenciesRequest, Tags, Target
+from pants.engine.unions import UnionRule
 from pants.testutil.rule_runner import RuleRunner
+from pants.util.frozendict import FrozenDict
 
 from pants_backend_cmake import register
 from pants_backend_cmake.goals.package import CMakeTargetFieldSet
 from pants_backend_cmake.goals.test import CMakeTestFieldSet, CMakeTestRequest
+from pants_backend_cmake.goals.wrapper import CMakeTestWrapper, CMakeTestWrapperRequest
 from pants_backend_cmake.target_types import CMakeTestSourcesField
+from pants_backend_cmake.util_rules import executable
 
 CMAKELISTS = """\
 cmake_minimum_required(VERSION 3.20)
@@ -108,10 +114,52 @@ FILES = {
 }
 
 
-@pytest.fixture
-def rule_runner() -> RuleRunner:
+class WrapTagged(CMakeTestWrapperRequest):
+    @classmethod
+    def is_applicable(cls, target: Target) -> bool:
+        return "wrapped" in (target[Tags].value or ())
+
+
+@rule
+async def wrap_tagged(request: WrapTagged) -> CMakeTestWrapper:
+    script = await create_digest(
+        CreateDigest(
+            [FileContent("run.sh", b'#!/bin/sh\necho "wrapped by $WRAPPER"\nexec "$@"\n', is_executable=True)]
+        )
+    )
+    return CMakeTestWrapper(
+        argv_prefix=("{chroot}/wrapper/run.sh",),
+        immutable_input_digests=FrozenDict({"wrapper": script}),
+        env=FrozenDict({"WRAPPER": "demo"}),
+    )
+
+
+class WrapTaggedToo(WrapTagged):
+    """A second wrapper for the same tests, which is an error."""
+
+
+@rule
+async def wrap_tagged_too(request: WrapTaggedToo) -> CMakeTestWrapper:
+    return CMakeTestWrapper()
+
+
+class WrapBroken(CMakeTestWrapperRequest):
+    @classmethod
+    def is_applicable(cls, target: Target) -> bool:
+        return "broken-wrapper" in (target[Tags].value or ())
+
+
+@rule
+async def wrap_broken(request: WrapBroken) -> CMakeTestWrapper:
+    raise ValueError("no emulator today")
+
+
+def _rule_runner(*extra_rules: object) -> RuleRunner:
     return RuleRunner(
         rules=[
+            wrap_tagged,
+            UnionRule(CMakeTestWrapperRequest, WrapTagged),
+            *extra_rules,
             *external_tool.rules(),
             *source_files.rules(),
             *system_binaries.rules(),
@@ -123,9 +171,16 @@ def rule_runner() -> RuleRunner:
             QueryRule(BuiltPackage, [CMakeTargetFieldSet]),
             QueryRule(TestResult, [CMakeTestRequest.Batch]),
             QueryRule(Addresses, [DependenciesRequest]),
+            QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
         ],
-        target_types=[*register.target_types(), FilesGeneratorTarget],
+        target_types=[*register.target_types(), FilesGeneratorTarget, RelocatedFiles],
+        objects={"parametrize": Parametrize},
     )
+
+
+@pytest.fixture
+def rule_runner() -> RuleRunner:
+    return _rule_runner()
 
 
 def _write_project(rule_runner: RuleRunner, **overrides: str) -> None:
@@ -226,3 +281,76 @@ def test_project_dependency_is_inferred(rule_runner: RuleRunner) -> None:
     target = rule_runner.get_target(Address("", target_name="demo"))
     addresses = rule_runner.request(Addresses, [DependenciesRequest(target[Dependencies])])
     assert Address("", target_name="proj") in addresses
+
+
+def test_wrapper(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner, BUILD=BUILD.replace('name="single",', 'name="single",\n    tags=["wrapped"],')
+    )
+    # The wrapper's script is mounted at `{chroot}/wrapper`, runs before the executable with
+    # the wrapper's env, and the test's own result comes through.
+    single = _test(rule_runner, Address("", target_name="single"))
+    assert single.exit_code == 0, single.stderr_bytes.decode()
+    assert "wrapped by demo" in single.stdout_bytes.decode()
+
+    # A test no wrapper applies to runs as is.
+    passing = _test(rule_runner, _generated("tests/pass"))
+    assert passing.exit_code == 0, passing.stderr_bytes.decode()
+    assert "wrapped" not in passing.stdout_bytes.decode()
+
+
+def test_wrapper_problems_are_failed_tests() -> None:
+    rule_runner = _rule_runner(
+        wrap_tagged_too,
+        UnionRule(CMakeTestWrapperRequest, WrapTaggedToo),
+        wrap_broken,
+        UnionRule(CMakeTestWrapperRequest, WrapBroken),
+    )
+    _write_project(
+        rule_runner,
+        BUILD=BUILD.replace('name="single",', 'name="single",\n    tags=["wrapped"],')
+        + 'cmake_test(name="broken", sources=["single.c", "extra/single.h"], dependencies=[":demo"],'
+        ' include_dirs=["extra"], defines=["SINGLE_SCALE=2"], tags=["broken-wrapper"])\n',
+    )
+    # Two wrappers apply to `single`; the wrapper of `broken` cannot be set up. Each is that
+    # test's failure, not the goal's.
+    two = _test(rule_runner, Address("", target_name="single"))
+    assert two.exit_code == 1
+    assert "more than one test wrapper applies: ['WrapTagged', 'WrapTaggedToo']" in two.stderr_bytes.decode()
+    broken = _test(rule_runner, Address("", target_name="broken"))
+    assert broken.exit_code == 1
+    assert "WrapBroken failed: no emulator today" in broken.stderr_bytes.decode()
+
+
+def test_generated_data_files(rule_runner: RuleRunner) -> None:
+    # A dependency that generates files (here `relocated_files`) is staged like a `files` one.
+    _write_project(
+        rule_runner,
+        BUILD=BUILD.replace('"dependencies": [":demo", ":data"]', '"dependencies": [":demo", ":moved"]')
+        + 'files(name="raw", sources=["raw/*.txt"])\n'
+        + 'relocated_files(name="moved", files_targets=[":raw"], src="raw", dest="data")\n',
+        **{"raw/input.txt": "moved\n"},
+    )
+    with_data = _test(rule_runner, _generated("tests/data"))
+    assert with_data.exit_code == 0, with_data.stderr_bytes.decode()
+    assert "hello moved" in with_data.stdout_bytes.decode()
+
+
+def test_parametrizations_share_the_build(rule_runner: RuleRunner) -> None:
+    # Parametrizations that differ only in how the test runs build the same executable at the
+    # same path, so every compile and link process is shared.
+    _write_project(
+        rule_runner,
+        BUILD=BUILD.replace(
+            'name="single",', 'name="single",\n    **parametrize("a"),\n    **parametrize("b", args=["x"]),'
+        ),
+    )
+    a, b = (
+        rule_runner.request(
+            executable.BuiltTest,
+            [executable.TestBuildRequest(Address("", target_name="single", parameters={"parametrize": p}))],
+        )
+        for p in ("a", "b")
+    )
+    assert a.executable == b.executable == "build/__pants_tests/.single/bin/single"
+    assert a.runtime == b.runtime

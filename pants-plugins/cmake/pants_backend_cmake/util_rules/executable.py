@@ -354,6 +354,7 @@ async def build_test(request: TestBuildRequest, platform: Platform) -> BuiltTest
             SourceFilesRequest(
                 [t.get(SourcesField) for t in dependencies if t.has_field(SourcesField)],
                 for_sources_types=(FileSourceField, ResourceSourceField),
+                enable_codegen=True,
             )
         ),
     )
@@ -383,7 +384,9 @@ async def build_test(request: TestBuildRequest, platform: Platform) -> BuiltTest
         for lang in languages
     }
     compilers = {C: project.toolchain.c_compiler.path, CXX: project.toolchain.cxx_compiler.path}
-    output_dir = f"{OUTPUT_DIR}/{address.path_safe_spec}"
+    # Without the address's parameters: a parametrization that does not change the build (one
+    # that only changes how the test runs, say) then shares every compile and link process.
+    output_dir = f"{OUTPUT_DIR}/{address.parametrize({}, replace=True).path_safe_spec}"
 
     compiled = await concurrently(
         compile_test_unit(

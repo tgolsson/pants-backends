@@ -44,6 +44,16 @@ compilers are resolved on the machine).
   translation units and every header matched. The other fields apply to all generated
   tests; `overrides={"c_abi": {"compiler_args": [...]}}` adjusts single ones.
 
+Another backend can run tests under a wrapper (an emulator, a tracer): it subclasses
+`CMakeTestWrapperRequest` (`goals/wrapper.py`), implements `is_applicable(target)` and a rule
+returning a `CMakeTestWrapper` (an argv prefix, digests mounted read-only into the sandbox,
+env), and registers it with a `UnionRule`. Typically it also adds a field to `cmake_test`
+with `register_plugin_field`, and to the `cmake_tests` generator with
+`register_plugin_field(..., as_moved_field=True)`, and reads it in `is_applicable`. At most
+one wrapper may apply to a test, and its env is set over the test's own. Test executables are
+built under their address without its parameters, so `parametrize` over such a field (one
+that does not change the build) runs one build several ways.
+
 ## Subsystems
 
 - `[cmake]`: the pinned CMake download (`version`, `known_versions`) and the host compilers

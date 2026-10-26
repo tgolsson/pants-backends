@@ -10,3 +10,10 @@
   only, but decides how a consumer of each is built: configure injects consumer probes, and
   the tests use their compile and link lines (PUBLIC/INTERFACE requirements, transitive link
   closure, CMake's link driver), so nothing PRIVATE leaks.
+- `CMakeTestWrapperRequest`: a union for running `cmake_test` executables under a wrapper; a
+  wrapper that cannot be set up is a failed test. Parametrizations of a test share its build
+  (the executable of a parametrized test moves from `<address@params>` to `<address>` under the
+  output directory). `files`-like dependencies of a test are generated when needed (codegen to
+  `files`/`resources`), so a generating target in `dependencies`, such as `relocated_files` or
+  `shell_command`, now runs for the test's build, and a generated translation unit is compiled
+  into it.

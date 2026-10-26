@@ -1,5 +1,5 @@
 from pants_backend_cmake import target_types as targets_module
-from pants_backend_cmake.goals import package, test
+from pants_backend_cmake.goals import package, test, wrapper
 from pants_backend_cmake.subsystems import cmake, ninja
 from pants_backend_cmake.util_rules import (
     configure,
@@ -29,4 +29,5 @@ def rules():
         *generate.rules(),
         *package.rules(),
         *test.rules(),
+        *wrapper.rules(),
     ]
