@@ -322,7 +322,8 @@ class ImageLayersField(Dependencies):
     alias = "layers"
 
     help = softwrap("""
-    The layers to include in the image.
+    The layers to include in the image, stacked in the order listed: a later layer's files replace
+    an earlier one's at the same path.
     """)
 
 

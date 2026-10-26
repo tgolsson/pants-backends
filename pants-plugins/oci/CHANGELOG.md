@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- `oci_image_build` stacks `layers=` in the order they are listed. They were stacked in address
+  order, so where two layers wrote the same path the wrong one could win. Images whose `layers`
+  are not listed in address order get new digests.
+
 - `pants run` and OCI repl work on macOS through `podman machine`, and on any platform through a
   named podman connection with the new `[oci].podman_connection` option. The image is loaded into
   the connection's store as `localhost/pants-oci-run:<digest>` and kept for later runs; a missing

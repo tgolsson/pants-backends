@@ -16,7 +16,7 @@ def foo_deb(content: bytes) -> bytes:
     return make_deb("foo", data, md5sums=b"abc  usr/bin/foo\n")
 
 
-def lint(lower: bytes, upper: bytes):
+def lint(lower: bytes, upper: bytes, layers: tuple[str, ...] = ("a_lower", "b_upper", "c_files")):
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/note.txt": "note",
@@ -32,9 +32,9 @@ def lint(lower: bytes, upper: bytes):
             # A layer above the deb layers isn't checked, or built.
             oci_layer(name="c_files", packages=[":note"])
 
-            oci_image_build(name="image", base=["//:empty"], layers=[":a_lower", ":b_upper", ":c_files"])
+            oci_image_build(name="image", base=["//:empty"], layers={layers})
             """
-        ),
+        ).format(layers=[f":{layer}" for layer in layers]),
     }
     with setup_tmpdir(build_inputs) as tmpdir:
         Path(tmpdir, "oci/lower.deb").write_bytes(lower)
@@ -62,3 +62,12 @@ def test_lint_passes_when_overwritten_files_are_identical() -> None:
     _, result = lint(foo_deb(b"same"), foo_deb(b"same"))
 
     result.assert_success()
+
+
+def test_lint_checks_layers_in_declared_order() -> None:
+    # Declared against address order, `a_lower` is stacked on top of `b_upper`.
+    tmpdir, result = lint(foo_deb(b"old"), foo_deb(b"new"), layers=("b_upper", "a_lower"))
+
+    result.assert_failure()
+    assert f"{tmpdir}/oci:a_lower overwrites 1 files from lower layers" in result.stderr
+    assert f"foo 1.0-1 (in {tmpdir}/oci:b_upper) replaced by foo 1.0-1:" in result.stderr

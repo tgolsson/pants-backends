@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 
+from pants.engine.addresses import Address, UnparsedAddressInputs
 from pants.engine.internals.graph import (
     resolve_target,
     resolve_targets,
@@ -84,11 +85,34 @@ async def image_layer_requests(request: ImageLayersRequest) -> ImageLayerRequest
 
     layer_requests = []
     if request.field_set.layers:
-        layer_dependencies = await resolve_targets(
-            **implicitly(DependenciesRequest(request.field_set.layers))
+        layers = request.field_set.layers
+        layer_dependencies, declared = await concurrently(
+            resolve_targets(**implicitly(DependenciesRequest(layers))),
+            resolve_unparsed_address_inputs(
+                UnparsedAddressInputs(
+                    (v for v in layers.value or () if not v.startswith("!")),
+                    owning_address=layers.address,
+                    description_of_origin=f"the `{layers.alias}` field of {layers.address}",
+                    # `DependenciesRequest` validates them, filling in parameters first.
+                    skip_invalid_addresses=True,
+                ),
+                **implicitly(),
+            ),
         )
 
-        for dependency in layer_dependencies:
+        # Dependencies come back sorted by address; stack them in the order they're declared,
+        # matching parameter-filled addresses by their unparametrized one. Anything still
+        # unmatched keeps its sorted place at the end.
+        position: dict[Address, int] = {}
+        for i, address in enumerate(declared):
+            position.setdefault(address, i)
+            position.setdefault(address.parametrize({}, replace=True), i)
+
+        def declared_position(target: Target) -> int:
+            address = target.address
+            return position.get(address, position.get(address.parametrize({}, replace=True), len(declared)))
+
+        for dependency in sorted(layer_dependencies, key=declared_position):
             layer_requests.append(ImageLayerRequest(dependency, old_style=False))
 
     if request.field_set.dependencies:
