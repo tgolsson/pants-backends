@@ -77,7 +77,8 @@ def test_image_name_is_the_digest_with_a_tag(tmp_path):
 def test_build_argv(dest):
     argv = docker_builder.build_argv("/usr/bin/docker", "ctx", "/tmp/iid", dest)
     assert argv[:2] == ["/usr/bin/docker", "build"]
-    assert "--iidfile=/tmp/iid" in argv
+    # BuildKit refuses an id file with a tar export.
+    assert ("--iidfile=/tmp/iid" in argv) == (dest is None)
     assert ("--output=type=tar,dest=/sandbox/export.tar" in argv) == (dest is not None)
     assert argv[-3:] == ["--file", "ctx/Containerfile", "ctx"]
 
@@ -168,10 +169,10 @@ def test_files_loads_the_base_by_name_and_writes_outputs(sandbox, capfd):
     with tarfile.open(work / "out.tar") as tar:
         assert tar.getnames() == [".", "./out", "./out/hi"]
     name = docker_builder.image_name(str(work / "build"), "build")
-    load, build, rmi = calls()
+    # Exporting files builds no image, so there is nothing to remove.
+    load, build = calls()
     assert load == ["load", "--quiet", "--input", str(work / "image.tar")]
-    assert build[0] == "build"
-    assert rmi == ["rmi", "--force", "sha256:built"]
+    assert build[0] == "build" and not any(arg.startswith("--iidfile") for arg in build)
     with tarfile.open(work / "image.tar") as tar:
         assert json.load(tar.extractfile("manifest.json"))[0]["RepoTags"] == [name]
     containerfile = (work / "docker-context" / "Containerfile").read_text()
@@ -198,9 +199,7 @@ def test_failed_load_fails_with_its_output(sandbox, monkeypatch, capfd):
 def test_failed_build_fails_and_still_removes_the_image(sandbox, monkeypatch):
     _, common, calls = sandbox
     monkeypatch.setenv("FAKE_BUILD_STATUS", "3")
-    status = docker_builder.main(
-        [*common, "--run", json.dumps(RUN), "--dest", "out.tar", "files", "--output", "out"]
-    )
+    status = docker_builder.main([*common, "--run", json.dumps(RUN), "--dest", "layer.tar", "layer"])
     assert status == 3
     assert calls()[-1] == ["rmi", "--force", "sha256:built"]
 

@@ -41,8 +41,12 @@ def image_name(layout: str, tag: str) -> str:
 
 
 def build_argv(docker: str, context: str, iidfile: str, dest: str | None) -> list[str]:
-    argv = [docker, "build", "--quiet", f"--iidfile={iidfile}"]
-    if dest is not None:
+    """Build into the daemon, writing the image's id to `iidfile`, or, with `dest`, only export the
+    image as a tar there: BuildKit writes no image and refuses an id file with a tar export."""
+    argv = [docker, "build", "--quiet"]
+    if dest is None:
+        argv.append(f"--iidfile={iidfile}")
+    else:
         # A tar keeps ownership and hardlinks, which a directory export loses.
         argv.append(f"--output=type=tar,dest={dest}")
     argv.extend(["--file", os.path.join(context, "Containerfile"), context])
