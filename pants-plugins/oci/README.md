@@ -79,8 +79,9 @@ on any version, as they also carry Docker's `manifest.json`.
 
 Each `pants run` and build step loads the image into the Docker daemon as
 `pants-<digest>:latest`. Built images are removed, but loaded ones stay in the daemon's store,
-where they can be shared by later runs and steps, and accumulate; remove them with
-`docker images --filter=reference='pants-*' -q | xargs docker rmi`. Ownership inside the
+where they can be shared by later runs and steps, and accumulate. A build step that is killed
+can also leave its `pants-step-*` image behind. Remove them all, while no Pants build is running,
+with `docker images --filter=reference='pants-*' -q | xargs docker rmi`. Ownership inside the
 container is whatever your daemon gives it: a rootful daemon keeps the image's owners as they are.
 Scripted build steps aren't keyed on the daemon's configuration, only on the `docker` binary, so
 after changing the daemon rebuild with `--no-local-cache`.

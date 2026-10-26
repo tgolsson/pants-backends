@@ -75,10 +75,11 @@ def test_image_name_is_the_digest_with_a_tag(tmp_path):
 
 @pytest.mark.parametrize("dest", [None, "/sandbox/export.tar"])
 def test_build_argv(dest):
-    argv = docker_builder.build_argv("/usr/bin/docker", "ctx", "/tmp/iid", dest)
+    argv = docker_builder.build_argv("/usr/bin/docker", "ctx", "pants-step-x:latest", dest)
     assert argv[:2] == ["/usr/bin/docker", "build"]
-    # BuildKit refuses an id file with a tar export.
-    assert ("--iidfile=/tmp/iid" in argv) == (dest is None)
+    # Pants decides when a step reruns, not Docker's own build cache.
+    assert "--no-cache" in argv
+    assert ("--tag=pants-step-x:latest" in argv) == (dest is None)
     assert ("--output=type=tar,dest=/sandbox/export.tar" in argv) == (dest is not None)
     assert argv[-3:] == ["--file", "ctx/Containerfile", "ctx"]
 
@@ -104,14 +105,24 @@ def test_layer_is_deterministic(tmp_path):
     assert (tmp_path / "a.tar").read_bytes() == (tmp_path / "b.tar").read_bytes()
 
 
+def built_tag(build: list[str]) -> str:
+    return next(arg for arg in build if arg.startswith("--tag=")).split("=", 1)[1]
+
+
 @pytest.mark.parametrize("oci", [False, True])
 def test_top_layer_is_the_one_added_layer(tmp_path, oci):
     saved_tar(tmp_path / "saved.tar", [layer_tar(), gzip.compress(layer_tar())], oci)
     docker_builder.write_top_layer(str(tmp_path / "saved.tar"), 1, str(tmp_path / "top.tar"))
     with tarfile.open(tmp_path / "top.tar") as tar:
         assert tar.getnames() == ["out", "out/hi", "etc/.wh.gone"]
-    with pytest.raises(b.LayoutError, match="add one layer to the base's 2, found 2"):
-        docker_builder.write_top_layer(str(tmp_path / "saved.tar"), 2, str(tmp_path / "top.tar"))
+
+
+@pytest.mark.parametrize("base_layers", [0, 3])
+def test_top_layer_rejects_unexpected_layer_counts(tmp_path, base_layers):
+    # Two layers: too many for an empty base, too few for a base of three.
+    saved_tar(tmp_path / "saved.tar", [layer_tar(), layer_tar()], oci=True)
+    with pytest.raises(b.LayoutError, match=f"add one layer to the base's {base_layers}, found 2"):
+        docker_builder.write_top_layer(str(tmp_path / "saved.tar"), base_layers, str(tmp_path / "top.tar"))
 
 
 FAKE_DOCKER = """\
@@ -128,8 +139,6 @@ if args[0] == "load":
     sys.exit(int(os.environ.get("FAKE_LOAD_STATUS", "0")))
 if args[0] == "build":
     for arg in args:
-        if arg.startswith("--iidfile="):
-            open(arg.split("=", 1)[1], "w").write("sha256:built\\n")
         if arg.startswith("--output="):
             with tarfile.open(arg.rsplit("dest=", 1)[1], "w") as tar:
                 info = tarfile.TarInfo("out/hi")
@@ -172,7 +181,7 @@ def test_files_loads_the_base_by_name_and_writes_outputs(sandbox, capfd):
     # Exporting files builds no image, so there is nothing to remove.
     load, build = calls()
     assert load == ["load", "--quiet", "--input", str(work / "image.tar")]
-    assert build[0] == "build" and not any(arg.startswith("--iidfile") for arg in build)
+    assert build[0] == "build" and not any(arg.startswith("--tag") for arg in build)
     with tarfile.open(work / "image.tar") as tar:
         assert json.load(tar.extractfile("manifest.json"))[0]["RepoTags"] == [name]
     containerfile = (work / "docker-context" / "Containerfile").read_text()
@@ -201,7 +210,8 @@ def test_failed_build_fails_and_still_removes_the_image(sandbox, monkeypatch):
     monkeypatch.setenv("FAKE_BUILD_STATUS", "3")
     status = docker_builder.main([*common, "--run", json.dumps(RUN), "--dest", "layer.tar", "layer"])
     assert status == 3
-    assert calls()[-1] == ["rmi", "--force", "sha256:built"]
+    build, rmi = calls()[1:]
+    assert rmi == ["rmi", built_tag(build)]
 
 
 def test_layer_writes_the_added_layer(sandbox):
@@ -212,8 +222,31 @@ def test_layer_writes_the_added_layer(sandbox):
     with tarfile.open(work / "scripted-layer.tar") as tar:
         assert tar.getnames() == ["out", "out/hi", "etc/.wh.gone"]
         assert {m.mtime for m in tar.getmembers()} == {0}
-    assert [call[0] for call in calls()] == ["load", "build", "save", "rmi"]
-    assert calls()[2][-1] == "sha256:built"
+    _, build, save, rmi = calls()
+    # Only this build's own tag is saved and removed, never the image by id.
+    tag = built_tag(build)
+    assert tag.startswith("pants-step-")
+    assert save[-1] == tag and rmi == ["rmi", tag]
+
+
+def test_a_step_that_changes_nothing_adds_an_empty_layer(sandbox):
+    work, common, _ = sandbox
+    # BuildKit records such a step in the history only, so the save has just the base's layer.
+    saved_tar(work / "saved-by-docker.tar", [b"base layer is not read"], oci=True)
+    status = docker_builder.main([*common, "--run", json.dumps(RUN), "--dest", "scripted-layer.tar", "layer"])
+    assert status == 0
+    with tarfile.open(work / "scripted-layer.tar") as tar:
+        assert tar.getnames() == []
+    # It's a layer the image can still be assembled with.
+    assert b.compress_to_blob(str(work / "scripted-layer.tar"), str(work / "blob")).startswith("sha256:")
+
+
+def test_docker_gets_a_configured_home(sandbox, tmp_path, monkeypatch):
+    _, common, _ = sandbox
+    monkeypatch.setenv(docker_builder.DOCKER_HOME, "/configured/home")
+    assert docker_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
+    homes = set((tmp_path / "docker.log.home").read_text().splitlines())
+    assert homes == {"/configured/home"}
 
 
 def test_missing_docker(sandbox, tmp_path, capsys):

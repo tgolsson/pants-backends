@@ -45,7 +45,10 @@ async def docker_build(
     builder: OciBuilder,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
 ) -> ProcessResult:
-    env = await environment_vars_subset(EnvironmentVarsRequest(docker_options.env_vars), **implicitly())
+    env = dict(await environment_vars_subset(EnvironmentVarsRequest(docker_options.env_vars), **implicitly()))
+    # The builder's HOME points its scie at a cache, so a configured one goes by another name.
+    if "HOME" in env:
+        env[docker_builder.DOCKER_HOME] = env.pop("HOME")
     process = builder.process(
         docker_builder,
         "--docker",

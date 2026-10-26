@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import uuid
 from pathlib import Path
 from typing import IO
 
@@ -32,6 +33,9 @@ _CONTEXT = "docker-context"
 _MISSING = "docker is missing. Install it: https://docs.docker.com/engine/install/"
 # Times that would otherwise survive in a layer's PAX headers.
 _PAX_TIMES = frozenset({"mtime", "atime", "ctime"})
+# A HOME from `[docker].env_vars`, which reaches the builder under this name: its own HOME only
+# points the scie at its cache.
+DOCKER_HOME = "__OCI_DOCKER_HOME"
 
 
 def image_name(layout: str, tag: str) -> str:
@@ -40,12 +44,15 @@ def image_name(layout: str, tag: str) -> str:
     return "pants-" + oci_layout_builder.image_digest(layout, tag).partition(":")[2] + ":latest"
 
 
-def build_argv(docker: str, context: str, iidfile: str, dest: str | None) -> list[str]:
-    """Build into the daemon, writing the image's id to `iidfile`, or, with `dest`, only export the
-    image as a tar there: BuildKit writes no image and refuses an id file with a tar export."""
-    argv = [docker, "build", "--quiet"]
+def build_argv(docker: str, context: str, tag: str, dest: str | None) -> list[str]:
+    """Build into the daemon as `tag`, or, with `dest`, only export the image as a tar there.
+
+    Docker's build cache is off, so the command reruns whenever Pants reruns the step. The tag is
+    this build's own: identical builds can produce the same image, and removing it by id would
+    remove it from under another build saving it."""
+    argv = [docker, "build", "--quiet", "--no-cache"]
     if dest is None:
-        argv.append(f"--iidfile={iidfile}")
+        argv.append(f"--tag={tag}")
     else:
         # A tar keeps ownership and hardlinks, which a directory export loses.
         argv.append(f"--output=type=tar,dest={dest}")
@@ -70,7 +77,8 @@ def write_top_layer(saved: str, base_layers: int, dest: str) -> None:
     """Write the one layer the step added, from the `docker save` tar `saved`, to `dest`.
 
     The tar's `manifest.json` lists the layers, whether Docker saved them in its own format or,
-    from Docker 25, as an OCI layout."""
+    from Docker 25, as an OCI layout. A step that changed no files adds no layer with BuildKit, and
+    gets an empty one; that relies on `docker save` keeping the base's layers one for one."""
     with tarfile.open(saved) as tar:
         manifest_file = tar.extractfile("manifest.json")
         if manifest_file is None:
@@ -79,6 +87,9 @@ def write_top_layer(saved: str, base_layers: int, dest: str) -> None:
         if len(manifest) != 1:
             raise oci_layout_builder.LayoutError("expected docker to save one image")
         layers = manifest[0]["Layers"]
+        if len(layers) == base_layers:
+            tarfile.open(dest, "w", format=tarfile.PAX_FORMAT).close()
+            return
         if len(layers) != base_layers + 1:
             raise oci_layout_builder.LayoutError(
                 f"expected the build step to add one layer to the base's {base_layers}, found {len(layers)}"
@@ -105,7 +116,7 @@ def main(argv: list[str]) -> int:
     env = container_build.host_env()
     # Builders run without a HOME. The Docker CLI reads its configuration and plugins, buildx
     # included, from the user's home; looking it up here keeps it out of the cache key.
-    env["HOME"] = pwd.getpwuid(os.getuid()).pw_dir
+    env["HOME"] = env.pop(DOCKER_HOME, None) or pwd.getpwuid(os.getuid()).pw_dir
 
     archive = os.path.abspath(_ARCHIVE)
     try:
@@ -118,8 +129,8 @@ def main(argv: list[str]) -> int:
     outputs = args.output if args.command == "files" else []
     Path(_CONTEXT, "Containerfile").write_text(container_build.containerfile(name, run, outputs))
 
+    built = f"pants-step-{uuid.uuid4().hex}:latest"
     with tempfile.TemporaryDirectory(dir=".") as tmp:
-        iidfile = os.path.join(tmp, "iid")
         export = os.path.abspath(os.path.join(tmp, "export.tar")) if args.command == "files" else None
         try:
             try:
@@ -130,7 +141,7 @@ def main(argv: list[str]) -> int:
             if result.returncode != 0:
                 return result.returncode
             # It prints the image's id, which isn't this step's output; errors go to stderr.
-            build = build_argv(args.docker, _CONTEXT, iidfile, export)
+            build = build_argv(args.docker, _CONTEXT, built, export)
             result = subprocess.run(build, env=env, stdout=subprocess.DEVNULL)
             if result.returncode != 0:
                 return result.returncode
@@ -138,9 +149,8 @@ def main(argv: list[str]) -> int:
                 container_build.write_outputs(export, outputs, args.exclude, args.dest)
                 return 0
 
-            image = Path(iidfile).read_text().strip()
             saved = os.path.join(tmp, "saved.tar")
-            result = _docker([args.docker, "save", "--output", saved, image], env)
+            result = _docker([args.docker, "save", "--output", saved, built], env)
             if result.returncode != 0:
                 return result.returncode
             base_layers = len(oci_layout_builder.load_image(args.layout, args.tag).manifest["layers"])
@@ -149,8 +159,9 @@ def main(argv: list[str]) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 1
         finally:
-            # The loaded base stays in the daemon for the next build; the built image doesn't.
-            image = Path(iidfile).read_text().strip() if os.path.exists(iidfile) else ""
-            if image:
-                subprocess.run([args.docker, "rmi", "--force", image], env=env, capture_output=True)
+            # The loaded base stays in the daemon for the next build; the built image doesn't, unless
+            # the process is killed first. An export builds no image. Removing the tag removes the
+            # image only once nothing else names it.
+            if export is None:
+                subprocess.run([args.docker, "rmi", built], env=env, capture_output=True)
     return 0

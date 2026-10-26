@@ -14,6 +14,7 @@ from pants_backend_oci.docker.rules import (
     docker_build,
     docker_run,
 )
+from pants_backend_oci.util_rules import docker_builder
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
@@ -87,3 +88,29 @@ def test_build_runs_the_builder_with_the_docker_backends_environment():
     assert process.env["PATH"] == "__tools/bin:/usr/bin:/bin"
     assert process.env["__OCI_DOCKER_FINGERPRINT"] == "fingerprint"
     assert process.output_files == ("layer.tar",)
+
+
+def test_build_passes_a_configured_home_under_another_name():
+    processes = []
+
+    def env_with_home(request, **kwargs):
+        return {"HOME": "/configured/home"}
+
+    run_rule_with_mocks(
+        docker_build,
+        rule_args=[
+            DockerBuildRequest(BUNDLE, ("layer",), "build"),
+            DOCKER,
+            SimpleNamespace(env_vars=("HOME",)),
+            OciBuilder(EMPTY_DIGEST),
+            SimpleNamespace(system_binary_paths=("/usr/bin",)),
+        ],
+        mock_calls={
+            "pants.core.util_rules.env_vars.environment_vars_subset": env_with_home,
+            "pants.engine.process.fallible_to_exec_result_or_raise": processes.append,
+        },
+    )
+    (process,) = processes
+    assert process.env[docker_builder.DOCKER_HOME] == "/configured/home"
+    # The builder's own HOME stays the scie's cache.
+    assert process.env["HOME"] == OciBuilder(EMPTY_DIGEST).home
