@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- `pants run` and OCI repl work on macOS through `podman machine`, and on any platform through a
+  named podman connection with the new `[oci].podman_connection` option. The image is loaded into
+  the connection's store as `localhost/pants-oci-run:<digest>` and kept for later runs; a missing
+  or stopped machine is reported with the command to fix it. Scripted build steps still need
+  local Linux podman. See "Running through podman machine" in the README.
+
 - `[oci].runner = "docker"` runs `pants run`, OCI repl and scripted build steps with Docker
   instead of podman, for teams without podman. It needs Docker 23.0 or newer and the
   `pants.backend.docker` and `pants_backend_oci.docker` backends; Docker is found and configured

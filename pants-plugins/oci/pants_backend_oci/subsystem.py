@@ -26,6 +26,16 @@ class OciSubsystem(Subsystem):
         options to find and configure Docker."""),
     )
 
+    podman_connection = StrOption(
+        default="",
+        help=softwrap("""
+        The podman connection `pants run` and OCI repl use, as `podman system connection list`
+        names it. Empty means local podman on Linux and podman's default connection, such as a
+        `podman machine`, elsewhere. Through a connection, images are loaded into its store as
+        `localhost/pants-oci-run:<digest>` and kept for later runs. Scripted build steps ignore it
+        and need local Linux podman. Only used with `[oci].runner = "podman"`."""),
+    )
+
     command_shell = StrListOption(
         default=["/bin/sh", "-c"],
         advanced=True,

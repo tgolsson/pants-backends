@@ -148,6 +148,41 @@ jobs:
           pants-plugins/oci/pants_backend_oci/util_rules/scripted_integration_test.py \
           -- -k docker
 
+  # `pants run` and repl through a podman connection, as macOS podman machine uses. Hosted macOS
+  # runners can't boot the machine's VM, so a local podman service stands in for it.
+  podman-remote:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Initialize Pants
+      uses: pantsbuild/actions/init-pants@main
+      with:
+        gha-cache-key: cache1-podman-remote-py3.11-pants2.31.0
+        named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
+
+    - name: Run images through a podman connection
+      env:
+        PANTS_OCI_PODMAN_CONNECTION: pants-ci
+      run: |
+        ./get-pants.sh
+        sudo sh -c 'echo "runner:100000:65536" > /etc/subuid'
+        sudo sh -c 'echo "runner:100000:65536" > /etc/subgid'
+        podman system service --time=0 "unix://$RUNNER_TEMP/podman.sock" &
+        timeout 30 sh -c "until [ -S '$RUNNER_TEMP/podman.sock' ]; do sleep 1; done"
+        podman system connection add pants-ci "unix://$RUNNER_TEMP/podman.sock"
+
+        /home/runner/bin/pants run examples/oci/debian:nonroot | tee run.out
+        grep -qx 'uid=65532(nonroot) gid=65532(nonroot) groups=65532(nonroot)' run.out
+        podman --connection pants-ci image ls --filter reference=localhost/pants-oci-run
+        OCI_TEST_PODMAN_REMOTE=pants-ci /home/runner/bin/pants test \
+          pants-plugins/oci/pants_backend_oci/goals/run_integration_test.py -- -k remote
+
   check-and-lint:
     runs-on: ubuntu-24.04
 

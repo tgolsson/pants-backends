@@ -57,15 +57,19 @@ async def podman_run(
     builder: OciBuilder,
     caches: NamedCachesDirOption,
     platform: Platform,
+    oci: OciSubsystem,
 ) -> Process:
-    if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
-        raise ValueError("OCI run/repl requires local Linux podman; podman machine is not supported yet.")
-    # Only the image's own blobs go to podman, in an OCI archive it reads directly.
+    # Local Linux podman reads the archive directly; elsewhere, or through a named connection, it's
+    # loaded into the connection's store first, under a name only these runs use.
+    local = not oci.podman_connection and platform in (Platform.linux_x86_64, Platform.linux_arm64)
+    name = None if local else podman_runner.remote_ref(request.bundle.image_sha)
+    # Only the image's own blobs go to podman, in an OCI archive.
     archive_process = await package_oci_archive(
-        OciArchiveRequest(request.bundle.digest, "image.tar", None, f"Archive {request.address} for podman"),
+        OciArchiveRequest(request.bundle.digest, "image.tar", name, f"Archive {request.address} for podman"),
         **implicitly(),
     )
     archive = await fallible_to_exec_result_or_raise(**implicitly({archive_process: Process}))
+    remote = () if local else ("--connection", oci.podman_connection, "--digest", request.bundle.image_sha)
     exe, *runner_args = builder.argv(
         podman_runner,
         "--podman",
@@ -74,6 +78,7 @@ async def podman_run(
         str(caches.val / PODMAN_CACHE / PODMAN_STORE_VERSION),
         "--archive",
         "{chroot}/image.tar",
+        *remote,
     )
     # The run happens outside the sandbox, so the builder is addressed through `{chroot}`. It
     # unpacks under the user's own `~/.cache`, as the run isn't cached.

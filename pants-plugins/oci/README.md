@@ -11,7 +11,7 @@ This release targets Pants **2.31.0**. Install it with
 This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses these tools:
 
 * `oci-builder`, a [scie](https://github.com/a-scie/jump) the plugin builds with pex from its own builder scripts and a pinned python-build-standalone Python. It is built once per machine and downloads that Python and pex's `science` tool from GitHub the first time; on first use it unpacks into the `oci_builder` named cache (`pants run` uses `~/.cache/nce` and `~/.cache/pex` instead)
-* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps; or Docker 23.0 or newer instead, with `[oci].runner = "docker"` (see [Running with Docker](#running-with-docker))
+* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps (on macOS, run and repl only, through `podman machine`); or Docker 23.0 or newer instead, with `[oci].runner = "docker"` (see [Running with Docker](#running-with-docker))
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 
 `pants package` writes each `oci_image_build` to `dist/` as an OCI archive, `<name>.tar`, with the
@@ -50,8 +50,52 @@ build steps read the same podman configuration: the system files and your
 `~/.config/containers`. Scripted build steps don't see environment variables that select
 other configuration files, such as `CONTAINERS_CONF` or `XDG_CONFIG_HOME`. Configuration isn't
 part of a build step's cache key, so after changing it, rebuild with `--no-local-cache`.
-Podman always runs locally: `CONTAINER_HOST` and `CONTAINER_CONNECTION` are ignored. macOS
-support requires a separate load/run path through `podman machine` and is deferred.
+`CONTAINER_HOST` and `CONTAINER_CONNECTION` are ignored: `[oci].podman_connection` alone decides
+whether podman runs locally or through a connection.
+
+### Running through podman machine (macOS) or another connection
+
+On macOS, `pants run` and OCI repl run images through [podman machine](https://docs.podman.io/en/stable/markdown/podman-machine.1.html):
+
+```shell
+brew install podman
+podman machine init
+podman machine start
+```
+
+Podman is found on `[system-binaries].system_binary_paths`, which includes Homebrew's
+`/opt/homebrew/bin` and `/usr/local/bin`. The podman.io installer and Podman Desktop install to
+`/opt/podman/bin`; add it there:
+
+```toml
+[system-binaries]
+system_binary_paths = ["/opt/podman/bin", "<PATH>"]
+```
+
+With `[oci].podman_connection` empty, the default, podman's default connection is used, which
+`podman machine init` sets up. Set it to a name from `podman system connection list` to use
+another machine or a remote podman service, on any platform; on Linux, run and repl then use it
+instead of the local store described above, while scripted build steps keep using the local store.
+The option only applies with `[oci].runner = "podman"`. If the connection can't be reached, the run
+fails with podman's error and, when no podman machine exists or none is running, what to start.
+
+Podman's remote client can't run an OCI archive directly, so each image is first loaded into the
+connection's own store as `localhost/pants-oci-run:<image digest>`, then run with `--rm`.
+Arguments, terminal, stdin and exit status behave as with local podman. Loaded images are kept, so
+running the same image again starts without transferring it (two first runs of an image at once
+may both load it). Nothing else in that store is touched. These images accumulate as images change; remove
+them while nothing runs from them:
+
+```shell
+podman image ls --filter reference=localhost/pants-oci-run
+podman image rm $(podman image ls --quiet --filter reference=localhost/pants-oci-run)
+```
+
+Limits: scripted build steps (`commands=`, `oci_build_layer`, `oci_extract`) still need local Linux
+podman and fail on macOS, so images that use them can't be built there; declarative packaging and
+publishing need no podman. The first run of each image copies its archive into the machine, which
+takes a while for large images. The image must suit the machine's architecture, as there is no
+multi-platform support.
 
 ### Running with Docker
 
@@ -179,7 +223,7 @@ to `latest`.
 
 * Currently there's no support for pulling tags, as that would break determinism
 * Multi-platform SHA/.sig is untested/unsupported
-* Container execution and scripted build steps require local Linux podman. Remote podman and macOS `podman machine` execution are not supported yet.
+* Scripted build steps require local Linux podman; only `pants run` and OCI repl work through `podman machine` or another podman connection.
 
 ## Targets
 

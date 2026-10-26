@@ -124,3 +124,140 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
     )
     assert result.returncode == 23
     assert json.loads(result.stdout)[-3:] == ["a b", "", "$HOME"]
+
+
+def fake_podman(tmp_path, *, exists: int = 1, load: int = 0, machines: str = "[]", stderr: str = ""):
+    """A podman that logs each call's arguments, answering `image exists` with `exists`."""
+    log = tmp_path / "calls.jsonl"
+    fake = tmp_path / "podman"
+    fake.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "args = sys.argv[1:]\n"
+        f"open({str(log)!r}, 'a').write(json.dumps(args) + '\\n')\n"
+        "if 'exists' in args:\n"
+        f"    sys.stderr.write({stderr!r})\n"
+        f"    sys.exit({exists})\n"
+        "if 'load' in args:\n"
+        "    print('Loaded image: localhost/pants-oci-run:abc')\n"
+        f"    sys.exit({load})\n"
+        "if 'machine' in args:\n"
+        f"    print({machines!r})\n"
+    )
+    fake.chmod(0o755)
+    return str(fake), log
+
+
+def calls(log: Path) -> list[list[str]]:
+    return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def remote_args(podman: str, connection: str, *extra: str) -> list[str]:
+    return [
+        "--podman",
+        podman,
+        "--cache",
+        "/unused",
+        "--archive",
+        "/sandbox/image.tar",
+        "--connection",
+        connection,
+        "--digest",
+        "sha256:abc",
+        *extra,
+    ]
+
+
+@pytest.mark.parametrize("connection,options", [("", ["--remote"]), ("vm", ["--connection", "vm"])])
+@pytest.mark.parametrize("exists", [0, 1])
+def test_remote_loads_the_image_once_then_runs_it(tmp_path, monkeypatch, connection, options, exists):
+    # Neither a Linux host, a runtime directory nor an unprivileged user is needed remotely.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.setattr(os, "geteuid", lambda: 0)
+    monkeypatch.setenv("CONTAINER_HOST", "ssh://elsewhere/run/podman.sock")
+    captured = []
+    monkeypatch.setattr(os, "execve", lambda *args: captured.append(args))
+    podman, log = fake_podman(tmp_path, exists=exists)
+    command_args = ["-c", "exit 3", "a b", "", "--tty"]
+    podman_runner.main(remote_args(podman, connection, "--interactive", "--tty", "--", *command_args))
+
+    ref = "localhost/pants-oci-run:abc"
+    expected = [[*options, "image", "exists", ref]]
+    if exists:
+        expected.append([*options, "load", "--quiet", "--input", "/sandbox/image.tar"])
+    assert calls(log) == expected
+    executable, argv, env = captured[0]
+    assert executable == podman
+    assert argv == [
+        podman,
+        *options,
+        "run",
+        "--rm",
+        "--quiet",
+        "--interactive",
+        "--tty",
+        "--pull=never",
+        ref,
+        *command_args,
+    ]
+    # The plugin's own store and runtime options are for local podman only.
+    assert not {"--remote=false", "--root", "--runroot", "--storage-driver=vfs"} & set(argv)
+    assert "CONTAINER_HOST" not in env
+
+
+def test_remote_load_failure_is_reported(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran after a failed load"))
+    podman, _ = fake_podman(tmp_path, load=125)
+    assert podman_runner.main(remote_args(podman, "")) == 125
+    assert "Loaded image" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "machines,expected",
+    [
+        ("[]", "If you use podman machine, there is none"),
+        (
+            json.dumps(
+                [{"Name": "other", "Running": False}, {"Name": "dev", "Default": True, "Running": False}]
+            ),
+            "`podman machine start dev`",
+        ),
+        (
+            json.dumps([{"Name": "dev", "Default": True, "Running": True}]),
+            "Could not reach podman's default connection",
+        ),
+    ],
+)
+def test_unreachable_machine_is_diagnosed(tmp_path, monkeypatch, capsys, machines, expected):
+    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran without a connection"))
+    podman, _ = fake_podman(tmp_path, exists=125, machines=machines, stderr="Cannot connect to Podman")
+    assert podman_runner.main(remote_args(podman, "")) == 125
+    err = capsys.readouterr().err
+    assert expected in err
+    # The default connection needn't be a machine, so podman's own error is always kept.
+    assert "Cannot connect to Podman" in err
+
+
+def test_unreachable_named_connection_is_diagnosed(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran without a connection"))
+    podman, log = fake_podman(tmp_path, exists=125, stderr='connection "ci" not found')
+    assert podman_runner.main(remote_args(podman, "ci")) == 125
+    err = capsys.readouterr().err
+    assert "Could not reach podman connection 'ci'" in err
+    assert 'connection "ci" not found' in err
+    assert "podman system connection list" in err
+    # A named connection isn't a machine, so podman machine isn't asked about it.
+    assert not any("machine" in call for call in calls(log))
+
+
+def test_connection_needs_the_digest(tmp_path):
+    podman, _ = fake_podman(tmp_path)
+    args = remote_args(podman, "")
+    with pytest.raises(SystemExit):
+        podman_runner.main(args[: args.index("--digest")])
+
+
+def test_remote_missing_podman(tmp_path, capsys):
+    assert podman_runner.main(remote_args(str(tmp_path / "missing"), "")) == 127
+    assert "https://podman.io/docs/installation" in capsys.readouterr().err

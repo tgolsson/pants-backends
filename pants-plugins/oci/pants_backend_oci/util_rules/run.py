@@ -37,7 +37,10 @@ from pants_backend_oci.util_rules.runner import (
 )
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
-_LINUX_ONLY = "OCI containers require local Linux podman; podman machine is not supported yet."
+_LINUX_ONLY = (
+    "Scripted OCI build steps require local Linux podman; `pants run` and OCI repl also work"
+    " through podman machine."
+)
 
 # Shared with `pants run`, which reaches the same named cache by its absolute path.
 PODMAN_CACHE = "oci_podman"
@@ -50,20 +53,30 @@ class PodmanBinary(BinaryPath):
     pass
 
 
+class LocalPodmanBinary(BinaryPath):
+    """Local Linux podman, fingerprinted by its hash, for scripted build steps."""
+
+
 @rule(desc="Finding podman for OCI containers")
-async def find_podman(
-    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
-    platform: Platform,
-    env_target: EnvironmentTarget,
-) -> PodmanBinary:
-    if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
-        raise ValueError(_LINUX_ONLY)
+async def find_podman(system_binaries: SystemBinariesSubsystem.EnvironmentAware) -> PodmanBinary:
     request = BinaryPathRequest(binary_name="podman", search_path=system_binaries.system_binary_paths)
     paths = await find_binary(request, **implicitly())
     binary = paths.first_path_or_raise(
         request,
         rationale="run OCI images. Install podman: https://podman.io/docs/installation",
     )
+    return PodmanBinary(binary.path)
+
+
+@rule(desc="Fingerprinting podman for OCI build steps")
+async def find_local_podman(
+    podman: PodmanBinary,
+    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
+    platform: Platform,
+    env_target: EnvironmentTarget,
+) -> LocalPodmanBinary:
+    if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
+        raise ValueError(_LINUX_ONLY)
     # Do not execute podman during discovery: even --version can initialize its host runtime. Its
     # hash is the fingerprint instead, so build steps rerun when podman is upgraded.
     sha256sum_request = BinaryPathRequest(
@@ -73,13 +86,13 @@ async def find_podman(
         sha256sum_request, rationale="fingerprint podman"
     )
     process = Process(
-        (sha256sum.path, binary.path),
-        description=f"Fingerprint {binary.path}",
+        (sha256sum.path, podman.path),
+        description=f"Fingerprint {podman.path}",
         level=LogLevel.DEBUG,
         cache_scope=env_target.executable_search_path_cache_scope(),
     )
     result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
-    return PodmanBinary(binary.path, result.stdout.split()[0].decode())
+    return LocalPodmanBinary(podman.path, result.stdout.split()[0].decode())
 
 
 @dataclass(frozen=True)
@@ -92,7 +105,7 @@ class PodmanBuildRequest(ContainerBuildRequest):
 @rule
 async def podman_build(
     request: PodmanBuildRequest,
-    podman: PodmanBinary,
+    podman: LocalPodmanBinary,
     builder: OciBuilder,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
 ) -> ProcessResult:

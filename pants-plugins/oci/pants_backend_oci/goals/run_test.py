@@ -78,9 +78,7 @@ def test_docker_runner_needs_its_backends():
         )
 
 
-@pytest.mark.parametrize("interactive,tty", [(False, False), (False, True), (True, True)])
-def test_podman_archives_image_before_launch(interactive, tty):
-    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True)
+def podman_run_process(request, platform=Platform.linux_x86_64, connection=""):
     archive_requests = []
     executions = []
 
@@ -95,11 +93,12 @@ def test_podman_archives_image_before_launch(interactive, tty):
     result = run_rule_with_mocks(
         podman_run,
         rule_args=[
-            PodmanRunRequest(bundle, Address("image"), interactive, tty),
-            PodmanBinary("/bin/podman", "abc"),
+            request,
+            PodmanBinary("/bin/podman"),
             OciBuilder(EMPTY_DIGEST),
             SimpleNamespace(val=PurePath("/caches")),
-            Platform.linux_x86_64,
+            platform,
+            SimpleNamespace(podman_connection=connection),
         ],
         mock_calls={
             "pants_backend_oci.goals.package.package_oci_archive": archive,
@@ -107,8 +106,17 @@ def test_podman_archives_image_before_launch(interactive, tty):
         },
     )
     assert len(executions) == 1
-    assert archive_requests[0].input_digest == bundle.digest
-    assert archive_requests[0].output_filename == "image.tar"
+    return result, archive_requests[0]
+
+
+@pytest.mark.parametrize("interactive,tty", [(False, False), (False, True), (True, True)])
+def test_podman_archives_image_before_launch(interactive, tty):
+    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True)
+    result, archive = podman_run_process(PodmanRunRequest(bundle, Address("image"), interactive, tty))
+    assert archive.input_digest == bundle.digest
+    assert archive.output_filename == "image.tar"
+    assert archive.name is None
+    assert "--connection" not in result.argv and "--digest" not in result.argv
     assert result.argv[-1] == "--"
     assert ("--interactive" in result.argv) == interactive
     assert ("--tty" in result.argv) == tty
@@ -116,18 +124,26 @@ def test_podman_archives_image_before_launch(interactive, tty):
     assert result.argv[:2] == ("{chroot}/" + OciBuilder.exe, "podman_runner")
 
 
-def test_podman_run_rejects_macos():
-    with pytest.raises(ValueError, match="podman machine is not supported"):
-        run_rule_with_mocks(
-            podman_run,
-            rule_args=[
-                PodmanRunRequest(ImageBundle(EMPTY_DIGEST, "sha256:abc", True), Address("image")),
-                PodmanBinary("/bin/podman", "abc"),
-                OciBuilder(EMPTY_DIGEST),
-                SimpleNamespace(val=PurePath("/caches")),
-                Platform.macos_arm64,
-            ],
-        )
+@pytest.mark.parametrize(
+    "platform,connection",
+    [
+        (Platform.macos_arm64, ""),
+        (Platform.macos_x86_64, ""),
+        (Platform.linux_x86_64, "ci"),
+        (Platform.macos_arm64, "vm"),
+    ],
+)
+def test_podman_runs_through_a_connection_off_linux_or_when_named(platform, connection):
+    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True)
+    result, archive = podman_run_process(
+        PodmanRunRequest(bundle, Address("image"), True, True), platform, connection
+    )
+    # The archive names the image, so loading it leaves no unnamed image behind.
+    assert archive.name == "localhost/pants-oci-run:abc"
+    argv = list(result.argv)
+    assert argv[argv.index("--connection") + 1] == connection
+    assert argv[argv.index("--digest") + 1] == "sha256:abc"
+    assert argv[-3:] == ["--interactive", "--tty", "--"]
 
 
 def test_missing_podman_error():
@@ -139,14 +155,9 @@ def test_missing_podman_error():
     with pytest.raises(Exception, match="Install podman: https://podman.io/docs/installation"):
         run_rule_with_mocks(
             find_podman,
-            rule_args=[SimpleNamespace(system_binary_paths=("/empty",)), Platform.linux_x86_64, None],
+            rule_args=[SimpleNamespace(system_binary_paths=("/empty",))],
             mock_calls={"pants.core.util_rules.system_binaries.find_binary": missing},
         )
-
-
-def test_macos_rejected():
-    with pytest.raises(ValueError, match="podman machine is not supported"):
-        run_rule_with_mocks(find_podman, rule_args=[SimpleNamespace(), Platform.macos_arm64, None])
 
 
 @pytest.mark.parametrize("exit_code,dependency_failed", [(1, False), (0, True)])
