@@ -28,6 +28,7 @@ from pants_backend_distroless.apt_resolver import (
     parse_relations,
     resolve,
 )
+from pants_backend_distroless.lockfile import verification_args
 from pants_backend_distroless.openpgp import Keyring
 from pants_backend_distroless.openpgp_test import armor, clearsign, fixture, sign
 
@@ -619,6 +620,17 @@ def test_main_writes_lockfile(tmp_path: Path) -> None:
     (tmp_path / "keyring.gpg").write_bytes(fixture("ed25519.gpg"))
     assert main([*argv, "--keyring", str(tmp_path / "keyring.gpg")]) == 1
     assert main([*argv, "--allow-unsigned"]) == 0
+
+
+def test_main_takes_a_keyring_path_starting_with_a_dash(tmp_path: Path, monkeypatch) -> None:
+    write_repo(tmp_path / "repo", "stable", {"main/amd64": stanza("jq")})
+    inputs = normalize_inputs([f"{(tmp_path / 'repo').as_uri()} stable main"], ["amd64"], ["jq"], [])
+    (tmp_path / "request.json").write_text(json.dumps(inputs))
+    (tmp_path / "-keyring.asc").write_bytes(fixture("rsa.asc"))
+    monkeypatch.chdir(tmp_path)
+
+    argv = ["--request", "request.json", "--output", "lock.json"]
+    assert main([*argv, *verification_args(("-keyring.asc",), allow_unsigned=False)]) == 0
 
 
 def test_main_needs_keyring_or_allow_unsigned(tmp_path: Path, capsys) -> None:

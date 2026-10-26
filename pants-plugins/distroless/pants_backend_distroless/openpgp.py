@@ -4,9 +4,10 @@
 """Verifies the OpenPGP signatures of apt `InRelease` and `Release.gpg` files.
 
 Only what Debian and Ubuntu archives use is supported: v4 keys and signatures made with RSA
-(PKCS#1 v1.5) or Ed25519 (legacy EdDSA) over SHA-224, SHA-256, SHA-384 or SHA-512. A signature
-verifies when at least one signature is good and made by a key in the keyring. A bad one from a
-keyring key fails. Signatures from other keys, or with unsupported algorithms, are skipped.
+(PKCS#1 v1.5) over SHA-224, SHA-256, SHA-384 or SHA-512, or Ed25519 (legacy EdDSA) over SHA-256,
+SHA-384 or SHA-512. A signature verifies when at least one signature is good and made by a key in
+the keyring. A bad one from a keyring key fails. Signatures from other keys, or with unsupported
+algorithms, are skipped.
 
 Every key in the keyring is trusted as given, like `gpgv` does. Expiry and revocation aren't
 evaluated: the Release files of a snapshot are historical, so what matters is which keys signed
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import hmac
 import re
 from dataclasses import dataclass, replace
 from typing import Iterable, Iterator
@@ -280,6 +280,9 @@ def _parse_signature(body: bytes) -> _Signature:
         values = (reader.mpi(),)
     elif algorithm == _EDDSA:
         values = (reader.mpi(), reader.mpi())
+        # EdDSA needs a hash of at least 256 bits (RFC 9580, section 5.2.3.4).
+        if hash_name == "sha224":
+            unsupported = unsupported or "Ed25519 with SHA-224"
     else:
         unsupported = unsupported or f"public-key algorithm {algorithm}"
     return _Signature(type_, algorithm, hash_name, hashed, fingerprint, keyid, left16, values, unsupported)
@@ -305,12 +308,14 @@ def _verify_rsa(key: PublicKey, signature: _Signature, digest: bytes) -> bool:
     if padding < 8:
         return False
     expected = b"\x00\x01" + b"\xff" * padding + b"\x00" + digest_info
-    return hmac.compare_digest(pow(s, e, n).to_bytes(k, "big"), expected)
+    return pow(s, e, n).to_bytes(k, "big") == expected
+
+
+def _compatible(key: PublicKey, signature: _Signature) -> bool:
+    return key.algorithm == signature.algorithm or (key.algorithm in _RSA and signature.algorithm in _RSA)
 
 
 def _verify(signature: _Signature, key: PublicKey, data: bytes) -> bool:
-    if key.algorithm != signature.algorithm and not (key.algorithm in _RSA and signature.algorithm in _RSA):
-        return False
     digest = _digest(signature, data)
     if digest[:2] != signature.left16:
         return False
@@ -333,10 +338,15 @@ def _check(data: bytes, signatures: bytes, keyring: Keyring, signature_type: int
         if signature.unsupported is None and signature.type != signature_type:
             signature = replace(signature, unsupported=f"signature type {signature.type:#04x}")
         key = keyring.find(signature.fingerprint, signature.keyid)
-        if key is None:
-            skipped.append(f"{signature.signer} isn't in the keyring")
-        elif signature.unsupported is not None:
+        if signature.unsupported is not None:
             skipped.append(f"{signature.signer} uses {signature.unsupported}")
+        elif key is None:
+            skipped.append(f"{signature.signer} isn't in the keyring")
+        elif not _compatible(key, signature):
+            skipped.append(
+                f"{signature.signer} made an algorithm {signature.algorithm} signature"
+                f" with an algorithm {key.algorithm} key"
+            )
         elif _verify(signature, key, data):
             good.append(key)
         else:

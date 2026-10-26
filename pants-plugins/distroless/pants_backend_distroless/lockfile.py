@@ -50,6 +50,14 @@ class GenerateDebPackagesLockfile(GenerateLockfile):
     allow_unsigned: bool
 
 
+def verification_args(keyring_paths: tuple[str, ...], allow_unsigned: bool) -> tuple[str, ...]:
+    """The resolver's arguments for verifying `Release` signatures."""
+    if allow_unsigned:
+        return ("--allow-unsigned",)
+    # One argument per keyring, so a path starting with `-` isn't taken for an option.
+    return tuple(f"--keyring={path}" for path in keyring_paths)
+
+
 class KnownDebPackagesUserResolveNamesRequest(KnownUserResolveNamesRequest):
     pass
 
@@ -137,11 +145,6 @@ async def generate_deb_packages_lockfile(
         )
     )
     input_digest = await merge_digests(MergeDigests([resolver, request.keyrings]))
-    verification = (
-        ("--allow-unsigned",)
-        if request.allow_unsigned
-        else tuple(arg for path in request.keyring_paths for arg in ("--keyring", path))
-    )
 
     # The sources are pinned to snapshots, so caching the result like any other process is correct.
     result = await fallible_to_exec_result_or_raise(
@@ -155,7 +158,7 @@ async def generate_deb_packages_lockfile(
                     "request.json",
                     "--output",
                     request.lockfile_dest,
-                    *verification,
+                    *verification_args(request.keyring_paths, request.allow_unsigned),
                 ),
                 input_digest=input_digest,
                 output_files=(request.lockfile_dest,),

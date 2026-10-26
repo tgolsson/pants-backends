@@ -160,6 +160,134 @@ def test_bad_ed25519_signature(transform) -> None:
         verify_detached(fixture("Release"), _ed25519_signature(transform), keyring)
 
 
+def _ed25519_packet() -> bytes:
+    for _, body in openpgp._packets(dearmor(fixture("Release.gpg"))):
+        if openpgp._parse_signature(body).algorithm == openpgp._EDDSA:
+            return body
+    raise AssertionError("no Ed25519 signature")
+
+
+def test_ed25519_with_sha224_is_unsupported() -> None:
+    # Version, type, public-key algorithm, then the hash algorithm: 11 is SHA-224.
+    body = bytearray(_ed25519_packet())
+    body[3] = 11
+    with pytest.raises(OpenPGPError, match=f"No good signature .*{ED25519} uses Ed25519 with SHA-224"):
+        verify_detached(fixture("Release"), _packet(2, bytes(body)), Keyring.load(fixture("ed25519.gpg")))
+
+
+def test_signature_algorithm_not_matching_the_key_is_skipped() -> None:
+    # An Ed25519 key's signature claiming to be RSA: it can't be verified, so it isn't a bad one.
+    body = bytearray(_ed25519_packet())
+    body[2] = 1
+    with pytest.raises(
+        OpenPGPError,
+        match=f"No good signature .*{ED25519} made an algorithm 1 signature with an algorithm 22 key",
+    ):
+        verify_detached(fixture("Release"), _packet(2, bytes(body)), Keyring.load(fixture("ed25519.gpg")))
+
+
+def test_left16_mismatch_is_a_bad_signature() -> None:
+    text = fixture("Release")
+    body = bytearray(sign(text)[6:])
+    # The left16 follows the hashed and unhashed subpacket areas.
+    hashed_end = 6 + int.from_bytes(body[4:6], "big")
+    left16 = hashed_end + 2 + int.from_bytes(body[hashed_end : hashed_end + 2], "big")
+    assert openpgp._parse_signature(bytes(body)).left16 == body[left16 : left16 + 2]
+    body[left16] ^= 0xFF
+    with pytest.raises(OpenPGPError, match=f"Bad signature from {RSA}"):
+        verify_detached(text, _packet(2, bytes(body)), Keyring.load(fixture("rsa.asc")))
+
+
+def test_critical_subpackets() -> None:
+    keyring = Keyring.load(fixture("rsa.asc"))
+    text = fixture("Release")
+    notation = bytes([0, 0, 0, 0, 0, 1, 0, 1]) + b"ab"
+    # A notation, which could change what the signature means, may only be ignored if not critical.
+    with pytest.raises(OpenPGPError, match=f"No good signature .*{RSA} uses a critical subpacket of type 20"):
+        verify_detached(
+            text, sign(text, hashed_subpackets=ISSUER_FINGERPRINT + _subpacket(0x80 | 20, notation)), keyring
+        )
+    assert fingerprints(
+        verify_detached(
+            text, sign(text, hashed_subpackets=ISSUER_FINGERPRINT + _subpacket(20, notation)), keyring
+        )
+    ) == [RSA]
+    # A critical unknown subpacket that isn't signed can be stripped by anyone, so it's ignored.
+    assert fingerprints(
+        verify_detached(text, sign(text, unhashed_subpackets=_subpacket(0x80 | 20, notation)), keyring)
+    ) == [RSA]
+    # A known one may be critical.
+    critical_issuer = bytes([22, 0x80 | 33, 4]) + bytes.fromhex(RSA)
+    assert fingerprints(verify_detached(text, sign(text, hashed_subpackets=critical_issuer), keyring)) == [
+        RSA
+    ]
+
+
+def test_issuer_by_key_id_only() -> None:
+    # Older GnuPG only names the issuer by key ID, in the unhashed area.
+    text = fixture("Release")
+    signature = sign(text, hashed_subpackets=b"", unhashed_subpackets=_subpacket(16, bytes.fromhex(RSA)[-8:]))
+    assert fingerprints(verify_detached(text, signature, Keyring.load(fixture("rsa.asc")))) == [RSA]
+
+
+def test_v3_signature_is_unsupported() -> None:
+    signature = _packet(2, bytes([3, 5, 0x00]) + bytes(20))
+    with pytest.raises(OpenPGPError, match="No good signature .*uses a v3 signature"):
+        verify_detached(fixture("Release"), signature, Keyring.load(fixture("rsa.asc")))
+
+
+def _old_format(tag: int, body: bytes, length_type: int) -> bytes:
+    header = bytes([0x80 | tag << 2 | length_type])
+    if length_type == 3:
+        return header + body
+    return header + len(body).to_bytes(1 << length_type, "big") + body
+
+
+def _partial(tag: int, body: bytes, exponent: int) -> bytes:
+    """A new format packet whose body is split into partial chunks of `2**exponent` bytes.
+
+    RFC 4880 only allows partial lengths on data packets, with a first chunk of at least 512 bytes.
+    The parser is lenient about both, which this pins.
+    """
+    chunk = 1 << exponent
+    encoded = bytes([0xC0 | tag])
+    while len(body) > chunk:
+        encoded += bytes([224 + exponent]) + body[:chunk]
+        body = body[chunk:]
+    # The final chunk has a normal length.
+    return encoded + b"\xff" + len(body).to_bytes(4, "big") + body
+
+
+def test_packet_length_encodings() -> None:
+    small, medium, large = b"s" * 10, b"m" * 300, b"l" * 70000
+    old = (
+        _old_format(2, small, 0)
+        + _old_format(2, medium, 1)
+        + _old_format(2, large, 2)
+        + _old_format(2, small, 3)
+    )
+    assert list(openpgp._packets(old)) == [(2, small), (2, medium), (2, large), (2, small)]
+    partial = _partial(2, medium, 8) + _partial(2, large, 12) + _partial(2, small, 0)
+    assert list(openpgp._packets(partial)) == [(2, medium), (2, large), (2, small)]
+    with pytest.raises(OpenPGPError, match="Truncated packet"):
+        list(openpgp._packets(_old_format(2, medium, 1)[:-1]))
+
+
+@pytest.mark.parametrize(
+    "encode",
+    [
+        lambda tag, body, last: _old_format(tag, body, 3 if last else 1),
+        lambda tag, body, last: _partial(tag, body, 6),
+    ],
+)
+def test_signatures_in_other_packet_encodings(encode) -> None:
+    packets = list(openpgp._packets(dearmor(fixture("Release.gpg"))))
+    signatures = b"".join(encode(tag, body, i == len(packets) - 1) for i, (tag, body) in enumerate(packets))
+    assert list(openpgp._packets(signatures)) == packets
+    good = verify_detached(fixture("Release"), signatures, Keyring.load(fixture("keyring.gpg")))
+    assert fingerprints(good) == [RSA, ED25519]
+
+
 def test_signature_from_a_key_outside_the_keyring() -> None:
     keyring = Keyring.load(fixture("keyring.gpg"))
     with pytest.raises(OpenPGPError, match=r"No good signature .*isn't in the keyring\)\. The keyring has "):
@@ -225,14 +353,27 @@ def _canonical_text(text: bytes) -> bytes:
     return b"\r\n".join(line.rstrip(b" \t") for line in lines)
 
 
-def sign(data: bytes, text_mode: bool = False) -> bytes:
-    """A binary v4 RSA/SHA-256 signature packet by the `rsa.asc` key over `data`."""
+def _subpacket(kind: int, value: bytes) -> bytes:
+    return bytes([len(value) + 1, kind]) + value
+
+
+ISSUER_FINGERPRINT = _subpacket(33, b"\x04" + bytes.fromhex(RSA))
+
+
+def sign(
+    data: bytes,
+    text_mode: bool = False,
+    hashed_subpackets: bytes = ISSUER_FINGERPRINT,
+    unhashed_subpackets: bytes = b"",
+) -> bytes:
+    """A binary v4 RSA/SHA-256 signature packet by the `rsa.asc` key over `data`.
+
+    A creation time is appended to `hashed_subpackets`.
+    """
     n, _, d = _rsa_private()
     if text_mode:
         data = _canonical_text(data)
-    hashed_subpackets = (
-        bytes([22, 33, 4]) + bytes.fromhex(RSA) + bytes([5, 2]) + int(time.time()).to_bytes(4, "big")
-    )
+    hashed_subpackets += _subpacket(2, int(time.time()).to_bytes(4, "big"))
     hashed = bytes([4, 0x01 if text_mode else 0x00, 1, 8]) + len(hashed_subpackets).to_bytes(2, "big")
     hashed += hashed_subpackets
     digest = hashlib.sha256(data + hashed + b"\x04\xff" + len(hashed).to_bytes(4, "big")).digest()
@@ -240,7 +381,8 @@ def sign(data: bytes, text_mode: bool = False) -> bytes:
     digest_info = bytes.fromhex("3031300d060960864801650304020105000420") + digest
     encoded = b"\x00\x01" + b"\xff" * (k - len(digest_info) - 3) + b"\x00" + digest_info
     s = pow(int.from_bytes(encoded, "big"), d, n)
-    return _packet(2, hashed + (0).to_bytes(2, "big") + digest[:2] + _mpi(s))
+    unhashed = len(unhashed_subpackets).to_bytes(2, "big") + unhashed_subpackets
+    return _packet(2, hashed + unhashed + digest[:2] + _mpi(s))
 
 
 def armor(packets: bytes) -> bytes:
