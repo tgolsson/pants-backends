@@ -25,7 +25,11 @@ from pants.util.frozendict import FrozenDict
 from pants_backend_cmake import register
 from pants_backend_cmake.goals.package import CMakeTargetFieldSet
 from pants_backend_cmake.goals.test import CMakeTestFieldSet, CMakeTestRequest
-from pants_backend_cmake.goals.wrapper import CMakeTestWrapper, CMakeTestWrapperRequest
+from pants_backend_cmake.goals.wrapper import (
+    CMakeTestWrapper,
+    CMakeTestWrapperError,
+    CMakeTestWrapperRequest,
+)
 from pants_backend_cmake.target_types import CMakeTestSourcesField
 from pants_backend_cmake.util_rules import executable
 
@@ -151,7 +155,18 @@ class WrapBroken(CMakeTestWrapperRequest):
 
 @rule
 async def wrap_broken(request: WrapBroken) -> CMakeTestWrapper:
-    raise ValueError("no emulator today")
+    raise CMakeTestWrapperError("no emulator today")
+
+
+class WrapBuggy(CMakeTestWrapperRequest):
+    @classmethod
+    def is_applicable(cls, target: Target) -> bool:
+        return "buggy-wrapper" in (target[Tags].value or ())
+
+
+@rule
+async def wrap_buggy(request: WrapBuggy) -> CMakeTestWrapper:
+    raise ValueError("a bug in the wrapper")
 
 
 def _rule_runner(*extra_rules: object) -> RuleRunner:
@@ -305,21 +320,27 @@ def test_wrapper_problems_are_failed_tests() -> None:
         UnionRule(CMakeTestWrapperRequest, WrapTaggedToo),
         wrap_broken,
         UnionRule(CMakeTestWrapperRequest, WrapBroken),
+        wrap_buggy,
+        UnionRule(CMakeTestWrapperRequest, WrapBuggy),
     )
     _write_project(
         rule_runner,
         BUILD=BUILD.replace('name="single",', 'name="single",\n    tags=["wrapped"],')
         + 'cmake_test(name="broken", sources=["single.c", "extra/single.h"], dependencies=[":demo"],'
-        ' include_dirs=["extra"], defines=["SINGLE_SCALE=2"], tags=["broken-wrapper"])\n',
+        ' include_dirs=["extra"], defines=["SINGLE_SCALE=2"], tags=["broken-wrapper"])\n'
+        + 'cmake_test(name="buggy", sources=["single.c", "extra/single.h"], dependencies=[":demo"],'
+        ' include_dirs=["extra"], defines=["SINGLE_SCALE=2"], tags=["buggy-wrapper"])\n',
     )
     # Two wrappers apply to `single`; the wrapper of `broken` cannot be set up. Each is that
-    # test's failure, not the goal's.
+    # test's failure, not the goal's. A wrapper whose rule has a bug is not a failed test.
     two = _test(rule_runner, Address("", target_name="single"))
     assert two.exit_code == 1
     assert "more than one test wrapper applies: ['WrapTagged', 'WrapTaggedToo']" in two.stderr_bytes.decode()
     broken = _test(rule_runner, Address("", target_name="broken"))
     assert broken.exit_code == 1
     assert "WrapBroken failed: no emulator today" in broken.stderr_bytes.decode()
+    with pytest.raises(ExecutionError, match="a bug in the wrapper"):
+        _test(rule_runner, Address("", target_name="buggy"))
 
 
 def test_generated_data_files(rule_runner: RuleRunner) -> None:

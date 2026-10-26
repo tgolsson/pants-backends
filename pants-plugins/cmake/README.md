@@ -50,8 +50,10 @@ returning a `CMakeTestWrapper` (an argv prefix, digests mounted read-only into t
 env), and registers it with a `UnionRule`. Typically it also adds a field to `cmake_test`
 with `register_plugin_field`, and to the `cmake_tests` generator with
 `register_plugin_field(..., as_moved_field=True)`, and reads it in `is_applicable`. At most
-one wrapper may apply to a test, and its env is set over the test's own. Test executables are
-built under their address without its parameters, so `parametrize` over such a field (one
+one wrapper may apply to a test, and its env is set over the test's own. A wrapper that cannot
+be set up (its rule raises `CMakeTestWrapperError`, or a process it runs fails) is reported as
+a failed test; any other exception is a bug in the wrapper and fails the goal. Test executables
+are built under their address without its parameters, so `parametrize` over such a field (one
 that does not change the build) runs one build several ways.
 
 ## Subsystems

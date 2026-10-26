@@ -3,9 +3,10 @@ tracer. Another backend subclasses `CMakeTestWrapperRequest`, implements `is_app
 rule from its subclass to `CMakeTestWrapper`, and registers the subclass with
 `UnionRule(CMakeTestWrapperRequest, ...)`. The test goal then runs `argv_prefix` before the
 test executable, with the wrapper's digests mounted and its env set. A test no member applies
-to runs unwrapped. Wrappers do not compose: at most one member may apply to a test, and a
-wrapper that cannot be set up makes that test a failed test (`CMakeTestWrapperError`), not a
-crashed goal."""
+to runs unwrapped. Wrappers do not compose: at most one member may apply to a test. A wrapper
+that cannot be set up (its rule raises `CMakeTestWrapperError`, or a process it runs fails)
+makes that test a failed test, not a crashed goal; any other exception from the rule is a bug
+in the wrapper and propagates with its traceback, as does one from `is_applicable`."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from dataclasses import dataclass, field
 
 from pants.engine.environment import EnvironmentName
 from pants.engine.fs import Digest
+from pants.engine.process import ProcessExecutionFailure
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import Target
 from pants.engine.unions import UnionMembership, union
@@ -63,7 +65,7 @@ async def cmake_test_wrapper(target: Target, union_membership: UnionMembership) 
     member = members[0]
     try:
         return await wrap_cmake_test(**implicitly({member(target): CMakeTestWrapperRequest}))
-    except Exception as error:
+    except (CMakeTestWrapperError, ProcessExecutionFailure) as error:
         raise CMakeTestWrapperError(f"{target.address}: {member.__name__} failed: {error}") from error
 
 
