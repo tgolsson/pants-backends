@@ -11,7 +11,7 @@ This release targets Pants **2.31.0**. Install it with
 This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses these tools:
 
 * `oci-builder`, a [scie](https://github.com/a-scie/jump) the plugin builds with pex from its own builder scripts and a pinned python-build-standalone Python. It is built once per machine and downloads that Python and pex's `science` tool from GitHub the first time; on first use it unpacks into the `oci_builder` named cache (`pants run` uses `~/.cache/nce` and `~/.cache/pex` instead)
-* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps
+* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps; or Docker 23.0 or newer instead, with `[oci].runner = "docker"` (see [Running with Docker](#running-with-docker))
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 
 `pants package` writes each `oci_image_build` to `dist/` as an OCI archive, `<name>.tar`, with the
@@ -53,6 +53,38 @@ part of a build step's cache key, so after changing it, rebuild with `--no-local
 Podman always runs locally: `CONTAINER_HOST` and `CONTAINER_CONNECTION` are ignored. macOS
 support requires a separate load/run path through `podman machine` and is deferred.
 
+### Running with Docker
+
+Teams without podman can run images and scripted build steps with Docker instead. Enable Pants'
+Docker backend and this plugin's Docker runner, and select it:
+
+```toml
+[GLOBAL]
+backend_packages.add = ["pants.backend.docker", "pants_backend_oci.docker"]
+
+[oci]
+runner = "docker"
+```
+
+Docker is found and configured by Pants' Docker backend, through its `[docker]` options:
+`executable_search_paths` finds `docker`, `env_vars` passes variables such as `DOCKER_HOST` and
+`DOCKER_CONFIG` (for `pants run` your whole environment is passed as well), `tools` puts extra
+tools such as credential helpers on its `PATH`, and `run_args` adds arguments to `docker run`, such
+as published ports. If the Docker backend's experimental podman support is on, it may pick podman's
+Docker-compatible command instead.
+
+Docker 23.0 or newer is required: scripted build steps use BuildKit, Docker's default builder from
+23.0, to build from the loaded image and export files. `docker load` reads the plugin's archives
+on any version, as they also carry Docker's `manifest.json`.
+
+Each `pants run` and build step loads the image into the Docker daemon as
+`pants-<digest>:latest`. Built images are removed, but loaded ones stay in the daemon's store,
+where they can be shared by later runs and steps, and accumulate; remove them with
+`docker images --filter=reference='pants-*' -q | xargs docker rmi`. Ownership inside the
+container is whatever your daemon gives it: a rootful daemon keeps the image's owners as they are.
+Scripted build steps aren't keyed on the daemon's configuration, only on the `docker` binary, so
+after changing the daemon rebuild with `--no-local-cache`.
+
 ## Pants store size
 
 Every layer and image the plugin builds is a file in the Pants store (`~/.cache/pants/lmdb_store`,
@@ -79,7 +111,10 @@ reproducible. A scripted step is only as reproducible as its command.
 
 Scripted steps run through `podman build`, from the image as an OCI archive and with
 `--timestamp 0`, as root inside the container. They need the same local, rootless Linux podman as
-`pants run` and share its store. Network access follows podman's defaults.
+`pants run` and share its store. Network access follows podman's defaults. With
+`[oci].runner = "docker"` they run through `docker build` instead, from the image loaded into
+the daemon, and the layer a step adds is rewritten with zeroed timestamps, as podman's
+`--timestamp 0` gives; network access follows Docker's defaults.
 
 A string command runs through `[oci].command_shell` (`/bin/sh -c` by default), so the base image
 must have that shell. On a base without one, such as a distroless image, give a list of strings
@@ -104,7 +139,7 @@ oci_build_layer(
 - `oci_image_build` with `commands=` adds what the command changed as one more layer on top of
   the image's layers, which are kept as they are.
 - `oci_extract` copies its `outputs` out of an image without running anything, but still reads
-  the image through podman.
+  the image through podman, or Docker.
 
 A failing command or a missing output fails the build. `examples/oci/scripted` shows all three.
 

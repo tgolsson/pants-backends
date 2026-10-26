@@ -16,6 +16,7 @@ from pants.testutil.rule_runner import QueryRule, RuleRunner
 
 from pants_backend_oci.util_rules import (
     builder_main,
+    container_build,
     deb_layer_builder,
     helper_layer_builder,
     layer_index,
@@ -41,7 +42,13 @@ def test_sandboxed_modules_keep_their_package_paths() -> None:
 
 
 def test_builder_dispatches_every_bundled_module() -> None:
-    bundled = {m.__name__.rpartition(".")[2] for m in sandboxed._MODULES if m is not builder_main}
+    # Modules without a `main` are only imported by the others.
+    bundled = {
+        m.__name__.rpartition(".")[2]
+        for m in sandboxed._MODULES
+        if m is not builder_main and hasattr(m, "main")
+    }
+    assert {m for m in sandboxed._MODULES if not hasattr(m, "main")} == {container_build}
     assert set(builder_main.MODULES) == bundled
 
 

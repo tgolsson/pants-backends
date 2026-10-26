@@ -10,7 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-_LAUNCHER_ENV = frozenset({"PEX", "SCIE", "SCIE_ARGV0", "VIRTUAL_ENV"})
+from pants_backend_oci.util_rules import container_build
+
 # Podman always runs locally (`--remote=false`), so a remote connection is dropped, not followed.
 _REMOTE_ENV = frozenset({"CONTAINER_HOST", "CONTAINER_CONNECTION"})
 
@@ -47,9 +48,7 @@ def prepare_store(cache: Path) -> tuple[Path, Path, dict[str, str]]:
     runtime = runtime_dir() / f"oci-{identity}"
     for directory in (cache, runtime, runtime / "run", runtime / "tmp"):
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    # Drop what launching `oci-builder` set, which names host paths.
-    dropped = _LAUNCHER_ENV | _REMOTE_ENV
-    env = {k: v for k, v in os.environ.items() if k not in dropped and not k.startswith("__PEX_")}
+    env = container_build.host_env(_REMOTE_ENV)
     return cache, runtime, env
 
 

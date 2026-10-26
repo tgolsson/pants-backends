@@ -113,6 +113,41 @@ jobs:
           pants package examples::
         fi
 
+  docker-runner:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.11"
+
+    - name: Initialize Pants
+      uses: pantsbuild/actions/init-pants@main
+      with:
+        gha-cache-key: cache1-docker-runner-py3.11-pants2.31.0
+        named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
+
+    # `[oci].runner = "docker"` on a machine with Docker and no podman.
+    - name: Run and script images with Docker
+      env:
+        PANTS_BACKEND_PACKAGES: "+['pants.backend.docker','pants_backend_oci.docker']"
+        PANTS_OCI_RUNNER: docker
+      run: |
+        ./get-pants.sh
+        sudo apt-get remove -y podman
+        ! command -v podman
+        docker version
+
+        /home/runner/bin/pants package examples/oci/scripted:: examples/oci/multistage::
+        /home/runner/bin/pants run examples/oci/debian:nonroot | tee run.out
+        grep -qx 'uid=65532(nonroot) gid=65532(nonroot) groups=65532(nonroot)' run.out
+        OCI_TEST_DOCKER=1 /home/runner/bin/pants test \
+          pants-plugins/oci/pants_backend_oci/goals/run_integration_test.py \
+          pants-plugins/oci/pants_backend_oci/util_rules/scripted_integration_test.py \
+          -- -k docker
+
   check-and-lint:
     runs-on: ubuntu-24.04
 

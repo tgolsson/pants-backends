@@ -34,7 +34,10 @@ from pants.util.logging import LogLevel
 from pants_backend_oci.subsystem import OciSubsystem
 from pants_backend_oci.util_rules import (
     builder_main,
+    container_build,
     deb_layer_builder,
+    docker_builder,
+    docker_runner,
     helper_layer_builder,
     layer_index,
     oci_layout_builder,
@@ -44,7 +47,10 @@ from pants_backend_oci.util_rules import (
 
 _MODULES = (
     builder_main,
+    container_build,
     deb_layer_builder,
+    docker_builder,
+    docker_runner,
     helper_layer_builder,
     layer_index,
     oci_layout_builder,
@@ -100,6 +106,7 @@ class OciBuilder:
         input_digest: Digest = EMPTY_DIGEST,
         env: Mapping[str, str] | None = None,
         append_only_caches: Mapping[str, str] | None = None,
+        immutable_input_digests: Mapping[str, Digest] | None = None,
         **kwargs: Any,
     ) -> Process:
         """A process running `module.main` with `args` in a sandbox holding `input_digest`."""
@@ -108,7 +115,7 @@ class OciBuilder:
             argv=self.argv(module, *args),
             description=description,
             input_digest=input_digest,
-            immutable_input_digests=self.immutable_input_digests,
+            immutable_input_digests={**(immutable_input_digests or {}), **self.immutable_input_digests},
             # The scie and pex record the cache's real path, so what they install outlives the sandbox.
             env={**(env or {}), "HOME": self.home, builder_main.CACHE_HOME: "1"},
             append_only_caches={**(append_only_caches or {}), _CACHE: f".{_CACHE}"},

@@ -1,6 +1,7 @@
 """Running scripted build steps, and finding the podman that runs them and `pants run`.
 
-`podman_builder` does the work in a sandboxed process; these rules only decide what it builds.
+`podman_builder`, or the runner `[oci].runner` picks, does the work in a sandboxed process; these
+rules only decide what it builds.
 """
 
 from __future__ import annotations
@@ -22,12 +23,18 @@ from pants.engine.env_vars import EnvironmentVarsRequest
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.logging import LogLevel
 
-from pants_backend_oci.subsystem import OciSubsystem
+from pants_backend_oci.subsystem import OciRunner, OciSubsystem
 from pants_backend_oci.util_rules import podman_builder
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.layer import ImageLayer
+from pants_backend_oci.util_rules.runner import (
+    ContainerBuildRequest,
+    container_build,
+    runner_member,
+)
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 _LINUX_ONLY = "OCI containers require local Linux podman; podman machine is not supported yet."
@@ -76,14 +83,10 @@ async def find_podman(
 
 
 @dataclass(frozen=True)
-class PodmanBuildRequest:
+class PodmanBuildRequest(ContainerBuildRequest):
     """Run `podman_builder` with `args` on `bundle`'s layout."""
 
-    bundle: ImageBundle
-    args: tuple[str, ...]
-    description: str
-    output_files: tuple[str, ...] = ()
-    output_directories: tuple[str, ...] = ()
+    runner = OciRunner.podman
 
 
 @rule
@@ -139,16 +142,16 @@ class ScriptedLayerRequest:
 
 
 @rule(desc="Run scripted OCI build step", level=LogLevel.DEBUG)
-async def run_scripted_layer(request: ScriptedLayerRequest, oci: OciSubsystem) -> ImageLayer:
-    result = await podman_build(
-        PodmanBuildRequest(
-            request.bundle,
-            (*_run_args(oci, request.command), "--dest", _SCRIPTED_LAYER, "layer"),
-            f"Run build step for {request.address}",
-            output_files=(_SCRIPTED_LAYER,),
-        ),
-        **implicitly(),
+async def run_scripted_layer(
+    request: ScriptedLayerRequest, oci: OciSubsystem, union_membership: UnionMembership
+) -> ImageLayer:
+    build = runner_member(ContainerBuildRequest, oci, union_membership)(
+        request.bundle,
+        (*_run_args(oci, request.command), "--dest", _SCRIPTED_LAYER, "layer"),
+        f"Run build step for {request.address}",
+        output_files=(_SCRIPTED_LAYER,),
     )
+    result = await container_build(**implicitly({build: ContainerBuildRequest}))
     command = request.command if isinstance(request.command, str) else shlex.join(request.command)
     return ImageLayer(
         request.address, result.output_digest, _SCRIPTED_LAYER, created_by=f"Build step: {command}"
@@ -169,21 +172,21 @@ class ImageFilesRequest:
 
 
 @rule(desc="Copy files out of OCI image", level=LogLevel.DEBUG)
-async def image_files(request: ImageFilesRequest, oci: OciSubsystem) -> ProcessResult:
+async def image_files(
+    request: ImageFilesRequest, oci: OciSubsystem, union_membership: UnionMembership
+) -> ProcessResult:
     if not request.outputs:
         raise ValueError(f"{request.address} has no `outputs`: list the paths to keep from the image.")
     args = [arg for output in request.outputs for arg in ("--output", output)]
     args += [arg for pattern in request.exclude_patterns for arg in ("--exclude", pattern)]
-    return await podman_build(
-        PodmanBuildRequest(
-            request.bundle,
-            (*_run_args(oci, request.command), "--dest", request.tar_name, "files", *args),
-            request.description,
-            output_files=(request.tar_name,),
-        ),
-        **implicitly(),
+    build = runner_member(ContainerBuildRequest, oci, union_membership)(
+        request.bundle,
+        (*_run_args(oci, request.command), "--dest", request.tar_name, "files", *args),
+        request.description,
+        output_files=(request.tar_name,),
     )
+    return await container_build(**implicitly({build: ContainerBuildRequest}))
 
 
 def rules():
-    return collect_rules()
+    return [*collect_rules(), UnionRule(ContainerBuildRequest, PodmanBuildRequest)]

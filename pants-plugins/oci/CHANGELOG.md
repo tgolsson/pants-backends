@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- `[oci].runner = "docker"` runs `pants run`, OCI repl and scripted build steps with Docker
+  instead of podman, for teams without podman. It needs Docker 23.0 or newer and the
+  `pants.backend.docker` and `pants_backend_oci.docker` backends; Docker is found and configured
+  by the Docker backend's `[docker]` options. podman stays the default. See "Running with Docker"
+  in the README.
+
 - Scripted build steps rerun when the podman binary changes, instead of reusing layers cached
   with the old podman. They also read podman's configuration from your home directory, like
   `pants run`, instead of from an empty private one. `pants run` no longer rejects

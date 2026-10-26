@@ -11,10 +11,11 @@ from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import Target, WrappedTargetRequest
-from pants.engine.unions import UnionRule
+from pants.engine.unions import UnionMembership, UnionRule
 from pants.option.global_options import NamedCachesDirOption
 
 from pants_backend_oci.goals.package import OciArchiveRequest, package_oci_archive
+from pants_backend_oci.subsystem import OciRunner, OciSubsystem
 from pants_backend_oci.target_types import ImageRepository, ImageRunTty
 from pants_backend_oci.util_rules import podman_runner
 from pants_backend_oci.util_rules.image_bundle import (
@@ -24,6 +25,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     resolve_image_bundle,
 )
 from pants_backend_oci.util_rules.run import PODMAN_CACHE, PODMAN_STORE_VERSION, PodmanBinary
+from pants_backend_oci.util_rules.runner import ContainerRunRequest, container_run, runner_member
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 
@@ -43,9 +45,14 @@ class RunImageBundleProcessRequest:
     interactive: bool = False
 
 
+@dataclass(frozen=True)
+class PodmanRunRequest(ContainerRunRequest):
+    runner = OciRunner.podman
+
+
 @rule
-async def prepare_run_image_bundle(
-    request: RunImageBundleProcessRequest,
+async def podman_run(
+    request: PodmanRunRequest,
     podman: PodmanBinary,
     builder: OciBuilder,
     caches: NamedCachesDirOption,
@@ -53,20 +60,9 @@ async def prepare_run_image_bundle(
 ) -> Process:
     if platform not in (Platform.linux_x86_64, Platform.linux_arm64):
         raise ValueError("OCI run/repl requires local Linux podman; podman machine is not supported yet.")
-    wrapped_target = await resolve_target(
-        WrappedTargetRequest(request.target.address, description_of_origin="run OCI image"),
-        **implicitly(),
-    )
-    bundle_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
-    image = await resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
-    if image.exit_code != 0 or image.dependency_failed or image.output is None:
-        raise ValueError(f"Failed preparing OCI image {request.target.address}: {image.stderr}")
-
     # Only the image's own blobs go to podman, in an OCI archive it reads directly.
     archive_process = await package_oci_archive(
-        OciArchiveRequest(
-            image.output.digest, "image.tar", None, f"Archive {request.target.address} for podman"
-        ),
+        OciArchiveRequest(request.bundle.digest, "image.tar", None, f"Archive {request.address} for podman"),
         **implicitly(),
     )
     archive = await fallible_to_exec_result_or_raise(**implicitly({archive_process: Process}))
@@ -84,15 +80,36 @@ async def prepare_run_image_bundle(
     args = [f"{{chroot}}/{exe}", *runner_args]
     if request.interactive:
         args.append("--interactive")
-    if request.interactive or wrapped_target.target.get(ImageRunTty).value:
+    if request.tty:
         args.append("--tty")
     args.append("--")
     return Process(
         args,
         input_digest=archive.output_digest,
         immutable_input_digests=builder.immutable_input_digests,
-        description=f"Running {request.target.address}",
+        description=f"Running {request.address}",
     )
+
+
+@rule
+async def prepare_run_image_bundle(
+    request: RunImageBundleProcessRequest, oci: OciSubsystem, union_membership: UnionMembership
+) -> Process:
+    wrapped_target = await resolve_target(
+        WrappedTargetRequest(request.target.address, description_of_origin="run OCI image"),
+        **implicitly(),
+    )
+    bundle_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
+    image = await resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest}))
+    if image.exit_code != 0 or image.dependency_failed or image.output is None:
+        raise ValueError(f"Failed preparing OCI image {request.target.address}: {image.stderr}")
+    run = runner_member(ContainerRunRequest, oci, union_membership)(
+        image.output,
+        request.target.address,
+        interactive=request.interactive,
+        tty=request.interactive or bool(wrapped_target.target.get(ImageRunTty).value),
+    )
+    return await container_run(**implicitly({run: ContainerRunRequest}))
 
 
 @rule
@@ -135,6 +152,7 @@ def rules():
         *collect_rules(),
         *RunImageBundleCommand.rules(),
         UnionRule(ReplImplementation, OciRepl),
+        UnionRule(ContainerRunRequest, PodmanRunRequest),
     ]
 
     return rules

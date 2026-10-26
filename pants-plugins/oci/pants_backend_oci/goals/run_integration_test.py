@@ -1,11 +1,34 @@
 from __future__ import annotations
 
+import os
 from textwrap import dedent
 
+import pytest
 from pants.testutil.pants_integration_test import run_pants, setup_tmpdir
 
+# The Docker runner is tested where Docker is, as in CI: `OCI_TEST_DOCKER=1`.
+RUNNERS = pytest.mark.parametrize(
+    "runner",
+    [
+        "podman",
+        pytest.param(
+            "docker",
+            marks=pytest.mark.skipif(
+                os.environ.get("OCI_TEST_DOCKER") != "1", reason="set OCI_TEST_DOCKER=1 to test Docker"
+            ),
+        ),
+    ],
+)
 
-def test_run_oci_container() -> None:
+
+def runner_args(runner: str) -> list[str]:
+    if runner == "podman":
+        return []
+    return ["--backend-packages=+['pants.backend.docker','pants_backend_oci.docker']", "--oci-runner=docker"]
+
+
+@RUNNERS
+def test_run_oci_container(runner: str) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -37,6 +60,7 @@ def test_run_oci_container() -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                *runner_args(runner),
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
                 "run",
@@ -49,7 +73,8 @@ def test_run_oci_container() -> None:
     assert result.stdout == "Hello world!\n"
 
 
-def test_run_oci_container_file() -> None:
+@RUNNERS
+def test_run_oci_container_file(runner: str) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -88,6 +113,7 @@ def test_run_oci_container_file() -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                *runner_args(runner),
                 "--backend-packages=pants.backend.python",
                 "--keep-sandboxes=on_failure",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
@@ -101,7 +127,8 @@ def test_run_oci_container_file() -> None:
     assert result.stdout == "Hello from a file!\n\n"
 
 
-def test_run_oci_container_files() -> None:
+@RUNNERS
+def test_run_oci_container_files(runner: str) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -140,6 +167,7 @@ def test_run_oci_container_files() -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                *runner_args(runner),
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
                 "run",

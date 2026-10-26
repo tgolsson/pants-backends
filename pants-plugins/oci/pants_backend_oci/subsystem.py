@@ -1,15 +1,30 @@
 from __future__ import annotations
 
+from enum import Enum
+
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.option.option_types import BoolOption, SkipOption, StrListOption, StrOption
+from pants.option.option_types import BoolOption, EnumOption, SkipOption, StrListOption, StrOption
 from pants.option.subsystem import Subsystem
 from pants.util.strutil import softwrap
+
+
+class OciRunner(Enum):
+    podman = "podman"
+    docker = "docker"
 
 
 class OciSubsystem(Subsystem):
     options_scope = "oci"
     help = "Generic options for the OCI subsystem."
+
+    runner = EnumOption(
+        default=OciRunner.podman,
+        help=softwrap("""
+        What runs images for `pants run` and OCI repl, and scripted build steps. `docker` needs the
+        `pants.backend.docker` and `pants_backend_oci.docker` backends, and uses their `[docker]`
+        options to find and configure Docker."""),
+    )
 
     command_shell = StrListOption(
         default=["/bin/sh", "-c"],

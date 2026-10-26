@@ -14,6 +14,7 @@ python_distribution_with_secret(
     dependencies=[
         ":package_data",
         "./pants_backend_oci:pants_backend_oci",
+        "./pants_backend_oci/docker:docker",
         "./pants_backend_oci/utility/mirror:mirror",
     ],
     provides=python_artifact(

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import tarfile
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
 from pants.testutil.pants_integration_test import run_pants, setup_tmpdir
 
 DEBIAN = dedent("""\
@@ -18,6 +20,26 @@ DEBIAN = dedent("""\
     )
     """)
 
+# The Docker runner is tested where Docker is, as in CI: `OCI_TEST_DOCKER=1`.
+RUNNERS = pytest.mark.parametrize(
+    "runner",
+    [
+        "podman",
+        pytest.param(
+            "docker",
+            marks=pytest.mark.skipif(
+                os.environ.get("OCI_TEST_DOCKER") != "1", reason="set OCI_TEST_DOCKER=1 to test Docker"
+            ),
+        ),
+    ],
+)
+
+
+def runner_args(runner: str) -> list[str]:
+    if runner == "podman":
+        return []
+    return ["--backend-packages=+['pants.backend.docker','pants_backend_oci.docker']", "--oci-runner=docker"]
+
 
 def top_layer(archive: Path) -> list[str]:
     """The paths in the image's last layer, which the scripted step added."""
@@ -29,10 +51,11 @@ def top_layer(archive: Path) -> list[str]:
             return tar.getnames()
 
 
-def pants(tmpdir: str, *args: str):
+def pants(tmpdir: str, runner: str, *args: str):
     return run_pants(
         [
             "--backend-packages=pants_backend_oci",
+            *runner_args(runner),
             "--keep-sandboxes=on_failure",
             "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
             f"--pants-distdir={tmpdir}/dist",
@@ -41,7 +64,8 @@ def pants(tmpdir: str, *args: str):
     )
 
 
-def test_scripted_layer_extract_and_image() -> None:
+@RUNNERS
+def test_scripted_layer_extract_and_image(runner: str) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": DEBIAN
@@ -82,7 +106,10 @@ def test_scripted_layer_extract_and_image() -> None:
 
     with setup_tmpdir(build_inputs) as tmpdir:
         result = pants(
-            tmpdir, "package", *(f"{tmpdir}/oci:{t}" for t in ("layer", "globbed", "extract", "image"))
+            tmpdir,
+            runner,
+            "package",
+            *(f"{tmpdir}/oci:{t}" for t in ("layer", "globbed", "extract", "image")),
         )
         result.assert_success()
         dist = Path(tmpdir, "dist")
@@ -105,8 +132,8 @@ def test_scripted_layer_extract_and_image() -> None:
             "var/lib/apt/.wh.lists",
         ]
 
-        no_outputs = pants(tmpdir, "package", f"{tmpdir}/oci:no-outputs")
-        result = pants(tmpdir, "run", f"{tmpdir}/oci:image")
+        no_outputs = pants(tmpdir, runner, "package", f"{tmpdir}/oci:no-outputs")
+        result = pants(tmpdir, runner, "run", f"{tmpdir}/oci:image")
 
     no_outputs.assert_failure()
     assert "has no `outputs`" in no_outputs.stderr
@@ -115,7 +142,8 @@ def test_scripted_layer_extract_and_image() -> None:
     assert result.stdout == "built\ngone\n"
 
 
-def test_failing_command_fails_the_build() -> None:
+@RUNNERS
+def test_failing_command_fails_the_build(runner: str) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": DEBIAN
@@ -137,8 +165,8 @@ def test_failing_command_fails_the_build() -> None:
     }
 
     with setup_tmpdir(build_inputs) as tmpdir:
-        failed = pants(tmpdir, "package", f"{tmpdir}/oci:layer")
-        missing = pants(tmpdir, "package", f"{tmpdir}/oci:missing")
+        failed = pants(tmpdir, runner, "package", f"{tmpdir}/oci:layer")
+        missing = pants(tmpdir, runner, "package", f"{tmpdir}/oci:missing")
 
     failed.assert_failure()
     assert "Run build step for" in failed.stderr
@@ -146,7 +174,8 @@ def test_failing_command_fails_the_build() -> None:
     assert "not/there" in missing.stderr
 
 
-def test_list_commands_run_without_a_shell() -> None:
+@RUNNERS
+def test_list_commands_run_without_a_shell(runner: str) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": DEBIAN
@@ -170,6 +199,7 @@ def test_list_commands_run_without_a_shell() -> None:
         # A shell that doesn't exist: list commands must not go through it.
         result = pants(
             tmpdir,
+            runner,
             "--oci-command-shell=['/no/such/shell']",
             "package",
             f"{tmpdir}/oci:layer",

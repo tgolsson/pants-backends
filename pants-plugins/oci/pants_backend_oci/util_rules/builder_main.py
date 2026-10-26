@@ -14,6 +14,8 @@ import sys
 
 MODULES = (
     "deb_layer_builder",
+    "docker_builder",
+    "docker_runner",
     "helper_layer_builder",
     "layer_index",
     "oci_layout_builder",
