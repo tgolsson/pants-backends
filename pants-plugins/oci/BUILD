@@ -33,6 +33,7 @@ __defaults__(
             dependencies=[
                 "//BUILD_ROOT:files",
                 "//pants-plugins/oci/pants_backend_oci/register.py",
+                "//pants-plugins/oci/pants_backend_oci/docker/register.py",
             ],
         ),
     },
