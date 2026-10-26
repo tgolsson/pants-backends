@@ -122,8 +122,10 @@ deb_packages(
 Like rules_distroless's `gpg_keys`, `generate-lockfiles` verifies every suite's `InRelease`, or its
 `Release` and `Release.gpg` when there's no `InRelease`, against `keyrings`, and fails unless at
 least one signature is good and made by a key in them. A bad signature from one of their keys fails
-too. The hashes of the `Packages` indices are only taken from the verified file. Either `keyrings` or
-`allow_unsigned=True` must be set.
+too. The hashes of the `Packages` indices are only taken from the verified file. It also fails
+unless the signed file's `Suite` or `Codename` is the suite asked for, so another suite's validly
+signed `Release` can't stand in for it. This is apt's rule, though apt only warns: a path like
+debian-security's old `buster/updates` matches by what comes before its last `/`. Either `keyrings` or `allow_unsigned=True` must be set.
 
 Use the archive's own keyring, from the snapshot you resolve against so it's pinned too:
 `/usr/share/keyrings/debian-archive-keyring.gpg` from the `debian-archive-keyring` package, or
@@ -132,11 +134,11 @@ Use the archive's own keyring, from the snapshot you resolve against so it's pin
 
 Verification needs no `gpgv` or `sqv`: it's built into the resolver, and supports what Debian and
 Ubuntu sign with, v4 RSA and Ed25519 keys with SHA-2 hashes. Older snapshots signed only with SHA-1
-need `allow_unsigned=True`, which turns verification off entirely. Every key in the keyrings is
-trusted as given: expiry and revocation aren't checked, since a snapshot's `Release` files are
-historical. For the same reason, neither is freshness (`Valid-Until`), nor that the signed `Release`
-is for the suite that was asked for: the snapshot URL is what pins both. The keys aren't recorded in
-the lockfile, so changing `keyrings` doesn't make it out of date.
+need `allow_unsigned=True`, which turns signature verification off entirely; the suite is still
+checked. Every key in the keyrings is trusted as given: expiry and revocation aren't checked, since a
+snapshot's `Release` files are historical. For the same reason, freshness (`Valid-Until`) isn't
+checked either: the snapshot URL is what pins it. The keys aren't recorded in the lockfile, so
+changing `keyrings` doesn't make it out of date.
 
 #### Resolution
 

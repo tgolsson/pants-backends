@@ -522,6 +522,72 @@ def test_fetch_release_unsigned(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "suite, release",
+    [
+        ("bookworm", "Suite: stable\nCodename: bookworm\n"),
+        ("stable", "Suite: stable\nCodename: bookworm\n"),
+        ("bookworm-security", "Suite: stable-security\nCodename: bookworm-security\n"),
+        # debian-security's old layout, whose `Release` names the release it updates.
+        ("buster/updates", "Suite: stable\nCodename: buster\n"),
+        ("noble-updates", "Suite: noble-updates\nCodename: noble\n"),
+        ("noble-security", "Suite: noble-security\nCodename: noble\n"),
+        # Either field alone is enough.
+        ("bookworm", "Codename: bookworm\n"),
+        ("stable", "Suite: stable\n"),
+        # Only the last `/` splits, as in apt.
+        ("a/b/c", "Codename: a/b\n"),
+    ],
+)
+def test_fetch_release_accepts_its_suite(tmp_path: Path, suite: str, release: str) -> None:
+    dists = tmp_path / "dists" / suite
+    dists.mkdir(parents=True)
+    write_release(dists, release + "SHA256:\n")
+    source = Source(tmp_path.as_uri(), suite, ("main",))
+    assert fetch_release(source, KEYRING) == release + "SHA256:\n"
+    (dists / "InRelease").unlink()
+    assert fetch_release(source, KEYRING) == release + "SHA256:\n"
+    assert fetch_release(source, None) == release + "SHA256:\n"
+
+
+@pytest.mark.parametrize(
+    "suite, release, error",
+    [
+        (
+            "bookworm",
+            "Suite: stable-backports\nCodename: bookworm-backports\n",
+            "is for suite stable-backports \\(codename bookworm-backports\\), not bookworm",
+        ),
+        (
+            "bookworm/updates",
+            "Suite: testing\nCodename: trixie\n",
+            "is for suite testing \\(codename trixie\\), not bookworm/updates",
+        ),
+        ("stable", "Origin: Debian\n", "is for suite \\(none\\) \\(codename \\(none\\)\\), not stable"),
+        # A shared prefix isn't a match: only `/` splits a suite.
+        (
+            "bookworm-security",
+            "Suite: stable\nCodename: bookworm\n",
+            "is for suite stable \\(codename bookworm\\), not bookworm-security",
+        ),
+        ("a/b/c", "Codename: a\n", "is for suite \\(none\\) \\(codename a\\), not a/b/c"),
+    ],
+)
+def test_fetch_release_rejects_another_suite(tmp_path: Path, suite: str, release: str, error: str) -> None:
+    """A validly signed `Release` of another suite doesn't pass for the one asked for."""
+    dists = tmp_path / "dists" / suite
+    dists.mkdir(parents=True)
+    write_release(dists, release + "SHA256:\n")
+    source = Source(tmp_path.as_uri(), suite, ("main",))
+    with pytest.raises(ResolveError, match=f"dists/{suite}/InRelease {error}"):
+        fetch_release(source, KEYRING)
+    (dists / "InRelease").unlink()
+    with pytest.raises(ResolveError, match=f"dists/{suite}/Release {error}"):
+        fetch_release(source, KEYRING)
+    with pytest.raises(ResolveError, match=f"dists/{suite}/Release {error}"):
+        fetch_release(source, None)
+
+
 def test_main_writes_lockfile(tmp_path: Path) -> None:
     write_repo(
         tmp_path / "repo",

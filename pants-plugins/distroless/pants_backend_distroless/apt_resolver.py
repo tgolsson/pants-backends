@@ -5,9 +5,11 @@
 
 Each source is a sources.list line without the leading `deb`: `<uri> <suite> <component>...`. The
 `InRelease` file of every suite is fetched and its signature verified against the given keyrings,
-falling back to `Release` and `Release.gpg` where there's no `InRelease`. Each `Packages` index is
-then checked against the SHA256 the verified file lists before being parsed. Resolution then walks
-the `Pre-Depends` and `Depends` of the requested packages, much like rules_distroless does:
+falling back to `Release` and `Release.gpg` where there's no `InRelease`, and its `Suite` or
+`Codename` must name the requested suite by apt's rule (where apt only warns). Each `Packages`
+index is then checked against the SHA256 the verified file lists before being parsed. Resolution
+then walks the `Pre-Depends` and `Depends` of the requested packages, much like rules_distroless
+does:
 
 * a real package resolves to its highest version (across all sources) satisfying the constraint;
 * `a | b` takes the first satisfiable alternative, unless one is already in the closure;
@@ -197,6 +199,22 @@ def parse_release_hashes(text: str) -> dict[str, tuple[str, int]]:
         if len(parts) == 3:
             hashes[parts[2]] = (parts[0], int(parts[1]))
     return hashes
+
+
+def check_suite(release: str, suite: str, url: str) -> None:
+    """Fails unless `release` is for `suite`, by the rule of apt's `CheckDist`, which only warns.
+
+    `suite` may be the `Suite` (`stable`) or the `Codename` (`bookworm`), and a path like
+    debian-security's old `buster/updates` matches by what comes before its last `/`.
+    """
+    stanza = next(parse_deb822(release), {})
+    names = {stanza.get("Suite"), stanza.get("Codename")} - {None, ""}
+    if suite in names or ("/" in suite and suite.rpartition("/")[0] in names):
+        return
+    raise ResolveError(
+        f"{url} is for suite {stanza.get('Suite') or '(none)'} "
+        f"(codename {stanza.get('Codename') or '(none)'}), not {suite}"
+    )
 
 
 @dataclass(frozen=True)
@@ -503,22 +521,30 @@ def fetch_release(
     """Returns the suite's `Release` content, verified against `keyring` unless that's None."""
     dists = f"{source.uri}/dists/{source.suite}"
     if keyring is None:
-        return _decode(fetch(f"{dists}/Release"), f"{dists}/Release")
-    try:
-        in_release = fetch(f"{dists}/InRelease")
-    except NotFound:
-        release = fetch(f"{dists}/Release")
+        url = f"{dists}/Release"
+        release = _decode(fetch(url), url)
+    else:
         try:
-            openpgp.verify_detached(release, fetch(f"{dists}/Release.gpg"), keyring)
-        except openpgp.OpenPGPError as e:
-            raise ResolveError(f"{dists}/Release.gpg doesn't verify {dists}/Release: {e}") from e
-        return _decode(release, f"{dists}/Release")
-    try:
-        # Only the signed text counts, so the hashes come from what was verified.
-        signed = openpgp.verify_cleartext(in_release, keyring)
-    except openpgp.OpenPGPError as e:
-        raise ResolveError(f"{dists}/InRelease doesn't verify: {e}") from e
-    return _decode(signed, f"{dists}/InRelease")
+            in_release = fetch(f"{dists}/InRelease")
+        except NotFound:
+            url = f"{dists}/Release"
+            data = fetch(url)
+            try:
+                openpgp.verify_detached(data, fetch(f"{dists}/Release.gpg"), keyring)
+            except openpgp.OpenPGPError as e:
+                raise ResolveError(f"{dists}/Release.gpg doesn't verify {url}: {e}") from e
+            release = _decode(data, url)
+        else:
+            url = f"{dists}/InRelease"
+            try:
+                # Only the signed text counts, so the hashes come from what was verified.
+                signed = openpgp.verify_cleartext(in_release, keyring)
+            except openpgp.OpenPGPError as e:
+                raise ResolveError(f"{url} doesn't verify: {e}") from e
+            release = _decode(signed, url)
+    # A validly signed `Release` of another suite at this suite's path mustn't pass for it.
+    check_suite(release, source.suite, url)
+    return release
 
 
 def fetch_index(

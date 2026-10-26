@@ -15,3 +15,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `generate-lockfiles` verifies the OpenPGP signature of every suite's `InRelease` (or `Release` and
   `Release.gpg`) against the keyrings in the new `keyrings` field of `deb_packages`. **Breaking:**
   `deb_packages` needs either `keyrings` or `allow_unsigned=True`.
+- `generate-lockfiles` fails unless each suite's `Release` names it as its `Suite` or `Codename`, by
+  apt's rule (where apt only warns).
