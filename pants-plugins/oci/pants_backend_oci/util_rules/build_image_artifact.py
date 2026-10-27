@@ -93,9 +93,14 @@ async def build_image_artifact(
         WrappedTargetRequest(base[0], description_of_origin="package_oci_image"), **implicitly()
     )
 
-    build_request = await ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly())
-    maybe_built_base = await resolve_image_bundle(
-        **implicitly({build_request.request: FallibleImageBundleRequest})
+    build_request, dependencies = await concurrently(
+        ibr_to_fibr(ImageBundleRequest(wrapped_target.target), **implicitly()),
+        resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
+    )
+
+    maybe_built_base, *layers = await concurrently(
+        resolve_image_bundle(**implicitly({build_request.request: FallibleImageBundleRequest})),
+        *(build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies),
     )
 
     if maybe_built_base.output is None:
@@ -104,10 +109,6 @@ async def build_image_artifact(
     bundle = maybe_built_base.output
 
     if request.target.dependencies.value:
-        dependencies = await resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies)))
-        layers = await concurrently(
-            build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies
-        )
         config = ConfigEdit(env=tuple(request.target.environment.value or ()), history=True)
         image = await assemble_image(
             AssembleImageRequest(bundle, (*layers, config), f"Assemble OCI image: {request.target.address}"),
