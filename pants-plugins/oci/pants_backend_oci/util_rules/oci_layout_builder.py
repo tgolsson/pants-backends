@@ -22,7 +22,6 @@ import io
 import json
 import os
 import re
-import shutil
 import struct
 import sys
 import tarfile
@@ -188,24 +187,51 @@ def _referenced(layout: str, desc: Mapping, seen: set[str]) -> None:
         raise _UnknownReferences(digest)
 
 
-def collect_garbage(layout: str) -> None:
-    """Remove blobs that nothing in `index.json` references.
+def referenced_blobs(layout: str) -> list[str] | None:
+    """The blobs that `index.json` references, or None if it holds anything whose references
+    aren't known, such as an artifact manifest.
 
-    A layout holding anything whose references aren't known, such as an artifact manifest, is left
-    alone rather than risk removing a blob it needs.
+    Only index and manifest blobs are read, so the layer and config blobs needn't be present.
     """
     seen: set[str] = set()
     try:
         for desc in read_index(layout).get("manifests", []):
             _referenced(layout, desc, seen)
     except _UnknownReferences:
+        return None
+    return sorted(seen)
+
+
+def collect_garbage(layout: str) -> None:
+    """Remove blobs that nothing in `index.json` references.
+
+    A layout whose references aren't known is left alone rather than risk removing a blob it needs.
+    """
+    referenced = referenced_blobs(layout)
+    if referenced is None:
         return
+    seen = set(referenced)
     blobs = os.path.join(layout, "blobs")
     for algorithm in sorted(os.listdir(blobs)):
         for name in sorted(os.listdir(os.path.join(blobs, algorithm))):
             path = os.path.join(blobs, algorithm, name)
             if f"{algorithm}:{name}" not in seen and os.path.isfile(path):
                 os.remove(path)
+
+
+def describe(layout: str, tag: str) -> dict:
+    """The image tagged `tag`: its manifest `digest`, its `metadata` blobs (manifest and config),
+    and the `blobs` the layout references (None if unknown, see `referenced_blobs`).
+
+    Assembly runs on metadata alone, so the rules use this to pick the blobs of the full layout.
+    """
+    desc = tagged_descriptor(read_index(layout), tag)
+    manifest = json.loads(read_blob(layout, desc["digest"]))
+    return {
+        "digest": desc["digest"],
+        "metadata": [desc["digest"], manifest["config"]["digest"]],
+        "blobs": referenced_blobs(layout),
+    }
 
 
 # -- archives ----------------------------------------------------------------------------------
@@ -568,28 +594,26 @@ def files_to_blob(files: Mapping[str, bool], out_dir: str, level: int = GZIP_LEV
     return _write_layer_blob(out_dir, write)
 
 
-def add_blob(layout: str, image: Image, path: str, history: Mapping | None) -> None:
-    """Add the layer compressed by `compress_to_blob`, whose descriptor is at `path`."""
+def add_blob(image: Image, path: str, history: Mapping | None) -> None:
+    """Add the layer compressed by `compress_to_blob`, whose descriptor is at `path`.
+
+    Only the descriptor is read: the blob stays out of the layout, for the rules to merge in.
+    """
     with open(path, "rb") as f:
         layer = json.load(f)
-    digest = layer["digest"]
-    source = blob_path(os.path.dirname(path), digest)
-    target = blob_path(layout, digest)
-    if not os.path.exists(target):
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        # A sandbox input may be a symlink into the store, which mustn't end up in the layout.
-        if os.path.islink(source):
-            shutil.copyfile(source, target)
-        else:
-            os.replace(source, target)
-    _append_layer(image, descriptor(layer["mediaType"], digest, layer["size"]), layer["diff_id"], history)
+    desc = descriptor(layer["mediaType"], layer["digest"], layer["size"])
+    _append_layer(image, desc, layer["diff_id"], history)
 
 
 def add_layer(layout: str, image: Image, path: str, history: Mapping | None) -> None:
-    """Compress the layer tar at `path` and add it."""
+    """Compress the layer tar at `path` and add it, blob included."""
     with tempfile.TemporaryDirectory(dir=layout, prefix=".tmp-") as tmp:
-        compress_to_blob(path, tmp)
-        add_blob(layout, image, os.path.join(tmp, LAYER_DESCRIPTOR), history)
+        digest = compress_to_blob(path, tmp)
+        target = blob_path(layout, digest)
+        if not os.path.exists(target):
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            os.replace(blob_path(tmp, digest), target)
+        add_blob(image, os.path.join(tmp, LAYER_DESCRIPTOR), history)
 
 
 def _append_layer(image: Image, desc: dict, diff_id: str, history: Mapping | None) -> None:
@@ -647,7 +671,7 @@ def apply(layout: str, tag: str, ops: Iterable[Mapping]) -> str:
     """Apply `ops` to the image tagged `tag` and return the new manifest digest.
 
     The ops are `init` (start from an empty image), `add_layer` (a layer tar), `add_blob` (a layer
-    compressed by `compress_to_blob`) and `config`.
+    compressed by `compress_to_blob`, by its descriptor alone) and `config`.
     """
     image: Image | None = None
     for op in ops:
@@ -661,7 +685,7 @@ def apply(layout: str, tag: str, ops: Iterable[Mapping]) -> str:
         if kind == "add_layer":
             add_layer(layout, image, op["path"], op.get("history"))
         elif kind == "add_blob":
-            add_blob(layout, image, op["path"], op.get("history"))
+            add_blob(image, op["path"], op.get("history"))
         elif kind == "config":
             configure(image, op)
         else:
@@ -739,7 +763,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--layout", default="build")
     parser.add_argument("--tag", default="build")
     commands = parser.add_subparsers(dest="command", required=True)
-    apply_parser = commands.add_parser("apply", help="Apply a JSON list of ops to the image.")
+    apply_parser = commands.add_parser("apply", help="Apply a JSON list of ops to the image and describe it.")
     apply_parser.add_argument("spec")
     compress_parser = commands.add_parser("compress", help="Gzip a layer tar into a blob.")
     compress_parser.add_argument("layer")
@@ -749,7 +773,7 @@ def main(argv: list[str]) -> int:
         gzip_parser.add_argument("--out", required=True)
         gzip_parser.add_argument("--level", type=int, choices=range(1, 10), default=GZIP_LEVEL)
         gzip_parser.add_argument("--threads", type=int, default=os.cpu_count() or 1)
-    commands.add_parser("normalize", help="Tag and convert a pulled layout.")
+    commands.add_parser("normalize", help="Tag and convert a pulled layout and describe it.")
     commands.add_parser("digest", help="Print the image's manifest digest.")
     export_parser = commands.add_parser("export", help="Write the image as a named OCI archive.")
     export_parser.add_argument("archive")
@@ -758,15 +782,17 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
-        if args.command == "apply":
-            with open(args.spec, "rb") as f:
-                digest = apply(args.layout, args.tag, json.load(f))
+        if args.command in ("apply", "normalize"):
+            if args.command == "apply":
+                with open(args.spec, "rb") as f:
+                    apply(args.layout, args.tag, json.load(f))
+            else:
+                normalize(args.layout, args.tag)
+            digest = _json(describe(args.layout, args.tag)).decode()
         elif args.command == "compress":
             digest = compress_to_blob(args.layer, args.out, args.level, args.threads)
         elif args.command == "layer":
             digest = files_to_blob(read_files_list(args.files_from), args.out, args.level, args.threads)
-        elif args.command == "normalize":
-            digest = normalize(args.layout, args.tag)
         elif args.command == "export":
             digest = write_archive(args.layout, args.tag, args.archive, args.name)
         elif args.command == "set-cmd":

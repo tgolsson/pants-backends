@@ -24,7 +24,9 @@ def build_process(podman: LocalPodmanBinary):
     run_rule_with_mocks(
         podman_build,
         rule_args=[
-            PodmanBuildRequest(ImageBundle(EMPTY_DIGEST, "sha256:abc", True), ("layer",), "build"),
+            PodmanBuildRequest(
+                ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST), ("layer",), "build"
+            ),
             podman,
             OciBuilder(EMPTY_DIGEST),
             SimpleNamespace(system_binary_paths=("/usr/bin", "/bin")),

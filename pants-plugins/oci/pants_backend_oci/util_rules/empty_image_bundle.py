@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-from pants.engine.fs import EMPTY_DIGEST
 from pants.engine.platform import Platform
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import FieldSet, Target
@@ -35,9 +34,7 @@ async def make_empty_oci_image(request: ImageBundleEmptyRequest, platform: Platf
     # The empty image is for the host's architecture.
     architecture = "arm64" if platform.value.endswith("arm64") else "amd64"
     return await assemble_image(
-        AssembleImageRequest(
-            EMPTY_DIGEST, (InitImage(architecture, "linux"),), "Creating an empty OCI image"
-        ),
+        AssembleImageRequest(None, (InitImage(architecture, "linux"),), "Creating an empty OCI image"),
         **implicitly(),
     )
 

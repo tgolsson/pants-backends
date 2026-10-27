@@ -37,9 +37,13 @@ class FallibleImageBundleRequestWrap:
 class ImageBundle:
     """A built OCI image layer."""
 
+    # The OCI layout under `build/`.
     digest: Digest
     image_sha: str
     is_local: bool
+    # The layout's `index.json`, `oci-layout` and the manifest and config blobs: all assembly
+    # needs, without the layer blobs.
+    metadata: Digest
 
 
 @dataclass(frozen=True)

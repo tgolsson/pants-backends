@@ -27,7 +27,7 @@ def test_image_tag_injection_publishes_local_layout(tag, is_local):
     address = Address("images", target_name="app")
     target = ImageBuild({"repository": "registry.example/app", "tag": tag}, address)
     field_set = KustomizeInjectOciTagFieldSet.create(target)
-    image = ImageBundle(EMPTY_DIGEST, "sha256:1234", is_local=is_local)
+    image = ImageBundle(EMPTY_DIGEST, "sha256:1234", is_local=is_local, metadata=EMPTY_DIGEST)
     published = []
     executed = []
 

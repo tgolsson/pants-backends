@@ -18,7 +18,7 @@ from pants_backend_oci.util_rules import docker_builder
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
-BUNDLE = ImageBundle(EMPTY_DIGEST, "sha256:abc", True)
+BUNDLE = ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST)
 DOCKER = DockerBinary("/usr/bin/docker", "fingerprint", extra_env={"PATH": "__tools/bin"})
 DOCKER_ENV = {"DOCKER_HOST": "unix:///run/docker.sock"}
 

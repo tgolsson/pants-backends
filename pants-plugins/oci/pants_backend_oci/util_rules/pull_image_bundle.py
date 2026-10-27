@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -7,7 +8,8 @@ from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.core.util_rules.external_tool import download_external_tool
 from pants.engine.env_vars import EnvironmentVars as Environment
 from pants.engine.env_vars import EnvironmentVarsRequest as EnvironmentRequest
-from pants.engine.intrinsics import execute_process
+from pants.engine.fs import DigestSubset, PathGlobs
+from pants.engine.intrinsics import digest_subset_to_digest, execute_process
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.rules import collect_rules, implicitly, rule
@@ -114,8 +116,26 @@ async def pull_oci_image(
             None, exit_code=normalized.exit_code, stderr=f"{error} ({image_ref})", stdout=""
         )
 
+    image = json.loads(normalized.stdout)
+    metadata = await digest_subset_to_digest(
+        DigestSubset(
+            normalized.output_digest,
+            PathGlobs(
+                [
+                    "build/index.json",
+                    "build/oci-layout",
+                    *(f"build/blobs/{digest.replace(':', '/', 1)}" for digest in image["metadata"]),
+                ]
+            ),
+        )
+    )
     return FallibleImageBundle(
-        ImageBundle(normalized.output_digest, f"sha256:{request.target.digest.value}", is_local=False)
+        ImageBundle(
+            normalized.output_digest,
+            f"sha256:{request.target.digest.value}",
+            is_local=False,
+            metadata=metadata,
+        )
     )
 
 

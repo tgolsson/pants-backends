@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -72,7 +73,8 @@ def test_pull_runs_crane(fields, platform, expected_platform, anonymous) -> None
     assert dict(process.env) == ({} if anonymous else {"HOME": "/home/user"})
 
 
-def run_pull(results: list, processes: list):
+def run_pull(results: list, processes: list, subsets: list | None = None):
+    subsets = [] if subsets is None else subsets
     target = PullImage(
         {"repository": "registry.k8s.io/pause", "digest": DIGEST, "anonymous": True},
         Address("images", target_name="pause"),
@@ -95,6 +97,8 @@ def run_pull(results: list, processes: list):
                 exe="./crane", digest=EMPTY_DIGEST
             ),
             "pants.engine.intrinsics.execute_process": execute,
+            "pants.engine.intrinsics.digest_subset_to_digest": lambda subset: subsets.append(subset)
+            or METADATA,
         },
     )
 
@@ -102,21 +106,36 @@ def run_pull(results: list, processes: list):
 PULLED = Digest("1" * 64, 1)
 BUILDER = Digest("2" * 64, 2)
 NORMALIZED = Digest("4" * 64, 4)
+METADATA = Digest("5" * 64, 5)
 
 
 def test_pull_normalizes_the_layout_in_a_sandbox() -> None:
     processes: list = []
+    subsets: list = []
+    described = {"digest": "sha256:m", "metadata": ["sha256:m", "sha256:c"], "blobs": ["sha256:l"]}
 
     result = run_pull(
         [
             SimpleNamespace(exit_code=0, output_digest=PULLED),
-            SimpleNamespace(exit_code=0, output_digest=NORMALIZED, stdout=b"sha256:x\n", stderr=b""),
+            SimpleNamespace(
+                exit_code=0, output_digest=NORMALIZED, stdout=json.dumps(described).encode(), stderr=b""
+            ),
         ],
         processes,
+        subsets,
     )
 
     assert result.exit_code == 0
     assert result.output.digest == NORMALIZED
+    assert result.output.metadata == METADATA
+    (subset,) = subsets
+    assert subset.digest == NORMALIZED
+    assert set(subset.globs.globs) == {
+        "build/index.json",
+        "build/oci-layout",
+        "build/blobs/sha256/m",
+        "build/blobs/sha256/c",
+    }
     assert result.output.image_sha == f"sha256:{DIGEST}"
     assert not result.output.is_local
     _, normalize = processes

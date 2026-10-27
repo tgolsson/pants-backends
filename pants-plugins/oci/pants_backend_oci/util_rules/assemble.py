@@ -7,12 +7,32 @@
 from __future__ import annotations
 
 import json
+import posixpath
 from dataclasses import dataclass
 from typing import Union
 
 from pants.engine.addresses import Address
-from pants.engine.fs import AddPrefix, CreateDigest, Digest, FileContent, MergeDigests
-from pants.engine.intrinsics import add_prefix, create_digest, execute_process, merge_digests
+from pants.engine.fs import (
+    EMPTY_DIGEST,
+    AddPrefix,
+    CreateDigest,
+    Digest,
+    DigestSubset,
+    FileContent,
+    GlobExpansionConjunction,
+    GlobMatchErrorBehavior,
+    MergeDigests,
+    PathGlobs,
+    RemovePrefix,
+)
+from pants.engine.intrinsics import (
+    add_prefix,
+    create_digest,
+    digest_subset_to_digest,
+    execute_process,
+    merge_digests,
+    remove_prefix,
+)
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.util.logging import LogLevel
@@ -134,9 +154,9 @@ async def compress_image_layer(
 
 @dataclass(frozen=True)
 class AssembleImageRequest:
-    """Apply `ops` to the layout in `base` (under `build/`), or to a new image after `InitImage`."""
+    """Apply `ops` to the image in `base`, or to a new image after `InitImage`."""
 
-    base: Digest
+    base: ImageBundle | None
     ops: tuple[AssembleOp, ...]
     description: str
 
@@ -149,22 +169,27 @@ async def assemble_image(request: AssembleImageRequest, builder: OciBuilder) -> 
     )
 
     spec: list[dict] = []
-    prefixed = []
+    added = 0
     for op in request.ops:
         if isinstance(op, ImageLayer):
             # Layers are prefixed by position, since different layers may hold the same blob.
-            prefix = f"layers/{len(prefixed)}"
-            layer = compressed[len(prefixed)]
-            prefixed.append(add_prefix(AddPrefix(layer.digest, prefix)))
-            spec.extend(layer_ops(op, f"{prefix}/{layer.descriptor}"))
+            spec.extend(layer_ops(op, f"layers/{added}/{compressed[added].descriptor}"))
+            added += 1
         else:
             spec.append(op.to_json())
 
-    spec_digest, *layer_digests = await concurrently(
-        create_digest(CreateDigest([FileContent(_SPEC, json.dumps(spec).encode())])),
-        *prefixed,
+    # The process gets metadata only: the base's index, manifest and config, and each layer's
+    # descriptor. The blobs are merged into the layout afterwards, so assembly never copies them.
+    descriptors = await concurrently(
+        digest_subset_to_digest(DigestSubset(layer.digest, PathGlobs([layer.descriptor])))
+        for layer in compressed
     )
-    input_digest = await merge_digests(MergeDigests([request.base, spec_digest, *layer_digests]))
+    spec_digest, *prefixed = await concurrently(
+        create_digest(CreateDigest([FileContent(_SPEC, json.dumps(spec).encode())])),
+        *(add_prefix(AddPrefix(digest, f"layers/{i}")) for i, digest in enumerate(descriptors)),
+    )
+    base_metadata = request.base.metadata if request.base else EMPTY_DIGEST
+    input_digest = await merge_digests(MergeDigests([base_metadata, spec_digest, *prefixed]))
 
     result = await execute_process(
         builder.process(
@@ -186,8 +211,47 @@ async def assemble_image(request: AssembleImageRequest, builder: OciBuilder) -> 
             stderr=result.stderr.decode(errors="replace"),
         )
 
-    image_sha = result.stdout.decode().strip()
-    return FallibleImageBundle(ImageBundle(result.output_digest, image_sha=image_sha, is_local=True))
+    image = json.loads(result.stdout)
+    # The captured layout is the new metadata. The full layout adds the base's and the layers'
+    # blobs, keeping those the image references.
+    base_blobs, *layer_blobs = await concurrently(
+        digest_subset_to_digest(
+            DigestSubset(request.base.digest if request.base else EMPTY_DIGEST, PathGlobs(["build/blobs/**"]))
+        ),
+        *(
+            digest_subset_to_digest(DigestSubset(layer.digest, PathGlobs([f"{_blob_dir(layer)}/blobs/**"])))
+            for layer in compressed
+        ),
+    )
+    layer_blobs = await concurrently(
+        remove_prefix(RemovePrefix(blobs, _blob_dir(layer))) for blobs, layer in zip(layer_blobs, compressed)
+    )
+    layer_layout = await add_prefix(AddPrefix(await merge_digests(MergeDigests(layer_blobs)), "build"))
+    layout = await merge_digests(MergeDigests([result.output_digest, base_blobs, layer_layout]))
+    if image["blobs"] is not None:
+        kept = [f"build/blobs/{digest.replace(':', '/', 1)}" for digest in image["blobs"]]
+        layout = await digest_subset_to_digest(
+            DigestSubset(
+                layout,
+                PathGlobs(
+                    ["build/index.json", "build/oci-layout", *kept],
+                    glob_match_error_behavior=GlobMatchErrorBehavior.error,
+                    conjunction=GlobExpansionConjunction.all_match,
+                    description_of_origin=request.description,
+                ),
+            )
+        )
+    return FallibleImageBundle(
+        ImageBundle(layout, image_sha=image["digest"], is_local=True, metadata=result.output_digest)
+    )
+
+
+def _blob_dir(layer: CompressedLayer) -> str:
+    """The directory holding the layer's `blobs/`, beside its descriptor."""
+    directory = posixpath.dirname(layer.descriptor)
+    if not directory:
+        raise ValueError(f"Expected the layer descriptor {layer.descriptor!r} in a directory")
+    return directory
 
 
 class ImageAssemblyError(Exception):

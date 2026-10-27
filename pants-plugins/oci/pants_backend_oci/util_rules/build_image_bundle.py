@@ -151,12 +151,12 @@ async def build_oci_bundle_package(request: BuildImageBundleRequest) -> Fallible
     description = f"Assemble OCI image: {request.target.address}"
     if not request.target.commands.value:
         return await assemble_image(
-            AssembleImageRequest(maybe_built_base.output.digest, (*layers, config), description),
+            AssembleImageRequest(maybe_built_base.output, (*layers, config), description),
             **implicitly(),
         )
 
     image = await assemble_image(
-        AssembleImageRequest(maybe_built_base.output.digest, tuple(layers), description), **implicitly()
+        AssembleImageRequest(maybe_built_base.output, tuple(layers), description), **implicitly()
     )
     if image.output is None:
         return image
@@ -167,7 +167,7 @@ async def build_oci_bundle_package(request: BuildImageBundleRequest) -> Fallible
     )
 
     return await assemble_image(
-        AssembleImageRequest(image.output.digest, (scripted, config), description), **implicitly()
+        AssembleImageRequest(image.output, (scripted, config), description), **implicitly()
     )
 
 

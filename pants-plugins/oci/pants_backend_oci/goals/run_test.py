@@ -26,7 +26,7 @@ from pants_backend_oci.util_rules.sandboxed import OciBuilder
 @pytest.mark.parametrize("interactive,terminal", [(False, False), (False, True), (True, False)])
 def test_prepare_runs_the_image_with_the_configured_runner(interactive, terminal):
     target = ImageBuild({"terminal": terminal}, Address("image"))
-    image = FallibleImageBundle(ImageBundle(EMPTY_DIGEST, "sha256:abc", True))
+    image = FallibleImageBundle(ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST))
     runs = []
 
     def run(request, **kwargs):
@@ -57,7 +57,7 @@ def test_prepare_runs_the_image_with_the_configured_runner(interactive, terminal
 
 def test_docker_runner_needs_its_backends():
     target = ImageBuild({}, Address("image"))
-    image = FallibleImageBundle(ImageBundle(EMPTY_DIGEST, "sha256:abc", True))
+    image = FallibleImageBundle(ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST))
     with pytest.raises(ValueError, match="needs the `pants.backend.docker` and `pants_backend_oci.docker`"):
         run_rule_with_mocks(
             prepare_run_image_bundle,
@@ -111,7 +111,7 @@ def podman_run_process(request, platform=Platform.linux_x86_64, connection=""):
 
 @pytest.mark.parametrize("interactive,tty", [(False, False), (False, True), (True, True)])
 def test_podman_archives_image_before_launch(interactive, tty):
-    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True)
+    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST)
     result, archive = podman_run_process(PodmanRunRequest(bundle, Address("image"), interactive, tty))
     assert archive.input_digest == bundle.digest
     assert archive.output_filename == "image.tar"
@@ -134,7 +134,7 @@ def test_podman_archives_image_before_launch(interactive, tty):
     ],
 )
 def test_podman_runs_through_a_connection_off_linux_or_when_named(platform, connection):
-    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True)
+    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST)
     result, archive = podman_run_process(
         PodmanRunRequest(bundle, Address("image"), True, True), platform, connection
     )

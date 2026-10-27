@@ -103,7 +103,7 @@ async def build_python_image(request: BuildPythonImageRequest) -> FallibleImageB
 
     return await assemble_image(
         AssembleImageRequest(
-            base_image.output.digest, tuple(ops), f"Assemble Python OCI image: {request.target.address}"
+            base_image.output, tuple(ops), f"Assemble Python OCI image: {request.target.address}"
         ),
         **implicitly(),
     )

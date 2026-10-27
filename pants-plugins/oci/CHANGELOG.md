@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Assembling an image no longer copies layer blobs. The assembly process sees only the base's
+  index, manifest and config and each layer's descriptor, and the layer blobs are merged into the
+  layout afterwards. On a 3 GB image, the assemble step of an incremental rebuild went from 25 s to
+  under 0.1 s. Image digests don't change.
+
 - Layers build much faster cold. A layer of files and packages is tarred and gzipped in one step,
   without capturing an uncompressed tar, and every layer is gzipped on up to 16 cores in
   fixed-size blocks, like `pigz`. On a 1.5 GB layer, tar and gzip went from 79 s to 12 s. Layer

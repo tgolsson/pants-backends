@@ -132,7 +132,8 @@ def test_compress_then_add_blob_matches_add_layer(tmp_path: Path, compressed: bo
     )
 
     assert from_blob == from_tar
-    assert blobs(tmp_path / "one") == blobs(tmp_path / "two")
+    # `add_blob` leaves the layer blob out of the layout, for the rules to merge in.
+    assert blobs(tmp_path / "one") == blobs(tmp_path / "two") - {descriptor["digest"]}
 
 
 def test_add_blob_already_in_the_layout(tmp_path: Path) -> None:
@@ -153,23 +154,22 @@ def test_add_blob_already_in_the_layout(tmp_path: Path) -> None:
     assert config["rootfs"]["diff_ids"] == [sha(Path(layer).read_bytes())] * 2
 
 
-def test_add_blob_copies_a_symlinked_blob(tmp_path: Path) -> None:
+def test_add_blob_reads_only_the_descriptor(tmp_path: Path) -> None:
     layer = write(tmp_path / "layer.tar", make_tar({"a": b"a"}))
     digest = b.compress_to_blob(layer, str(tmp_path / "store"))
-    # Like a sandbox input linked to a file in the store.
-    linked = tmp_path / "sandbox" / "blobs" / "sha256" / digest[7:]
-    linked.parent.mkdir(parents=True)
-    linked.symlink_to(tmp_path / "store" / "blobs" / "sha256" / digest[7:])
-    (tmp_path / "sandbox" / b.LAYER_DESCRIPTOR).write_bytes(
-        (tmp_path / "store" / b.LAYER_DESCRIPTOR).read_bytes()
+    # Assembly gets the descriptor without its blob.
+    path = write(
+        tmp_path / "sandbox" / b.LAYER_DESCRIPTOR, (tmp_path / "store" / b.LAYER_DESCRIPTOR).read_bytes()
     )
 
-    path = str(tmp_path / "sandbox" / b.LAYER_DESCRIPTOR)
     b.apply(str(tmp_path / "build"), "build", [INIT, {"op": "add_blob", "path": path, "history": None}])
 
-    blob = tmp_path / "build" / "blobs" / "sha256" / digest[7:]
-    assert blob.is_file() and not blob.is_symlink()
-    assert sha(blob.read_bytes()) == digest
+    _, manifest, _ = image(tmp_path / "build")
+    assert [layer["digest"] for layer in manifest["layers"]] == [digest]
+    assert digest not in blobs(tmp_path / "build")
+    assert b.referenced_blobs(str(tmp_path / "build")) == sorted(
+        {b.image_digest(str(tmp_path / "build"), "build"), manifest["config"]["digest"], digest}
+    )
 
 
 @pytest.mark.parametrize(
@@ -404,8 +404,10 @@ def test_main_applies_a_spec_and_prints_the_digest(
     write(tmp_path / "spec.json", json.dumps([INIT, {"op": "config", "cmd": ["a"]}]).encode())
 
     assert b.main(["apply", "spec.json"]) == 0
-    digest = capsys.readouterr().out.strip()
-    assert digest == b.image_digest("build", "build")
+    described = json.loads(capsys.readouterr().out)
+    digest = b.image_digest("build", "build")
+    config = image(tmp_path / "build")[1]["config"]["digest"]
+    assert described == {"digest": digest, "metadata": [digest, config], "blobs": sorted([digest, config])}
 
     assert b.main(["set-cmd", "--", "--version", "-x"]) == 0
     assert image(tmp_path / "build")[2]["config"]["Cmd"] == ["--version", "-x"]
@@ -486,6 +488,8 @@ def test_garbage_collection_skips_layouts_with_unknown_manifests(tmp_path: Path)
     b.apply(str(layout), "build", [{"op": "config", "user": "1"}])
 
     assert os.path.exists(artifact) and os.path.exists(referenced_by_artifact)
+    # So the rules keep every blob too.
+    assert b.describe(str(layout), "build")["blobs"] is None
 
 
 def test_retagging_drops_embedded_data_and_urls(tmp_path: Path) -> None:

@@ -110,9 +110,7 @@ async def build_image_artifact(
         )
         config = ConfigEdit(env=tuple(request.target.environment.value or ()), history=True)
         image = await assemble_image(
-            AssembleImageRequest(
-                bundle.digest, (*layers, config), f"Assemble OCI image: {request.target.address}"
-            ),
+            AssembleImageRequest(bundle, (*layers, config), f"Assemble OCI image: {request.target.address}"),
             **implicitly(),
         )
         bundle = assembled_or_raise(image, request.target.address)
