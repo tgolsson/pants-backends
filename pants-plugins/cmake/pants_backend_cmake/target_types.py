@@ -200,11 +200,11 @@ class CMakeTestDependenciesField(Dependencies):
         """
         The `cmake_target` libraries the executable links against, in the order written here
         (the first one's flags come first; each library brings everything it links against
-        itself, as CMake resolves it), plus `files` and `resources` targets, or targets that
-        generate them (`relocated_files`, for example). A file with a
+        itself, as CMake resolves it), plus `files`, `resources` and `cc_sources` targets, or
+        targets that generate them (`relocated_files`, `cpp_generate`). A file with a
         translation-unit suffix in those is compiled into the executable (a vendored test
-        framework, for example); every other file is staged next to the build directory when
-        the test runs.
+        framework, a generated runner); every other file is staged next to the build directory
+        when the test runs.
         """
     )
 
@@ -212,7 +212,13 @@ class CMakeTestDependenciesField(Dependencies):
 class CMakeTestIncludeDirsField(StringSequenceField):
     alias = "include_dirs"
     default = ()
-    help = "Include directories for the test's translation units, relative to this BUILD file."
+    help = softwrap(
+        """
+        Include directories for the test's translation units, relative to this BUILD file. They
+        come before the source roots of the test's and its dependencies' files, which are added
+        too.
+        """
+    )
 
 
 class CMakeTestDefinesField(StringSequenceField):

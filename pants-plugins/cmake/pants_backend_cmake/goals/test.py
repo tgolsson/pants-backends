@@ -1,7 +1,7 @@
 """`pants test` for `cmake_test` targets: the executable Pants compiled and linked (see
 `util_rules/executable.py`), run from the libraries' build directory with the target's `args`.
 Staged with it: the libraries it links against, the packages in `runtime_package_dependencies`,
-and the `files`/`resources` in `dependencies`. A test that fails to build, or whose wrapper
+and the files of its `dependencies`. A test that fails to build, or whose wrapper
 cannot be set up, is a failed test, not a crashed goal. Another backend can run the executable
 under a wrapper (`wrapper.py`)."""
 

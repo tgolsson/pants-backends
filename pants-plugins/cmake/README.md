@@ -38,11 +38,13 @@ compilers are resolved on the machine).
   global flags for that language) and linked with the probe's link line (the library,
   everything it links against, system libraries such as `-lm`, CMake's link flags and
   driver). PRIVATE settings of the library do not leak. Libraries are taken in the order
-  written; the first one's flags come first. The test adds `include_dirs`, `defines`,
-  `compiler_args` and `linker_args`. Translation units found in `files` dependencies are
-  compiled in (a vendored test framework); their other files are staged for the run, as are
-  `runtime_package_dependencies`. `timeout` and `extra_env_vars` apply. A test that fails to
-  compile or link is reported as a failed test.
+  written; the first one's flags come first. The test adds `include_dirs`, then `-I<root>`
+  for every source root owning one of its or its dependencies' files (so a vendored framework
+  under its own root needs no `include_dirs`), `defines`, `compiler_args` and `linker_args`.
+  Translation units found in `files`, `cc_sources` or codegen dependencies are compiled in
+  (a vendored test framework, a generated runner); their other files are staged for the
+  run, as are `runtime_package_dependencies`. `timeout` and `extra_env_vars` apply. A test
+  that fails to compile or link is reported as a failed test.
 - `cmake_tests`: a generator: one `cmake_test` per directory with translation units under
   `sources`, named after the directory (`tests:cc#unit/ops/abs`), with that directory's
   translation units and every header matched. The other fields apply to all generated

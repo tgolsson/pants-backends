@@ -9,9 +9,10 @@ PUBLIC and INTERFACE defines, include directories and options, the directory's g
 for the language, and the full transitive link line. Private requirements of the library do
 not leak. With several libraries, the first declared one's probe gives the base flags and the
 others add their own usage requirements; the link lines are concatenated in declared order.
-The test adds `include_dirs`, `defines`, `compiler_args` and `linker_args`. The link uses the
-C++ driver when the test has C++ translation units or CMake links a C consumer of one of the
-libraries with it.
+The test adds `include_dirs`, then `-I<root>` for each source root owning one of its files or
+its dependencies' files (so a vendored framework under its own root needs no `include_dirs`),
+`defines`, `compiler_args` and `linker_args`. The link uses the C++ driver when the test has
+C++ translation units or CMake links a C consumer of one of the libraries with it.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import os
 import shlex
 from dataclasses import dataclass
 
+from pants.backend.cc.target_types import CCSourceField
 from pants.core.target_types import FileSourceField, ResourceSourceField
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
@@ -43,6 +45,7 @@ from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import DependenciesRequest, SourcesField, Target, WrappedTargetRequest
+from pants.source.source_root import SourceRootsRequest, get_optional_source_roots
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
@@ -64,7 +67,7 @@ from pants_backend_cmake.target_types import (
     is_translation_unit,
 )
 from pants_backend_cmake.util_rules.canonicalize import rebase
-from pants_backend_cmake.util_rules.configure import ConfiguredProject
+from pants_backend_cmake.util_rules.configure import ConfiguredProject, overlap_error
 from pants_backend_cmake.util_rules.probes import probe_name
 from pants_backend_cmake.util_rules.replay import BuildTargetRequest, build_target
 from pants_backend_cmake.util_rules.scan import (
@@ -293,7 +296,7 @@ class BuiltTest:
     runtime: Digest
     """The executable and the outputs of every library it links against, transitively."""
     data: Digest
-    """The files of the `files`/`resources` dependencies, staged for the run."""
+    """The files of the dependencies, generated ones included, staged for the run."""
 
 
 async def _libraries_in_declared_order(target: Target, address: Address) -> list[Target]:
@@ -353,26 +356,40 @@ async def build_test(request: TestBuildRequest, platform: Platform) -> BuiltTest
         determine_source_files(
             SourceFilesRequest(
                 [t.get(SourcesField) for t in dependencies if t.has_field(SourcesField)],
-                for_sources_types=(FileSourceField, ResourceSourceField),
+                for_sources_types=(FileSourceField, ResourceSourceField, CCSourceField),
                 enable_codegen=True,
             )
         ),
     )
+    error = overlap_error(address, sources.files, extra.files)
+    if error:
+        raise TestBuildError(error)
     files = await merge_digests(MergeDigests([sources.snapshot.digest, extra.snapshot.digest]))
     file_paths = tuple(sorted({*sources.files, *extra.files}))
     units = list(dict.fromkeys(p for p in (*sources.files, *extra.files) if is_translation_unit(p)))
     if not units:
         raise TestBuildError(f"{address}: `sources` has no translation unit to compile")
+    # Optional roots: a file outside every root needs no include directory.
+    roots = await get_optional_source_roots(SourceRootsRequest.for_files(file_paths))
+    root_dirs = sorted(
+        {r.source_root.path for r in roots.path_to_optional_root.values() if r.source_root is not None}
+    )
 
     def from_build_dir(path: str) -> str:
         return os.path.normpath(os.path.join(relative_root, path))
 
     spec_path = address.spec_path
+    include_flags = dict.fromkeys(
+        [
+            *(
+                f"-I{from_build_dir(os.path.normpath(os.path.join(spec_path, d)))}"
+                for d in target[CMakeTestIncludeDirsField].value or ()
+            ),
+            *(f"-I{from_build_dir(d)}" for d in root_dirs),
+        ]
+    )
     own_flags = [
-        *(
-            f"-I{from_build_dir(os.path.normpath(os.path.join(spec_path, d)))}"
-            for d in target[CMakeTestIncludeDirsField].value or ()
-        ),
+        *include_flags,
         *(f"-D{d}" for d in target[CMakeTestDefinesField].value or ()),
         *(target[CMakeTestCompilerArgsField].value or ()),
     ]
