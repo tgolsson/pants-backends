@@ -18,3 +18,11 @@
   `files`/`resources`), so a generating target in `dependencies`, such as `relocated_files` or
   `shell_command`, now runs for the test's build, and a generated translation unit is compiled
   into it.
+- Codegen dependencies of `cmake_project` and `cmake_test`: `dependencies` hydrate `files`,
+  `cc_sources` and targets generating either (any `GenerateSourcesRequest` with a
+  `FileSourceField` or `CCSourceField` output). A generated translation unit of the project is
+  replayed with its real content; one of a test (a generated runner) is compiled into it.
+- Dependency files of a `cmake_project` matching `configure_placeholders` are placeholders at
+  configure, so a generated translation unit named in `add_library` configures.
+- A path both a `cmake_project`'s `sources` and one of its dependencies provide is a configure
+  error naming the path and the `!` glob that drops it from `sources`.

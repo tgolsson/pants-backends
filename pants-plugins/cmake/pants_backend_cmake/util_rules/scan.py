@@ -1,7 +1,7 @@
 """Per-translation-unit header scan: which workspace headers a compile reads.
 
 The compile's own compiler and flags run with `-M -MG` on its source, against the project's
-header-like files and the `files` dependencies. The result is the exact input set for the
+header-like files and the files of its dependencies. The result is the exact input set for the
 compile process, so an edit to a header rebuilds only the TUs that include it. Editing a
 source rescans only that TU; editing a header rescans every TU (the header set is the scan's
 input), which is cheap next to compiling. A scan that fails, or that names an include the
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pants.engine.fs import Digest, DigestSubset, MergeDigests, PathGlobs
 from pants.engine.intrinsics import digest_subset_to_digest, execute_process, merge_digests
 from pants.engine.process import Process
-from pants.engine.rules import collect_rules, implicitly, rule
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.util.logging import LogLevel
 
 from pants_backend_cmake.ninja.parser import NinjaEdge
@@ -149,9 +149,10 @@ async def _scan(
     if unknown:
         raise ScanError(
             f"{owner}: {what} includes files that none of its inputs provide: {unknown}. "
-            "Inputs are the project's `sources` and `files` dependencies and, for a test, its "
-            "own `sources` and the files of its dependencies. Add the files to the right "
-            "target, or if the build generates them, check them in."
+            "Inputs are the project's `sources` and the files of its dependencies and, for a "
+            "test, its own `sources` and the files of its dependencies. Add the files to the right "
+            "target, or if the build generates them, check them in or generate them with a "
+            "codegen dependency."
         )
     return tuple(sorted({path for _, path in entries} - sources))
 
@@ -172,8 +173,13 @@ async def scan_translation_unit(request: ScanRequest) -> ScanResult:
     project, edge = request.project, request.edge
     header_set = await project_header_set(HeaderSetRequest(project))
     sources = {p for p in map(workspace_path, edge.dependencies) if p}
-    source_digest = await digest_subset_to_digest(DigestSubset(project.sources, PathGlobs(sorted(sources))))
-    input_digest = await merge_digests(MergeDigests([source_digest, header_set.digest]))
+    globs = PathGlobs(sorted(sources))
+    # A generated translation unit lives in `extra`.
+    source_digest, extra_digest = await concurrently(
+        digest_subset_to_digest(DigestSubset(project.sources, globs)),
+        digest_subset_to_digest(DigestSubset(project.extra, globs)),
+    )
+    input_digest = await merge_digests(MergeDigests([source_digest, extra_digest, header_set.digest]))
     command = rebase(project.graph.command(edge, overrides=SCAN_OVERRIDES), project.relative_root)
     known = set(project.source_paths) | set(project.extra_paths) | set(project.generated_paths)
     headers = await _scan(

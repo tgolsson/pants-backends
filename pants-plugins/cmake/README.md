@@ -16,8 +16,12 @@ compilers are resolved on the machine).
   (sources and headers by default) are given to configure as zero-byte placeholders, so
   editing one never reruns configure, only adding or removing one does; everything else
   (`CMakeLists.txt`, `*.cmake`, `configure_file` inputs, `file(READ)` inputs) is given as
-  is. `dependencies` on `files` targets are mounted next to the sources for the compile and
-  link steps (vendored header trees, for example); they are not visible to configure.
+  is. `dependencies` are `files`, `cc_sources` and codegen targets producing either (such as
+  `cpp_generate`, below); their files are mounted next to the sources for the compile and
+  link steps. Configure sees those matching `configure_placeholders` as placeholders, so a
+  generated translation unit named in `add_library` configures, and none of the others. A
+  path both `sources` and a dependency provide is an error, here and for `cmake_test`: drop
+  it from one of them (`"!gen/registry.cpp"` in `sources`).
   `cmake_args`, `build_dir` (default `build`) and `build_type` are passed to CMake.
 - `cmake_target`: one CMake `STATIC`, `SHARED`, `MODULE` library or `EXECUTABLE`, named by
   `project` (the `cmake_project`'s address, inferred as a dependency) and `cmake_name`
@@ -94,7 +98,7 @@ that does not change the build) runs one build several ways.
 
 - Order-only dependencies are not followed. Generated sources produced by
   `add_custom_command` and discovered only through them are an error at planning time:
-  check them in, or list them as sources.
+  check them in and list them as sources, or generate them with a codegen dependency.
 - A scan that fails, or that finds an include the project does not provide, is an error.
   Compiler launchers (`CMAKE_<LANG>_COMPILER_LAUNCHER`, `CMAKE_<LANG>_CLANG_TIDY`) are
   stripped for the scan but kept for the compile, where they need their own environment.

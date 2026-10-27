@@ -2,8 +2,8 @@
 
 One rule per edge: `build_edge` awaits the producers of the edge's declared inputs (other
 edges, or whole dependency targets at a boundary), then runs the edge's command with exactly
-its inputs: the workspace sources it declares, the headers its scan found, the `files`
-dependencies, the empty build directory, and its producers' outputs. The engine schedules the
+its inputs: the workspace sources it declares, the headers its scan found, the files of
+`dependencies`, the empty build directory, and its producers' outputs. The engine schedules the
 dataflow and memoizes each edge once per run, so two targets that share a compile edge (a
 static and a shared library over the same object files) share one process.
 """

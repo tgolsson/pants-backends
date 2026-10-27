@@ -62,10 +62,10 @@ class CMakeProjectPlaceholdersField(StringSequenceField):
     )
     help = softwrap(
         """
-        Patterns (relative to this BUILD file, `*` also matches `/`) selecting the `sources`
-        configure sees as zero-byte placeholders. Anything CMake reads at configure time
-        (`CMakeLists.txt`, `*.cmake`, `configure_file` inputs, `file(READ)` inputs) must not
-        match.
+        Patterns (relative to this BUILD file, `*` also matches `/`) selecting the files of
+        `sources` and `dependencies` configure sees as zero-byte placeholders. Anything CMake
+        reads at configure time (`CMakeLists.txt`, `*.cmake`, `configure_file` inputs,
+        `file(READ)` inputs) must not match: it would read as empty.
         """
     )
 
@@ -73,9 +73,10 @@ class CMakeProjectPlaceholdersField(StringSequenceField):
 class CMakeProjectDependenciesField(Dependencies):
     help = softwrap(
         """
-        `files` targets mounted next to the sources for the compile and link steps, for example
-        a vendored header-only library CMake points an include directory at. They are not
-        visible to configure.
+        `files`, `cc_sources` and codegen targets producing either, mounted next to the sources
+        for the compile and link steps. Configure sees only their files matching
+        `configure_placeholders`, as placeholders. A path `sources` also provides is an error:
+        drop it from one of them.
         """
     )
 

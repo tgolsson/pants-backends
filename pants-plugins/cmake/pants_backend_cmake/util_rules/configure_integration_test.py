@@ -4,11 +4,13 @@ import pytest
 from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.fs import DigestContents
+from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 
 from pants_backend_cmake.subsystems import cmake, ninja
 from pants_backend_cmake.target_types import targets
+from pants_backend_cmake.testutil import GenTarget, codegen_rules
 from pants_backend_cmake.util_rules import configure, toolchain
 from pants_backend_cmake.util_rules.canonicalize import PLACEHOLDER
 from pants_backend_cmake.util_rules.configure import ConfiguredProject, ConfigureRequest
@@ -37,9 +39,10 @@ def rule_runner() -> RuleRunner:
             *ninja.rules(),
             *toolchain.rules(),
             *configure.rules(),
+            *codegen_rules(),
             QueryRule(ConfiguredProject, [ConfigureRequest]),
         ],
-        target_types=targets(),
+        target_types=[*targets(), GenTarget],
     )
 
 
@@ -99,3 +102,54 @@ def test_configure_small_project(rule_runner: RuleRunner) -> None:
     assert f"-I{PLACEHOLDER}/include" in configured.graph.command(edge)
     assert configured.graph.command(edge).startswith(configured.toolchain.c_compiler.path)
     assert len(configured.toolchain.binutils) == 3
+
+
+# A project in a subdirectory whose library compiles a translation unit a codegen dependency
+# generates from `gen/answer.cpp.in`.
+GENERATED_BUILD = """\
+cmake_project(name="proj", sources=["CMakeLists.txt", "lib.c"], dependencies=[":gen"])
+test_gen(name="gen", sources=["gen/answer.cpp.in"])
+"""
+
+GENERATED_FILES = {
+    "proj/BUILD": GENERATED_BUILD,
+    "proj/CMakeLists.txt": "cmake_minimum_required(VERSION 3.20)\nproject(demo LANGUAGES C CXX)\n"
+    "add_library(demo STATIC lib.c gen/answer.cpp)\n",
+    "proj/lib.c": "int demo(void) { return 1; }\n",
+    "proj/gen/answer.cpp.in": 'extern "C" int answer(void) { return 42; }\n',
+}
+
+
+def test_configure_with_generated_source(rule_runner: RuleRunner) -> None:
+    rule_runner.write_files(GENERATED_FILES)
+    rule_runner.set_options([], env_inherit={"PATH"})
+    configured = rule_runner.request(
+        ConfiguredProject, [ConfigureRequest(Address("proj", target_name="proj"))]
+    )
+
+    # The generated file exists at configure (a placeholder) and keeps its content for the build.
+    assert "proj/gen/answer.cpp" in configured.extra_paths
+    assert "proj/gen/answer.cpp" not in configured.source_paths
+    edge = configured.graph.producers["CMakeFiles/demo.dir/gen/answer.cpp.o"]
+    assert edge.target == "demo"
+    assert edge.inputs == (f"{PLACEHOLDER}/proj/gen/answer.cpp",)
+    extra = rule_runner.request(DigestContents, [configured.extra])
+    assert {fc.path: fc.content for fc in extra}["proj/gen/answer.cpp"].startswith(b'extern "C"')
+
+
+def test_sources_overlapping_generated_file_is_an_error(rule_runner: RuleRunner) -> None:
+    rule_runner.write_files(
+        {
+            **GENERATED_FILES,
+            "proj/BUILD": GENERATED_BUILD.replace(
+                'sources=["CMakeLists.txt", "lib.c"]', 'sources=["CMakeLists.txt", "**/*.c", "**/*.cpp"]'
+            ),
+            "proj/gen/answer.cpp": "stale committed copy\n",
+        }
+    )
+    rule_runner.set_options([], env_inherit={"PATH"})
+    with pytest.raises(ExecutionError) as error:
+        rule_runner.request(ConfiguredProject, [ConfigureRequest(Address("proj", target_name="proj"))])
+    message = str(error.value)
+    assert "proj:proj: `sources` and a dependency both provide ['proj/gen/answer.cpp']" in message
+    assert '"!gen/answer.cpp"' in message

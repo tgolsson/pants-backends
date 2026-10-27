@@ -4,8 +4,9 @@ the sandbox.
 Configure sees the CMake files, and every other configure-time input, as they are, and a
 zero-byte placeholder at every path matching `configure_placeholders` (sources and headers):
 CMake only checks that those exist, so editing one never reruns configure, only adding or
-removing one does. The consumer probes (`probes.py`) are injected through
-`CMAKE_PROJECT_INCLUDE`. From the result the generated build files are kept and canonicalized
+removing one does. Matching files of `dependencies`, generated ones included, are placeholders
+too; configure does not see their other files. The consumer probes (`probes.py`) are injected
+through `CMAKE_PROJECT_INCLUDE`. From the result the generated build files are kept and canonicalized
 (see `canonicalize.py`); the cache, the compiler-id artefacts, the logs under `CMakeFiles/`
 and the probe sources are dropped so they cannot break digest identity.
 """
@@ -16,6 +17,7 @@ import fnmatch
 import os
 from dataclasses import dataclass
 
+from pants.backend.cc.target_types import CCSourceField
 from pants.core.target_types import FileSourceField
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.addresses import Address
@@ -87,7 +89,7 @@ class ConfiguredProject:
     sources: Digest
     source_paths: tuple[str, ...]
     extra: Digest
-    """Files from `files` dependencies, mounted next to the sources."""
+    """Files of `dependencies`, generated ones included, mounted next to the sources."""
     extra_paths: tuple[str, ...]
     toolchain: CMakeToolchain
     coverage: bool
@@ -107,6 +109,21 @@ def matches_any(relative_path: str, patterns: tuple[str, ...]) -> bool:
     return False
 
 
+def overlap_error(address: Address, sources: tuple[str, ...], extra: tuple[str, ...]) -> str | None:
+    """Two copies of one path must never reach a compile: which one won would depend on merge
+    order."""
+    overlap = sorted(set(sources) & set(extra))
+    if not overlap:
+        return None
+    first = overlap[0]
+    prefix = f"{address.spec_path}/" if address.spec_path else ""
+    relative = first[len(prefix) :] if first.startswith(prefix) else first
+    return (
+        f"{address}: `sources` and a dependency both provide {overlap}; drop it from one of them, "
+        f'e.g. "!{relative}" in `sources`'
+    )
+
+
 @rule(desc="Configure CMake project", level=LogLevel.DEBUG)
 async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain) -> ConfiguredProject:
     wrapped = await resolve_target(
@@ -121,19 +138,29 @@ async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain
         determine_source_files(
             SourceFilesRequest(
                 [t.get(SourcesField) for t in dependencies if t.has_field(SourcesField)],
-                for_sources_types=(FileSourceField,),
+                for_sources_types=(FileSourceField, CCSourceField),
+                enable_codegen=True,
             )
         ),
     )
 
     project_dir = request.address.spec_path
     prefix = f"{project_dir}/" if project_dir else ""
+
+    def relative(path: str) -> str:
+        return path[len(prefix) :] if path.startswith(prefix) else path
+
+    error = overlap_error(request.address, sources.files, extra.files)
+    if error:
+        raise ValueError(error)
+
     patterns = tuple(target[CMakeProjectPlaceholdersField].value or ())
     real_files = []
     placeholders = []
     for path in sources.files:
-        relative = path[len(prefix) :] if path.startswith(prefix) else path
-        (placeholders if matches_any(relative, patterns) else real_files).append(path)
+        (placeholders if matches_any(relative(path), patterns) else real_files).append(path)
+    # A generated TU named in `add_library` must exist at configure.
+    placeholders.extend(p for p in extra.files if matches_any(relative(p), patterns))
     if not real_files:
         raise ValueError(
             f"{request.address}: every source matches `configure_placeholders`; configure needs "
