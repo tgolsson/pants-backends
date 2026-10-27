@@ -17,9 +17,10 @@ from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.util.logging import LogLevel
 
+from pants_backend_oci.subsystem import OciSubsystem
 from pants_backend_oci.util_rules import oci_layout_builder
 from pants_backend_oci.util_rules.image_bundle import FallibleImageBundle, ImageBundle
-from pants_backend_oci.util_rules.layer import ImageLayer
+from pants_backend_oci.util_rules.layer import LAYER_GZIP_THREADS, ImageLayer, gzip_args
 from pants_backend_oci.util_rules.oci_layout_builder import (
     AUTHOR,
     BUILT_BY,
@@ -100,13 +101,18 @@ class CompressLayerRequest:
 
 @dataclass(frozen=True)
 class CompressedLayer:
-    """The gzipped layer blob and its descriptor, under `compressed/`."""
+    """The gzipped layer blob and its descriptor at `descriptor`."""
 
     digest: Digest
+    descriptor: str
 
 
 @rule(desc="Compress OCI layer", level=LogLevel.DEBUG)
-async def compress_image_layer(request: CompressLayerRequest, builder: OciBuilder) -> CompressedLayer:
+async def compress_image_layer(
+    request: CompressLayerRequest, builder: OciBuilder, oci: OciSubsystem
+) -> CompressedLayer:
+    if request.layer.descriptor:
+        return CompressedLayer(request.layer.digest, request.layer.descriptor)
     # Only the layer and the builder are inputs, so an unchanged layer is compressed once and its
     # blob reused by every image that adds it.
     process = builder.process(
@@ -115,13 +121,15 @@ async def compress_image_layer(request: CompressLayerRequest, builder: OciBuilde
         request.layer.path,
         "--out",
         _COMPRESSED,
+        *gzip_args(oci),
         input_digest=request.layer.digest,
         output_directories=(_COMPRESSED,),
+        concurrency_available=LAYER_GZIP_THREADS,
         description=f"Compress OCI layer: {request.layer.address}",
         level=LogLevel.DEBUG,
     )
     result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
-    return CompressedLayer(result.output_digest)
+    return CompressedLayer(result.output_digest, f"{_COMPRESSED}/{LAYER_DESCRIPTOR}")
 
 
 @dataclass(frozen=True)
@@ -146,8 +154,9 @@ async def assemble_image(request: AssembleImageRequest, builder: OciBuilder) -> 
         if isinstance(op, ImageLayer):
             # Layers are prefixed by position, since different layers may hold the same blob.
             prefix = f"layers/{len(prefixed)}"
-            prefixed.append(add_prefix(AddPrefix(compressed[len(prefixed)].digest, prefix)))
-            spec.extend(layer_ops(op, f"{prefix}/{_COMPRESSED}/{LAYER_DESCRIPTOR}"))
+            layer = compressed[len(prefixed)]
+            prefixed.append(add_prefix(AddPrefix(layer.digest, prefix)))
+            spec.extend(layer_ops(op, f"{prefix}/{layer.descriptor}"))
         else:
             spec.append(op.to_json())
 

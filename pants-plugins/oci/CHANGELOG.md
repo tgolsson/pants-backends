@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Layers build much faster cold. A layer of files and packages is tarred and gzipped in one step,
+  without capturing an uncompressed tar, and every layer is gzipped on up to 16 cores in
+  fixed-size blocks, like `pigz`. On a 1.5 GB layer, tar and gzip went from 79 s to 12 s. Layer
+  blobs come out about 0.4% larger, and every layer and image digest changes once; layer
+  `diff_id`s don't change. The new `[oci].layer_compression_level` (default 6) sets the gzip level.
+
 - `oci_image_build` stacks `layers=` in the order they are listed. They were stacked in address
   order, so where two layers wrote the same path the wrong one could win. Images whose `layers`
   are not listed in address order get new digests.

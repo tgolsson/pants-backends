@@ -2,7 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 """Writes OCI image layouts: creating an empty image, adding layers, editing the config,
-normalising pulled layouts, exporting an image as an OCI archive and writing files as a layer tar.
+normalising pulled layouts, exporting an image as an OCI archive and writing files as a layer.
 
 This module runs inside a sandboxed process, with the rules only deciding what to do, so it uses
 only the standard library and never imports Pants.
@@ -23,12 +23,15 @@ import json
 import os
 import re
 import shutil
+import struct
 import sys
 import tarfile
 import tempfile
 import zlib
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, BinaryIO, Iterable, Iterator, Mapping
+from typing import Any, BinaryIO, Callable, Iterable, Iterator, Mapping
 
 INDEX_MEDIA_TYPE = "application/vnd.oci.image.index.v1+json"
 MANIFEST_MEDIA_TYPE = "application/vnd.oci.image.manifest.v1+json"
@@ -60,7 +63,10 @@ CLEARABLE = {
 }
 
 _CHUNK = 1 << 20
-_GZIP_LEVEL = 6
+GZIP_LEVEL = 6
+# Layers are gzipped in blocks of this size, so changing it changes every layer digest.
+_GZIP_BLOCK = 1 << 20
+_GZIP_WINDOW = 1 << 15
 
 
 class LayoutError(ValueError):
@@ -272,9 +278,9 @@ def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
     return desc["digest"]
 
 
-def write_files_tar(files: Mapping[str, bool], out: str) -> None:
-    """Write `files`, paths relative to the current directory mapped to whether they're executable,
-    as a layer tar at `out`.
+def _add_files(tar: tarfile.TarFile, files: Mapping[str, bool]) -> None:
+    """Add `files`, paths relative to the current directory mapped to whether they're executable,
+    to `tar`.
 
     Entries are sorted, owned by 0:0 with empty names and zeroed times, and files are 0755 or 0644
     by the executable bit Pants records, never their sandbox mode: Pants hardlinks large files from
@@ -284,21 +290,18 @@ def write_files_tar(files: Mapping[str, bool], out: str) -> None:
     changes mid-read, which happens whenever Pants hardlinks the same store file into another
     sandbox.
     """
-    if os.path.dirname(out):
-        os.makedirs(os.path.dirname(out), exist_ok=True)
-    with tarfile.TarFile(out, "w", format=tarfile.GNU_FORMAT, copybufsize=1 << 20) as tar:
-        for name, executable in sorted(files.items()):
-            info = tarfile.TarInfo(name)
-            if os.path.islink(name):
-                info.type, info.linkname, info.mode = tarfile.SYMTYPE, os.readlink(name), 0o777
-                tar.addfile(info)
-            elif os.path.isfile(name):
-                info.mode = 0o755 if executable else 0o644
-                with open(name, "rb") as f:
-                    info.size = os.fstat(f.fileno()).st_size
-                    tar.addfile(info, f)
-            else:
-                raise LayoutError(f"{name} is not a file or symlink")
+    for name, executable in sorted(files.items()):
+        info = tarfile.TarInfo(name)
+        if os.path.islink(name):
+            info.type, info.linkname, info.mode = tarfile.SYMTYPE, os.readlink(name), 0o777
+            tar.addfile(info)
+        elif os.path.isfile(name):
+            info.mode = 0o755 if executable else 0o644
+            with open(name, "rb") as f:
+                info.size = os.fstat(f.fileno()).st_size
+                tar.addfile(info, f)
+        else:
+            raise LayoutError(f"{name} is not a file or symlink")
 
 
 def read_files_list(path: str) -> dict[str, bool]:
@@ -417,39 +420,108 @@ def _open_layer(path: str) -> Iterator[_TarChecked]:
             yield _TarChecked(gz, path)
 
 
-def compress_layer(source: BinaryIO | _TarChecked, out: BinaryIO) -> tuple[str, str, int]:
+def _deflate(block: bytes, window: bytes, level: int, last: bool) -> bytes:
+    args = (level, zlib.DEFLATED, -zlib.MAX_WBITS)
+    compressor = zlib.compressobj(*args, zdict=window) if window else zlib.compressobj(*args)
+    return compressor.compress(block) + compressor.flush(zlib.Z_FINISH if last else zlib.Z_SYNC_FLUSH)
+
+
+class _ParallelGzip:
+    """A gzip stream into `out`, compressed on `threads` threads like pigz.
+
+    The data is cut into fixed blocks, each deflated on its own, primed with the last 32 KiB of
+    the block before it and ended with a sync flush, so the output depends on the data and the
+    level but never on the thread count. No file name and a zero mtime keep the header independent
+    of where and when it ran. Also hashes the uncompressed data, for the layer's diff_id.
+    """
+
+    def __init__(self, out: BinaryIO | _HashingWriter, level: int, threads: int) -> None:
+        self.out = out
+        self.level = level
+        self.uncompressed = hashlib.sha256()
+        self.size = 0
+        self._crc = 0
+        self._buffer = bytearray()
+        self._window = b""
+        # As `gzip` writes it: the extra flags mark the best and fastest levels; the OS is unknown.
+        flags = {9: b"\x02", 1: b"\x04"}.get(level, b"\x00")
+        out.write(b"\x1f\x8b\x08\x00\x00\x00\x00\x00" + flags + b"\xff")
+        threads = max(1, threads)
+        self._pool = ThreadPoolExecutor(threads)
+        self._pending: deque[Future[bytes]] = deque()
+        self._in_flight = 2 * threads
+
+    def write(self, data: bytes) -> int:
+        self.uncompressed.update(data)
+        self._crc = zlib.crc32(data, self._crc)
+        self.size += len(data)
+        self._buffer += data
+        # A full block is held back until more data follows, as the last block must end the stream.
+        while len(self._buffer) > _GZIP_BLOCK:
+            block = bytes(memoryview(self._buffer)[:_GZIP_BLOCK])
+            del self._buffer[:_GZIP_BLOCK]
+            self._submit(block, last=False)
+        return len(data)
+
+    def tell(self) -> int:
+        return self.size
+
+    def _submit(self, block: bytes, last: bool) -> None:
+        self._pending.append(self._pool.submit(_deflate, block, self._window, self.level, last))
+        self._window = block[-_GZIP_WINDOW:]
+        while len(self._pending) > self._in_flight:
+            self.out.write(self._pending.popleft().result())
+
+    def close(self) -> None:
+        try:
+            self._submit(bytes(self._buffer), last=True)
+            self._buffer.clear()
+            while self._pending:
+                self.out.write(self._pending.popleft().result())
+            self.out.write(struct.pack("<II", self._crc, self.size & 0xFFFFFFFF))
+        finally:
+            self._pool.shutdown(cancel_futures=True)
+
+    @property
+    def diff_id(self) -> str:
+        return f"sha256:{self.uncompressed.hexdigest()}"
+
+    def __enter__(self) -> _ParallelGzip:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if exc_type is None:
+            self.close()
+        else:
+            self._pool.shutdown(cancel_futures=True)
+
+
+def compress_layer(
+    source: BinaryIO | _TarChecked, out: BinaryIO, level: int = GZIP_LEVEL, threads: int = 1
+) -> tuple[str, str, int]:
     """Gzip `source` into `out` deterministically.
 
     Returns the diff_id (digest of the uncompressed tar), the blob digest and the blob size.
     """
-    uncompressed = hashlib.sha256()
     writer = _HashingWriter(out)
-    # No file name and a zero mtime keep the gzip header independent of where and when it ran.
-    with gzip.GzipFile(filename="", mode="wb", fileobj=writer, mtime=0, compresslevel=_GZIP_LEVEL) as gz:
+    with _ParallelGzip(writer, level, threads) as gz:
         while chunk := source.read(_CHUNK):
-            uncompressed.update(chunk)
             gz.write(chunk)
-    return f"sha256:{uncompressed.hexdigest()}", f"sha256:{writer.hash.hexdigest()}", writer.size
+    return gz.diff_id, f"sha256:{writer.hash.hexdigest()}", writer.size
 
 
 LAYER_DESCRIPTOR = "layer.json"
 
 
-def compress_to_blob(path: str, out_dir: str) -> str:
-    """Gzip the layer tar at `path` into `out_dir` as a blob plus a `layer.json` descriptor.
-
-    Compressing runs apart from assembly, so an unchanged layer's blob can be reused. Returns the
-    blob digest.
-    """
+def _write_layer_blob(out_dir: str, write: Callable[[BinaryIO], tuple[str, str, int]]) -> str:
+    """Write a gzipped layer into `out_dir` as a blob plus a `layer.json` descriptor, with `write`
+    returning its diff_id, blob digest and size. Returns the blob digest."""
     blobs = os.path.join(out_dir, "blobs", "sha256")
     os.makedirs(blobs, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=blobs, prefix=".tmp-")
     try:
-        with os.fdopen(fd, "wb") as out, _open_layer(path) as source:
-            try:
-                diff_id, digest, size = compress_layer(source, out)
-            except (EOFError, zlib.error, gzip.BadGzipFile) as e:
-                raise LayoutError(f"layer {path} is not a valid gzip stream: {e}") from e
+        with os.fdopen(fd, "wb") as out:
+            diff_id, digest, size = write(out)
         os.chmod(tmp, 0o644)
         os.replace(tmp, blob_path(out_dir, digest))
     except BaseException:
@@ -460,6 +532,40 @@ def compress_to_blob(path: str, out_dir: str) -> str:
     layer = {**descriptor(LAYER_MEDIA_TYPE, digest, size), "diff_id": diff_id}
     _replace_file(os.path.join(out_dir, LAYER_DESCRIPTOR), _json(layer))
     return digest
+
+
+def compress_to_blob(path: str, out_dir: str, level: int = GZIP_LEVEL, threads: int = 1) -> str:
+    """Gzip the layer tar at `path` into `out_dir` as a blob plus a `layer.json` descriptor.
+
+    Compressing runs apart from assembly, so an unchanged layer's blob can be reused. Returns the
+    blob digest.
+    """
+
+    def write(out: BinaryIO) -> tuple[str, str, int]:
+        with _open_layer(path) as source:
+            try:
+                return compress_layer(source, out, level, threads)
+            except (EOFError, zlib.error, gzip.BadGzipFile) as e:
+                raise LayoutError(f"layer {path} is not a valid gzip stream: {e}") from e
+
+    return _write_layer_blob(out_dir, write)
+
+
+def files_to_blob(files: Mapping[str, bool], out_dir: str, level: int = GZIP_LEVEL, threads: int = 1) -> str:
+    """Write `files` (see `_add_files`) as a gzipped layer into `out_dir`, like `compress_to_blob`.
+
+    The tar streams straight into the compressor, so it's never written out uncompressed. Returns
+    the blob digest.
+    """
+
+    def write(out: BinaryIO) -> tuple[str, str, int]:
+        writer = _HashingWriter(out)
+        with _ParallelGzip(writer, level, threads) as gz:
+            with tarfile.TarFile(fileobj=gz, mode="w", format=tarfile.GNU_FORMAT, copybufsize=_CHUNK) as tar:
+                _add_files(tar, files)
+        return gz.diff_id, f"sha256:{writer.hash.hexdigest()}", writer.size
+
+    return _write_layer_blob(out_dir, write)
 
 
 def add_blob(layout: str, image: Image, path: str, history: Mapping | None) -> None:
@@ -637,15 +743,17 @@ def main(argv: list[str]) -> int:
     apply_parser.add_argument("spec")
     compress_parser = commands.add_parser("compress", help="Gzip a layer tar into a blob.")
     compress_parser.add_argument("layer")
-    compress_parser.add_argument("--out", required=True)
+    layer_parser = commands.add_parser("layer", help="Write the listed files as a gzipped layer blob.")
+    layer_parser.add_argument("--files-from", required=True, help="`x<TAB>path` or `-<TAB>path` lines.")
+    for gzip_parser in (compress_parser, layer_parser):
+        gzip_parser.add_argument("--out", required=True)
+        gzip_parser.add_argument("--level", type=int, choices=range(1, 10), default=GZIP_LEVEL)
+        gzip_parser.add_argument("--threads", type=int, default=os.cpu_count() or 1)
     commands.add_parser("normalize", help="Tag and convert a pulled layout.")
     commands.add_parser("digest", help="Print the image's manifest digest.")
     export_parser = commands.add_parser("export", help="Write the image as a named OCI archive.")
     export_parser.add_argument("archive")
     export_parser.add_argument("--name")
-    tar_parser = commands.add_parser("tar", help="Write the listed files as a layer tar.")
-    tar_parser.add_argument("out")
-    tar_parser.add_argument("--files-from", required=True, help="`x<TAB>path` or `-<TAB>path` lines.")
     commands.add_parser("set-cmd", help="Replace the image's cmd with the args after `--`, if any.")
     args = parser.parse_args(argv)
 
@@ -654,14 +762,13 @@ def main(argv: list[str]) -> int:
             with open(args.spec, "rb") as f:
                 digest = apply(args.layout, args.tag, json.load(f))
         elif args.command == "compress":
-            digest = compress_to_blob(args.layer, args.out)
+            digest = compress_to_blob(args.layer, args.out, args.level, args.threads)
+        elif args.command == "layer":
+            digest = files_to_blob(read_files_list(args.files_from), args.out, args.level, args.threads)
         elif args.command == "normalize":
             digest = normalize(args.layout, args.tag)
         elif args.command == "export":
             digest = write_archive(args.layout, args.tag, args.archive, args.name)
-        elif args.command == "tar":
-            write_files_tar(read_files_list(args.files_from), args.out)
-            return 0
         elif args.command == "set-cmd":
             ops = [{"op": "config", "cmd": cmd}] if cmd else []
             digest = apply(args.layout, args.tag, ops)

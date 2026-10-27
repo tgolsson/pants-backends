@@ -207,6 +207,11 @@ Pants checks against the hashes recorded in `known_versions`, the Python and pex
 are checked only against the checksum files published in the same GitHub releases, through pex;
 no hash in this repository or in `pants.toml` pins them.
 
+Layers are gzipped at level 6 in 1 MiB blocks spread over up to 16 cores, like `pigz`. The blocks
+make the output independent of how many cores ran it; like the rest of compression, it still
+depends on `oci-builder`'s zlib. `[oci].layer_compression_level` (1 to 9) trades build time for size; changing it changes
+layer digests.
+
 Registry credentials are read the way crane reads them, from the first of these that
 exists: `~/.docker/config.json` (or `$DOCKER_CONFIG/config.json`) with its credential
 helpers, then `$REGISTRY_AUTH_FILE`, then podman's `containers/auth.json` under

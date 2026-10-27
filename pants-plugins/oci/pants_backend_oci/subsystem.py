@@ -4,7 +4,15 @@ from enum import Enum
 
 from pants.core.util_rules.external_tool import ExternalTool
 from pants.engine.platform import Platform
-from pants.option.option_types import BoolOption, EnumOption, SkipOption, StrListOption, StrOption
+from pants.option.errors import OptionsError
+from pants.option.option_types import (
+    BoolOption,
+    EnumOption,
+    IntOption,
+    SkipOption,
+    StrListOption,
+    StrOption,
+)
 from pants.option.subsystem import Subsystem
 from pants.util.strutil import softwrap
 
@@ -68,6 +76,22 @@ class OciSubsystem(Subsystem):
         `[oci].builder_pbs_release`. Layer compression depends on its zlib, so changing it may
         change layer digests."""),
     )
+
+    layer_compression_level = IntOption(
+        default=6,
+        advanced=True,
+        help=softwrap("""
+        The gzip level, 1 (fastest) to 9 (smallest), layers are compressed with. Changing it
+        changes layer digests."""),
+    )
+
+    @property
+    def layer_gzip_level(self) -> int:
+        if not 1 <= self.layer_compression_level <= 9:
+            raise OptionsError(
+                f"`[oci].layer_compression_level` must be 1 to 9, got {self.layer_compression_level}."
+            )
+        return self.layer_compression_level
 
     unsafe_tar_ignore_file_changed = BoolOption(
         default=False,

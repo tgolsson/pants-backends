@@ -614,7 +614,15 @@ def files_tree(root: Path, mtime: int) -> dict[str, bool]:
     return {"app/run.sh": True, long_name: False, "app/link": False, "app/data.txt": False}
 
 
-def test_files_tar_takes_modes_from_the_executable_bit_and_zeroes_the_rest(
+def files_layer(files: dict[str, bool], out_dir: str = "out", threads: int = 1) -> tuple[bytes, dict, bytes]:
+    """Write `files` as a layer blob and return the blob, its descriptor and the tar inside it."""
+    digest = b.files_to_blob(files, out_dir, threads=threads)
+    blob = Path(b.blob_path(out_dir, digest)).read_bytes()
+    layer = json.loads(Path(out_dir, b.LAYER_DESCRIPTOR).read_bytes())
+    return blob, layer, gzip.decompress(blob)
+
+
+def test_files_layer_takes_modes_from_the_executable_bit_and_zeroes_the_rest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -622,9 +630,9 @@ def test_files_tar_takes_modes_from_the_executable_bit_and_zeroes_the_rest(
     # Like a large file hardlinked from the Pants store, whatever its executable bit.
     (tmp_path / "app" / "data.txt").chmod(0o555)
 
-    b.write_files_tar(files, "layers/image_bundle.tar")
+    _, _, layer_tar = files_layer(files)
 
-    with tarfile.open(tmp_path / "layers" / "image_bundle.tar") as tar:
+    with tarfile.open(fileobj=io.BytesIO(layer_tar)) as tar:
         members = {m.name: m for m in tar.getmembers()}
         assert list(members) == sorted(files)
         assert {(m.mtime, m.uid, m.gid, m.uname, m.gname) for m in members.values()} == {(0, 0, 0, "", "")}
@@ -634,19 +642,34 @@ def test_files_tar_takes_modes_from_the_executable_bit_and_zeroes_the_rest(
         assert tar.extractfile(f"deep/{'d' * 60}/{'f' * 60}.txt").read() == b"long"
 
 
-def test_files_tar_writes_hardlinked_paths_as_copies(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_files_layer_describes_its_blob(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    blob, layer, layer_tar = files_layer(files_tree(tmp_path, 0))
+    assert layer == {
+        "mediaType": b.LAYER_MEDIA_TYPE,
+        "digest": sha(blob),
+        "size": len(blob),
+        "diff_id": sha(layer_tar),
+    }
+    assert os.listdir(tmp_path / "out" / "blobs" / "sha256") == [sha(blob).partition(":")[2]]
+
+
+def test_files_layer_writes_hardlinked_paths_as_copies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     write(tmp_path / "a", b"same")
     os.link(tmp_path / "a", tmp_path / "b")
 
-    b.write_files_tar({"a": False, "b": False}, "out.tar")
+    _, _, layer_tar = files_layer({"a": False, "b": False})
 
-    with tarfile.open(tmp_path / "out.tar") as tar:
+    with tarfile.open(fileobj=io.BytesIO(layer_tar)) as tar:
         assert all(m.isreg() for m in tar.getmembers())
         assert tar.extractfile("b").read() == b"same"
 
 
-def test_files_tar_is_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_files_layer_is_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(b, "_GZIP_BLOCK", 256)
     outputs = []
     for run, mtime in enumerate((1_600_000_000, 1_700_000_000)):
         root = tmp_path / str(run)
@@ -654,28 +677,33 @@ def test_files_tar_is_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         monkeypatch.chdir(root)
         files = files_tree(root, mtime)
         (root / "app" / "run.sh").chmod(0o700 if run else 0o555)
-        b.write_files_tar(files if run else dict(reversed(files.items())), "out.tar")
-        outputs.append((root / "out.tar").read_bytes())
+        blob, _, _ = files_layer(files if run else dict(reversed(files.items())), threads=1 + 3 * run)
+        outputs.append(blob)
     assert outputs[0] == outputs[1]
 
 
-def test_files_tar_rejects_directories(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_files_layer_rejects_directories_and_leaves_no_blob(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "dir").mkdir()
     with pytest.raises(b.LayoutError, match="not a file or symlink"):
-        b.write_files_tar({"dir": False}, "out.tar")
+        b.files_to_blob({"dir": False}, "out")
+    assert os.listdir(tmp_path / "out" / "blobs" / "sha256") == []
 
 
-def test_main_writes_a_files_tar(
+def test_main_writes_a_files_layer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
     files = files_tree(tmp_path, 0)
     write(tmp_path / "list", "\n".join(f"{'x' if x else '-'}\t{name}" for name, x in files.items()).encode())
 
-    assert b.main(["tar", "layers/image_bundle.tar", "--files-from", "list"]) == 0
-    assert capsys.readouterr().out == ""
-    with tarfile.open(tmp_path / "layers" / "image_bundle.tar") as tar:
+    assert b.main(["layer", "--files-from", "list", "--out", "compressed", "--threads", "4"]) == 0
+    digest = capsys.readouterr().out.strip()
+    layer = json.loads((tmp_path / "compressed" / b.LAYER_DESCRIPTOR).read_bytes())
+    assert layer["digest"] == digest
+    with tarfile.open(b.blob_path("compressed", digest)) as tar:
         assert {m.name: m.mode == 0o755 for m in tar.getmembers() if m.isreg()} == {
             name: x for name, x in files.items() if name != "app/link"
         }
@@ -686,5 +714,91 @@ def test_main_rejects_a_bad_files_list(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     write(tmp_path / "list", b"app/run.sh\n")
-    assert b.main(["tar", "out.tar", "--files-from", "list"]) == 1
+    assert b.main(["layer", "--files-from", "list", "--out", "out"]) == 1
     assert "bad files list line" in capsys.readouterr().err
+
+
+def gzip_bytes(data: bytes, level: int = b.GZIP_LEVEL, threads: int = 1, writes: int = 1) -> bytes:
+    out = io.BytesIO()
+    with b._ParallelGzip(out, level, threads) as gz:
+        step = -(-len(data) // writes) or 1
+        for i in range(0, len(data), step):
+            gz.write(data[i : i + step])
+    return out.getvalue()
+
+
+@pytest.mark.parametrize("size", [0, 1, 255, 256, 257, 256 * 7 + 13])
+def test_parallel_gzip_ignores_threads_and_write_sizes(monkeypatch: pytest.MonkeyPatch, size: int) -> None:
+    monkeypatch.setattr(b, "_GZIP_BLOCK", 256)
+    data = (os.urandom(size // 2) + b"abc" * size)[:size]
+    outputs = {gzip_bytes(data, threads=t, writes=w) for t in (1, 2, 8) for w in (1, 3, 50)}
+    assert len(outputs) == 1
+    (output,) = outputs
+    assert gzip.decompress(output) == data
+    # A fixed header, as `gzip` writes it with no name and a zero mtime.
+    assert output[:10] == b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff"
+
+
+def test_parallel_gzip_ignores_threads_with_blocks_beyond_the_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Blocks larger than the 32 KiB window, so priming takes only the end of the previous block.
+    monkeypatch.setattr(b, "_GZIP_BLOCK", 1 << 16)
+    data = (os.urandom(1 << 15) + bytes(range(256)) * 512) * 3 + b"tail"
+    outputs = {gzip_bytes(data, threads=t, writes=w) for t in (1, 4) for w in (1, 7)}
+    assert len(outputs) == 1 and gzip.decompress(outputs.pop()) == data
+
+
+@pytest.mark.parametrize("level", [1, 6, 9])
+def test_parallel_gzip_header_matches_gzip(level: int) -> None:
+    expected = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=expected, mtime=0, compresslevel=level):
+        pass
+    assert gzip_bytes(b"x", level=level)[:10] == expected.getvalue()[:10]
+
+
+class _FailingSink(io.BytesIO):
+    def __init__(self, fail_after: int) -> None:
+        super().__init__()
+        self.writes = fail_after
+
+    def write(self, data: bytes) -> int:  # type: ignore[override]
+        self.writes -= 1
+        if self.writes < 0:
+            raise OSError("disk full")
+        return super().write(data)
+
+
+def test_parallel_gzip_shuts_down_its_threads_when_writing_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(b, "_GZIP_BLOCK", 256)
+    # The header and the 11 blocks beyond the 8 in flight are written; draining them on close fails.
+    gz = b._ParallelGzip(_FailingSink(fail_after=13), b.GZIP_LEVEL, threads=4)
+    with pytest.raises(OSError, match="disk full"):
+        with gz:
+            gz.write(os.urandom(256 * 20))
+        pytest.fail("closing should have failed")
+    assert all(not thread.is_alive() for thread in gz._pool._threads)
+
+
+def test_parallel_gzip_priming_keeps_matches_across_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(b, "_GZIP_BLOCK", 4096)
+    chunk = os.urandom(2048)
+    # Each block repeats the end of the block before it, which only the primed window can find.
+    assert len(gzip_bytes(chunk * 16)) < 4 * len(chunk)
+
+
+def test_parallel_gzip_level_changes_output() -> None:
+    data = b"".join(str(i).encode() for i in range(100_000))
+    fast, best = gzip_bytes(data, level=1), gzip_bytes(data, level=9)
+    assert fast != best and gzip.decompress(fast) == gzip.decompress(best) == data
+    assert fast[8:9] == b"\x04" and best[8:9] == b"\x02"
+
+
+def test_main_compress_passes_level_and_threads(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    layer = write(tmp_path / "layer.tar", make_tar({"a": b"".join(str(i).encode() for i in range(50_000))}))
+    digests = []
+    for level, threads in (("1", "1"), ("1", "8"), ("9", "8")):
+        out = str(tmp_path / f"out-{level}-{threads}")
+        assert b.main(["compress", layer, "--out", out, "--level", level, "--threads", threads]) == 0
+        digests.append(capsys.readouterr().out.strip())
+    assert digests[0] == digests[1] != digests[2]
+    with pytest.raises(SystemExit):
+        b.main(["compress", layer, "--out", str(tmp_path / "bad"), "--level", "0"])

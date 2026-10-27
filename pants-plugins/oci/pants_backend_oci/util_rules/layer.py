@@ -83,18 +83,41 @@ class ImageLayer:
     entrypoint: str | None = None
     # What made the layer, for its history; the target's address if unset.
     created_by: str | None = None
+    # The `layer.json` descriptor within `digest`, when the layer is already a compressed blob.
+    descriptor: str | None = None
+
+
+# Threads a layer's gzip may use. The output doesn't depend on it, and gains level off around here.
+LAYER_GZIP_THREADS = 16
+
+
+def gzip_args(oci: OciSubsystem) -> tuple[str, ...]:
+    """Arguments for an `oci_layout_builder` command that gzips a layer, run in a `Process` with
+    `concurrency_available=LAYER_GZIP_THREADS`."""
+    return ("--level", str(oci.layer_gzip_level), "--threads", "{pants_concurrency}")
 
 
 @dataclass(frozen=True)
-class FilesTarRequest:
-    """A deterministic tar at `output_filename` of every file in `snapshot`."""
+class LayerBlobRequest:
+    """A deterministic gzipped layer of every file in `snapshot`."""
 
     snapshot: Snapshot
-    output_filename: str
 
 
-@rule(desc="Creating a layer tar", level=LogLevel.DEBUG)
-async def create_files_tar(request: FilesTarRequest, builder: OciBuilder, oci: OciSubsystem) -> Digest:
+@dataclass(frozen=True)
+class LayerBlob:
+    """The layer blob and its descriptor, under `compressed/`."""
+
+    digest: Digest
+    path: str
+    descriptor: str
+
+
+_COMPRESSED = "compressed"
+
+
+@rule(desc="Creating a layer", level=LogLevel.DEBUG)
+async def create_layer_blob(request: LayerBlobRequest, builder: OciBuilder, oci: OciSubsystem) -> LayerBlob:
     if oci.unsafe_tar_ignore_file_changed:
         logger.warning("`[oci].unsafe_tar_ignore_file_changed` is deprecated and has no effect.")
     # The paths go in a file, as a long argument list can exceed the OS limit. Modes come from the
@@ -108,19 +131,24 @@ async def create_files_tar(request: FilesTarRequest, builder: OciBuilder, oci: O
     file_list = FileContent(_FILE_LIST, "\n".join(lines).encode("utf-8"))
     file_list_digest = await create_digest(CreateDigest([file_list]))
     input_digest = await merge_digests(MergeDigests([file_list_digest, request.snapshot.digest]))
+    # The tar streams straight into gzip, so the uncompressed layer is never captured.
     process = builder.process(
         oci_layout_builder,
-        "tar",
-        request.output_filename,
+        "layer",
         "--files-from",
         _FILE_LIST,
+        "--out",
+        _COMPRESSED,
+        *gzip_args(oci),
         input_digest=input_digest,
-        output_files=(request.output_filename,),
-        description=f"Create {request.output_filename}",
+        output_directories=(_COMPRESSED,),
+        concurrency_available=LAYER_GZIP_THREADS,
+        description="Create OCI layer",
         level=LogLevel.DEBUG,
     )
     result = await fallible_to_exec_result_or_raise(**implicitly({process: Process}))
-    return result.output_digest
+    blob = oci_layout_builder.blob_path(_COMPRESSED, result.stdout.decode().strip())
+    return LayerBlob(result.output_digest, blob, f"{_COMPRESSED}/{oci_layout_builder.LAYER_DESCRIPTOR}")
 
 
 @rule
@@ -194,24 +222,13 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
     if all_digests:
         snapshot = await digest_to_snapshot(**implicitly(MergeDigests(all_digests)))
 
-        layer_name = "layers/image_bundle.tar"
-        raw_layer_digest = await create_files_tar(FilesTarRequest(snapshot, layer_name), **implicitly())
-        real_layers.append(
-            (
-                raw_layer_digest,
-                layer_name,
-            )
-        )
+        blob = await create_layer_blob(LayerBlobRequest(snapshot), **implicitly())
+        real_layers.append((blob.digest, blob.path, blob.descriptor))
 
     for layer in layer_artifacts:
         snapshot = await digest_to_snapshot(**implicitly(MergeDigests([layer.digest])))
 
-        real_layers.append(
-            (
-                snapshot.digest,
-                snapshot.files[0],
-            )
-        )
+        real_layers.append((snapshot.digest, snapshot.files[0], None))
 
     if len(real_layers) > 1:
         # TODO[TSolberg]: Support multiple layers. We need to merge the layers together to create a single
@@ -221,13 +238,13 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         # Layer order matters. Determinism. `tar --concatenate` is ridiculusly slow.
         raise Exception(f"Multiple layers not yet supported: {real_layers}")
 
-    raw_layer_digest, layer_name = real_layers[0]
+    layer_digest, layer_path, descriptor = real_layers[0]
     entrypoint = None
     if other_artifacts:
         entrypoint = f"/{other_artifacts[0].artifacts[0].relpath}"
         logger.info(f"Setting entrypoint to: {entrypoint}")
 
-    return ImageLayer(request.target.address, raw_layer_digest, layer_name, entrypoint)
+    return ImageLayer(request.target.address, layer_digest, layer_path, entrypoint, descriptor=descriptor)
 
 
 def rules():
