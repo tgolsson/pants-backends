@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from pants.engine.addresses import Address
-from pants.engine.fs import EMPTY_DIGEST
+from pants.engine.fs import EMPTY_DIGEST, Digest
 from pants.engine.platform import Platform
 from pants.engine.process import Process
 from pants.engine.unions import UnionMembership, UnionRule
@@ -105,18 +105,24 @@ def podman_run_process(request, platform=Platform.linux_x86_64, connection=""):
             "pants.engine.process.fallible_to_exec_result_or_raise": execute,
         },
     )
-    assert len(executions) == 1
-    return result, archive_requests[0]
+    assert len(executions) == len(archive_requests)
+    return result, archive_requests
 
 
 @pytest.mark.parametrize("interactive,tty", [(False, False), (False, True), (True, True)])
-def test_podman_archives_image_before_launch(interactive, tty):
-    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST)
-    result, archive = podman_run_process(PodmanRunRequest(bundle, Address("image"), interactive, tty))
-    assert archive.input_digest == bundle.digest
-    assert archive.output_filename == "image.tar"
-    assert archive.name is None
-    assert "--connection" not in result.argv and "--digest" not in result.argv
+def test_local_podman_reads_the_layout_without_an_archive(interactive, tty):
+    layout = Digest("a" * 64, 1)
+    bundle = ImageBundle(layout, "sha256:abc", True, metadata=EMPTY_DIGEST)
+    result, archives = podman_run_process(PodmanRunRequest(bundle, Address("image"), interactive, tty))
+    # Capturing an archive of a multi-GB image costs more than running it.
+    assert archives == []
+    assert result.input_digest == EMPTY_DIGEST
+    assert result.immutable_input_digests["__oci_image"] == layout
+    argv = list(result.argv)
+    assert argv[argv.index("--layout") + 1] == "{chroot}/__oci_image/build"
+    assert argv[argv.index("--tag") + 1] == "build"
+    assert "--archive" not in argv
+    assert "--connection" not in argv and "--digest" not in argv
     assert result.argv[-1] == "--"
     assert ("--interactive" in result.argv) == interactive
     assert ("--tty" in result.argv) == tty
@@ -134,13 +140,16 @@ def test_podman_archives_image_before_launch(interactive, tty):
     ],
 )
 def test_podman_runs_through_a_connection_off_linux_or_when_named(platform, connection):
-    bundle = ImageBundle(EMPTY_DIGEST, "sha256:abc", True, metadata=EMPTY_DIGEST)
-    result, archive = podman_run_process(
+    bundle = ImageBundle(Digest("a" * 64, 1), "sha256:abc", True, metadata=EMPTY_DIGEST)
+    result, archives = podman_run_process(
         PodmanRunRequest(bundle, Address("image"), True, True), platform, connection
     )
     # The archive names the image, so loading it leaves no unnamed image behind.
-    assert archive.name == "localhost/pants-oci-run:abc"
+    assert [archive.name for archive in archives] == ["localhost/pants-oci-run:abc"]
+    assert archives[0].input_digest == bundle.digest
     argv = list(result.argv)
+    assert argv[argv.index("--archive") + 1] == "{chroot}/image.tar"
+    assert "--layout" not in argv
     assert argv[argv.index("--connection") + 1] == connection
     assert argv[argv.index("--digest") + 1] == "sha256:abc"
     assert argv[-3:] == ["--interactive", "--tty", "--"]

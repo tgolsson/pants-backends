@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from pants.core.goals.repl import ReplImplementation, ReplRequest
 from pants.core.goals.run import RunFieldSet, RunInSandboxBehavior, RunRequest
+from pants.engine.fs import EMPTY_DIGEST
 from pants.engine.internals.graph import resolve_target
 from pants.engine.platform import Platform
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
@@ -45,6 +46,9 @@ class RunImageBundleProcessRequest:
     interactive: bool = False
 
 
+_RUN_LAYOUT = "__oci_image"
+
+
 @dataclass(frozen=True)
 class PodmanRunRequest(ContainerRunRequest):
     runner = OciRunner.podman
@@ -59,26 +63,45 @@ async def podman_run(
     platform: Platform,
     oci: OciSubsystem,
 ) -> Process:
-    # Local Linux podman reads the archive directly; elsewhere, or through a named connection, it's
-    # loaded into the connection's store first, under a name only these runs use.
+    # Local Linux podman reads the image's layout directly; elsewhere, or through a named
+    # connection, an archive of it is loaded into the connection's store first, under a name only
+    # these runs use.
     local = not oci.podman_connection and platform in (Platform.linux_x86_64, Platform.linux_arm64)
-    name = None if local else podman_runner.remote_ref(request.bundle.image_sha)
-    # Only the image's own blobs go to podman, in an OCI archive.
-    archive_process = await package_oci_archive(
-        OciArchiveRequest(request.bundle.digest, "image.tar", name, f"Archive {request.address} for podman"),
-        **implicitly(),
-    )
-    archive = await fallible_to_exec_result_or_raise(**implicitly({archive_process: Process}))
-    remote = () if local else ("--connection", oci.podman_connection, "--digest", request.bundle.image_sha)
+    if local:
+        # An immutable input, so the layout's blobs come from Pants' store as they are, and nothing
+        # new is captured.
+        input_digest = EMPTY_DIGEST
+        layout = {_RUN_LAYOUT: request.bundle.digest}
+        image: tuple[str, ...] = ("--layout", f"{{chroot}}/{_RUN_LAYOUT}/build", "--tag", "build")
+    else:
+        # Only the image's own blobs go to podman, in an OCI archive.
+        archive_process = await package_oci_archive(
+            OciArchiveRequest(
+                request.bundle.digest,
+                "image.tar",
+                podman_runner.remote_ref(request.bundle.image_sha),
+                f"Archive {request.address} for podman",
+            ),
+            **implicitly(),
+        )
+        archive = await fallible_to_exec_result_or_raise(**implicitly({archive_process: Process}))
+        input_digest = archive.output_digest
+        layout = {}
+        image = (
+            "--archive",
+            "{chroot}/image.tar",
+            "--connection",
+            oci.podman_connection,
+            "--digest",
+            request.bundle.image_sha,
+        )
     exe, *runner_args = builder.argv(
         podman_runner,
         "--podman",
         podman.path,
         "--cache",
         str(caches.val / PODMAN_CACHE / PODMAN_STORE_VERSION),
-        "--archive",
-        "{chroot}/image.tar",
-        *remote,
+        *image,
     )
     # The run happens outside the sandbox, so the builder is addressed through `{chroot}`. It
     # unpacks under the user's own `~/.cache`, as the run isn't cached.
@@ -90,8 +113,8 @@ async def podman_run(
     args.append("--")
     return Process(
         args,
-        input_digest=archive.output_digest,
-        immutable_input_digests=builder.immutable_input_digests,
+        input_digest=input_digest,
+        immutable_input_digests={**builder.immutable_input_digests, **layout},
         description=f"Running {request.address}",
     )
 

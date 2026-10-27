@@ -25,8 +25,8 @@ def launch_args(tmp_path):
         "/usr/bin/podman",
         "--cache",
         str(tmp_path / "cache"),
-        "--archive",
-        "/image with spaces.tar",
+        "--layout",
+        "/image with spaces/build",
     ]
 
 
@@ -40,9 +40,9 @@ def test_launcher_preserves_args_and_isolates_storage(tmp_path, monkeypatch, loc
     podman_runner.main(launch_args(tmp_path) + flags + ["--", *command_args])
     executable, argv, env = captured[0]
     assert executable == "/usr/bin/podman"
-    archive_index = argv.index("oci-archive:/image with spaces.tar")
-    assert argv[archive_index + 1 :] == command_args
-    options = argv[:archive_index]
+    image_index = argv.index("oci:/image with spaces/build:build")
+    assert argv[image_index + 1 :] == command_args
+    options = argv[:image_index]
     assert ("--interactive" in options) == interactive
     assert ("--tty" in options) == tty
     assert "--rm" in options and "--quiet" in options
@@ -111,8 +111,8 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
             str(fake),
             "--cache",
             str(tmp_path / "cache"),
-            "--archive",
-            "/image.tar",
+            "--layout",
+            "/image/build",
             "--",
             "a b",
             "",
@@ -256,6 +256,29 @@ def test_connection_needs_the_digest(tmp_path):
     args = remote_args(podman, "")
     with pytest.raises(SystemExit):
         podman_runner.main(args[: args.index("--digest")])
+
+
+def test_connection_needs_the_archive(tmp_path, capsys):
+    podman, _ = fake_podman(tmp_path)
+    args = remote_args(podman, "")
+    archive = args.index("--archive")
+    with pytest.raises(SystemExit):
+        podman_runner.main(args[:archive] + ["--layout", "/image/build"] + args[archive + 2 :])
+    assert "--connection needs --digest and --archive" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "image,error",
+    [
+        ([], "one of the arguments --layout --archive is required"),
+        (["--archive", "/image.tar"], "local podman needs --layout"),
+        (["--layout", "/image/build", "--archive", "/image.tar"], "not allowed with argument"),
+    ],
+)
+def test_local_needs_only_the_layout(tmp_path, local_user, capsys, image, error):
+    with pytest.raises(SystemExit):
+        podman_runner.main(["--podman", "/usr/bin/podman", "--cache", str(tmp_path / "cache"), *image])
+    assert error in capsys.readouterr().err
 
 
 def test_remote_missing_podman(tmp_path, capsys):

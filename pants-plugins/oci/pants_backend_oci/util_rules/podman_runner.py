@@ -1,8 +1,8 @@
 """Host-side launcher for OCI execution with podman (stdlib only).
 
-Local Linux podman runs the archive from the plugin's own rootless store. Through a connection,
-such as a `podman machine`, the image is loaded into the connection's store under `REMOTE_REPOSITORY`
-first, since the remote client can't run an archive directly.
+Local Linux podman runs the image straight from its OCI layout, in the plugin's own rootless store.
+Through a connection, such as a `podman machine`, an archive of the image is loaded into the connection's
+store under `REMOTE_REPOSITORY` first, since the remote client can't run an archive directly.
 
 Also holds the podman store setup that `podman_builder` shares."""
 
@@ -82,9 +82,9 @@ def storage_args(cache: Path, runtime: Path) -> list[str]:
 
 
 def command(
-    podman: str, cache: Path, archive: str, *, runtime: Path, interactive: bool, tty: bool
+    podman: str, cache: Path, layout: str, tag: str, *, runtime: Path, interactive: bool, tty: bool
 ) -> list[str]:
-    return [*_run(podman, storage_args(cache, runtime), interactive, tty), f"oci-archive:{archive}"]
+    return [*_run(podman, storage_args(cache, runtime), interactive, tty), f"oci:{layout}:{tag}"]
 
 
 def remote_args(connection: str) -> list[str]:
@@ -161,7 +161,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--podman", required=True)
     parser.add_argument("--cache", required=True, type=Path)
-    parser.add_argument("--archive", required=True)
+    image = parser.add_mutually_exclusive_group(required=True)
+    image.add_argument("--layout", help="The image's OCI layout, run by local podman.")
+    image.add_argument("--archive", help="The image's OCI archive, loaded through a connection.")
+    parser.add_argument("--tag", default="build", help="The image's tag in `--layout`.")
     parser.add_argument(
         "--connection", help="Run through this podman connection, or the default one when empty."
     )
@@ -170,8 +173,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tty", action="store_true")
     parser.add_argument("args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
-    if args.connection is not None and not args.digest:
-        parser.error("--connection needs --digest")
+    if args.connection is not None and not (args.digest and args.archive):
+        parser.error("--connection needs --digest and --archive")
+    if args.connection is None and not args.layout:
+        parser.error("local podman needs --layout")
     if args.connection is None:
         try:
             check_local("OCI run/repl")
@@ -180,7 +185,13 @@ def main(argv: list[str] | None = None) -> int:
             print(e, file=sys.stderr)
             return 1
         argv = command(
-            args.podman, cache, args.archive, runtime=runtime, interactive=args.interactive, tty=args.tty
+            args.podman,
+            cache,
+            args.layout,
+            args.tag,
+            runtime=runtime,
+            interactive=args.interactive,
+            tty=args.tty,
         )
     else:
         env = container_build.host_env(_REMOTE_ENV)
