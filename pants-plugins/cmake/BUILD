@@ -7,6 +7,7 @@ python_distribution_with_secret(
     dependencies=[
         ":package_data",
         "//pants-plugins/cmake/pants_backend_cmake:pants_backend_cmake",
+        "//pants-plugins/cmake/pants_backend_cmake/generate:generate",
     ],
     provides=python_artifact(
         name="pants_backend_cmake",

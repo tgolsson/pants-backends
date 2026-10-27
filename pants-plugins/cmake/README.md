@@ -62,6 +62,24 @@ a failed test; any other exception is a bug in the wrapper and fails the goal. T
 are built under their address without its parameters, so `parametrize` over such a field (one
 that does not change the build) runs one build several ways.
 
+## `cpp_generate`
+
+The optional sub-backend `pants_backend_cmake.generate` provides `cpp_generate`, the C/C++
+specialization of `pants-backend-generate`: C/C++ sources written by a generator, formatted
+with the cc backend's `[clang-format]` (a pex, hence `pants.backend.python`;
+`[clang-format].skip` is not read). `pants generate` writes them, `pants lint` checks the
+committed copies, and a `cmake_project` or `cmake_test` depending on one compiles them.
+Install `pants_backend_cmake[generate]` (it pulls in `pants-backend-generate`) and enable:
+
+```toml
+backend_packages = [
+  "pants.backend.python",
+  "pants_backend_generate",
+  "pants_backend_cmake",
+  "pants_backend_cmake.generate",
+]
+```
+
 ## Subsystems
 
 - `[cmake]`: the pinned CMake download (`version`, `known_versions`) and the host compilers

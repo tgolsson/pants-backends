@@ -17,6 +17,9 @@ classifiers = [
   "Topic :: Software Development :: Build Tools",
 ]
 
+[project.optional-dependencies]
+generate = ["pants_backend_generate>=0.1.0"]
+
 [project.urls]
 Repository = "https://github.com/tgolsson/pants-backends"
 Code = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/cmake"

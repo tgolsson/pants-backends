@@ -22,6 +22,8 @@
   `cc_sources` and targets generating either (any `GenerateSourcesRequest` with a
   `FileSourceField` or `CCSourceField` output). A generated translation unit of the project is
   replayed with its real content; one of a test (a generated runner) is compiled into it.
+- `pants_backend_cmake.generate`, an optional sub-backend: `cpp_generate`, the C/C++
+  specialization of `pants-backend-generate`, formatted with `[clang-format]`.
 - Dependency files of a `cmake_project` matching `configure_placeholders` are placeholders at
   configure, so a generated translation unit named in `add_library` configures.
 - A path both a `cmake_project`'s `sources` and one of its dependencies provide is a configure
