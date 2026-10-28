@@ -9,6 +9,7 @@ Also holds the podman store setup that `podman_builder` shares."""
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -27,6 +28,10 @@ _REMOTE_ENV = frozenset({"CONTAINER_HOST", "CONTAINER_CONNECTION"})
 REMOTE_REPOSITORY = "localhost/pants-oci-run"
 
 _MISSING = "podman is missing. Install it: https://podman.io/docs/installation"
+
+# One file per `podman build` on a store, removed when it finishes; one that was killed leaves
+# its working container behind, and its file.
+BUILDS = "builds"
 
 
 class PodmanUnavailable(Exception):
@@ -80,6 +85,49 @@ def prepare_store(cache: Path) -> tuple[Path, Path, dict[str, str]]:
     # Podman keeps the user namespace it shares across runs there.
     env["XDG_RUNTIME_DIR"] = str(base)
     return cache, runtime, env
+
+
+def lock_store(podman: str, cache: Path, options: list[str], env: dict[str, str]) -> int:
+    """Hold the store's lock, shared, for as long as this process and what it execs run.
+
+    Podman can't say which working container a killed build left, so after one the store is swept
+    once no one else is using it. Returns the lock's file descriptor."""
+    lock = os.open(cache / ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    os.set_inheritable(lock, True)
+    builds = cache / BUILDS
+    builds.mkdir(exist_ok=True)
+    if any(builds.iterdir()):
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pass
+        else:
+            # Every build still running holds the lock, so these builds are gone; if the sweep
+            # fails, a later one retries.
+            if sweep(podman, options, env):
+                for build in builds.iterdir():
+                    build.unlink()
+    fcntl.flock(lock, fcntl.LOCK_SH)
+    return lock
+
+
+def sweep(podman: str, options: list[str], env: dict[str, str]) -> bool:
+    """Remove every container and dangling image, while nothing else uses the store; whether it
+    could."""
+
+    def step(*args: str) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run([podman, *options, *args], env=env, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"warning: couldn't clean up the podman store: {result.stderr.strip()}", file=sys.stderr)
+        return result
+
+    listed = step("ps", "--all", "--external", "--quiet")
+    if listed.returncode != 0:
+        return False
+    containers = listed.stdout.split()
+    if containers and step("rm", "--force", *containers).returncode != 0:
+        return False
+    return step("image", "prune", "--force").returncode == 0
 
 
 def storage_args(cache: Path, runtime: Path) -> list[str]:
@@ -204,7 +252,11 @@ def main(argv: list[str] | None = None) -> int:
             check_local("OCI run/repl", sys.platform, os.geteuid())
             cache, runtime, env = prepare_store(args.cache)
             options = storage_args(cache, runtime)
-            image = [f"oci:{args.layout}:{args.tag}"]
+            # Inherited by podman, so the store stays locked while it runs.
+            lock_store(args.podman, cache, options, env)
+            # Every layout is imported under its tag, so the image goes when the run ends rather than
+            # being left behind once another image takes the name.
+            image = ["--rmi", f"oci:{args.layout}:{args.tag}"]
         else:
             env = container_build.host_env(_REMOTE_ENV)
             options = remote_args(args.connection)

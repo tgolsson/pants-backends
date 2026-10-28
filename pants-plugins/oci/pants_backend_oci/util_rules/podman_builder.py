@@ -71,6 +71,22 @@ def rmi_argv(podman: str, storage: list[str], image: str) -> list[str]:
     return [podman, *storage, "rmi", "--force", image]
 
 
+def run_build(argv: list[str], env: dict[str, str], cache: Path) -> int:
+    """Run `podman build`, recorded in the store until it exits by itself, so a sweep removes the
+    working container it leaves when it's killed or interrupted."""
+    marker, path = tempfile.mkstemp(dir=cache / podman_runner.BUILDS)
+    os.close(marker)
+    try:
+        status = subprocess.run(argv, env=env).returncode
+    except OSError:
+        os.unlink(path)
+        raise
+    # A podman killed by a signal leaves its working container too.
+    if status >= 0:
+        os.unlink(path)
+    return status
+
+
 def write_archive(layout: str, tag: str, archive: str) -> str:
     """Write the image tagged `tag` as an OCI archive, and return the name it's tagged with there.
 
@@ -114,12 +130,13 @@ def main(argv: list[str]) -> int:
         export = os.path.abspath(os.path.join(tmp, "export.tar")) if args.command == "files" else None
         try:
             try:
-                result = subprocess.run(build_argv(args.podman, storage, _CONTEXT, iidfile, export), env=env)
+                podman_runner.lock_store(args.podman, cache, storage, env)
+                status = run_build(build_argv(args.podman, storage, _CONTEXT, iidfile, export), env, cache)
             except FileNotFoundError:
                 print("podman is missing. Install it: https://podman.io/docs/installation", file=sys.stderr)
                 return 127
-            if result.returncode != 0:
-                return result.returncode
+            if status != 0:
+                return status
             if export is not None:
                 container_build.write_outputs(export, outputs, args.exclude, args.dest)
                 return 0
@@ -138,5 +155,11 @@ def main(argv: list[str]) -> int:
             # The imported base stays in the store for the next build; the built image doesn't.
             if os.path.exists(iidfile):
                 image = Path(iidfile).read_text().strip()
-                subprocess.run(rmi_argv(args.podman, storage, image), env=env, capture_output=True)
+                removed = subprocess.run(
+                    rmi_argv(args.podman, storage, image), env=env, capture_output=True, text=True
+                )
+                if removed.returncode != 0:
+                    print(
+                        f"warning: couldn't remove the built image: {removed.stderr.strip()}", file=sys.stderr
+                    )
     return 0

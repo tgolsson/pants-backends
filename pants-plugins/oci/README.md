@@ -35,11 +35,14 @@ portable `vfs` storage driver. Its runtime state lives where rootless podman put
 `XDG_RUNTIME_DIR`: `/run/user/<uid>` when that is yours, else `/tmp/podman-run-<uid>`, in a
 directory named by a hash of the store path. `XDG_RUNTIME_DIR` itself is ignored, since podman
 ties a store to that location and `pants run` and scripted build steps see different
-environments. Exited containers are removed; imported images and layers remain
-cached across runs. This store can grow and is separate from your default podman store. A run or
-build step that is interrupted (Ctrl-C, a timeout) can also leave its container and image behind.
-To clear all of it, imported bases included, run this while no Pants build is running; the files
-belong to your subordinate user ids, hence `podman unshare`:
+environments. A run's container is removed when it exits, and so is its image unless another run
+or a build step still uses it, so each run imports it again; the bases build steps import remain
+cached, which is why this store, separate from your default podman store, grows. A build
+step that is interrupted (Ctrl-C, a timeout) leaves podman's working container behind, and its
+command runs on until it ends; the next run or build that finds the store otherwise unused removes
+such containers and any dangling images. To clear all of it, imported bases included, run this
+while no Pants build is running; the files belong to your subordinate user ids, hence
+`podman unshare`:
 
 ```shell
 podman unshare rm -rf <named-caches-dir>/oci_podman

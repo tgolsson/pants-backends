@@ -103,6 +103,12 @@ from pants_backend_oci.util_rules import oci_layout_builder as b
 args = sys.argv[1:]
 with open({log!r}, "a") as f:
     f.write(json.dumps(args) + "\\n")
+if "build" in args and os.environ.get("FAKE_BUILD_KILLED"):
+    import signal
+    os.kill(os.getpid(), signal.SIGKILL)
+if "rmi" in args and os.environ.get("FAKE_RMI_STATUS"):
+    sys.stderr.write("image not known\\n")
+    sys.exit(int(os.environ["FAKE_RMI_STATUS"]))
 if "build" in args:
     for arg in args:
         if arg.startswith("--iidfile="):
@@ -125,7 +131,8 @@ if "save" in args:
 def sandbox(tmp_path, monkeypatch):
     if sys.platform != "linux" or os.geteuid() == 0:
         pytest.skip("requires an unprivileged Linux user")
-    monkeypatch.delenv("FAKE_BUILD_STATUS", raising=False)
+    for name in ("FAKE_BUILD_STATUS", "FAKE_BUILD_KILLED", "FAKE_RMI_STATUS"):
+        monkeypatch.delenv(name, raising=False)
     (tmp_path / "xdg").mkdir()
     monkeypatch.setattr(podman_runner, "runtime_dir", lambda uid: tmp_path / "xdg")
     work = tmp_path / "sandbox"
@@ -148,6 +155,8 @@ def test_files_writes_outputs_and_removes_the_image(sandbox):
     assert status == 0
     with tarfile.open(work / "out.tar") as tar:
         assert tar.getnames() == [".", "./out", "./out/hi"]
+    # The finished build is no longer recorded in the store.
+    assert list((Path(common[3]) / "builds").iterdir()) == []
     build, rmi = calls()
     assert build[build.index("--root") + 1] == str((Path(common[3]) / "storage").resolve())
     assert rmi[-3:] == ["rmi", "--force", "built-image"]
@@ -175,3 +184,36 @@ def test_layer_writes_the_added_layer(sandbox):
     with tarfile.open(work / "scripted-layer.tar") as tar:
         assert tar.getnames() == ["out/hi"]
     assert [call[call.index("--storage-driver=vfs") + 1] for call in calls()] == ["build", "save", "rmi"]
+
+
+def test_failed_rmi_is_reported(sandbox, monkeypatch, capsys):
+    _, common, _ = sandbox
+    monkeypatch.setenv("FAKE_RMI_STATUS", "1")
+    assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
+    assert "couldn't remove the built image: image not known" in capsys.readouterr().err
+
+
+def builds(tmp_path):
+    return list((tmp_path / "cache" / "builds").iterdir())
+
+
+def test_killed_podman_leaves_the_build_recorded_for_a_sweep(sandbox, monkeypatch, tmp_path):
+    _, common, _ = sandbox
+    monkeypatch.setenv("FAKE_BUILD_KILLED", "1")
+    assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == -9
+    assert len(builds(tmp_path)) == 1
+
+
+def test_failed_build_is_not_recorded(sandbox, monkeypatch, tmp_path):
+    # A build that fails by itself removes its working container (`--force-rm`).
+    _, common, _ = sandbox
+    monkeypatch.setenv("FAKE_BUILD_STATUS", "3")
+    assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 3
+    assert builds(tmp_path) == []
+
+
+def test_missing_podman_is_not_recorded(sandbox, tmp_path):
+    _, common, _ = sandbox
+    common = [*common[:1], str(tmp_path / "missing"), *common[2:]]
+    assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 127
+    assert builds(tmp_path) == []

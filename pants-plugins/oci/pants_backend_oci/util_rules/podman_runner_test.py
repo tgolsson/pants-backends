@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import subprocess
@@ -143,10 +144,15 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
         text=True,
     )
     assert result.returncode == 23
-    assert json.loads(result.stdout)[-3:] == ["a b", "", "$HOME"]
+    argv = json.loads(result.stdout)
+    assert argv[-3:] == ["a b", "", "$HOME"]
+    # Its image goes with it, as the next run's import takes the name.
+    assert argv[-5:-3] == ["--rmi", "oci:/image/build:build"]
 
 
-def fake_podman(tmp_path, *, exists: int = 1, load: int = 0, machines: str = "[]", stderr: str = ""):
+def fake_podman(
+    tmp_path, *, exists: int = 1, load: int = 0, machines: str = "[]", stderr: str = "", containers: str = ""
+):
     """A podman that logs each call's arguments, answering `image exists` with `exists`."""
     log = tmp_path / "calls.jsonl"
     fake = tmp_path / "podman"
@@ -163,6 +169,8 @@ def fake_podman(tmp_path, *, exists: int = 1, load: int = 0, machines: str = "[]
         f"    sys.exit({load})\n"
         "if 'machine' in args:\n"
         f"    print({machines!r})\n"
+        "if 'ps' in args:\n"
+        f"    print({containers!r})\n"
     )
     fake.chmod(0o755)
     return str(fake), log
@@ -186,6 +194,68 @@ def remote_args(podman: str, connection: str, *extra: str) -> list[str]:
         "sha256:abc",
         *extra,
     ]
+
+
+def test_store_is_swept_after_a_killed_build_once_no_one_uses_it(tmp_path):
+    podman, log = fake_podman(tmp_path, containers="c1\nc2")
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "builds").mkdir()
+    (cache / "builds" / "killed").touch()
+    lock = podman_runner.lock_store(podman, cache, ["--root", "/s"], {})
+    other = os.open(cache / ".lock", os.O_RDWR)
+    try:
+        assert calls(log) == [
+            ["--root", "/s", "ps", "--all", "--external", "--quiet"],
+            ["--root", "/s", "rm", "--force", "c1", "c2"],
+            ["--root", "/s", "image", "prune", "--force"],
+        ]
+        assert list((cache / "builds").iterdir()) == []
+        # Held shared, and kept by what this process execs.
+        with pytest.raises(BlockingIOError):
+            fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(other, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        assert os.get_inheritable(lock)
+    finally:
+        os.close(other)
+        os.close(lock)
+
+
+def test_failed_sweep_is_retried_later(tmp_path, capsys):
+    podman, log = fake_podman(tmp_path, containers="c1")
+    cache = tmp_path / "cache"
+    (cache / "builds").mkdir(parents=True)
+    (cache / "builds" / "killed").touch()
+    failing = tmp_path / "failing-podman"
+    failing.write_text(Path(podman).read_text() + "if 'rm' in args:\n    sys.exit(125)\n")
+    failing.chmod(0o755)
+    os.close(podman_runner.lock_store(str(failing), cache, [], {}))
+    assert "couldn't clean up the podman store" in capsys.readouterr().err
+    assert (cache / "builds" / "killed").exists()
+
+
+def test_store_in_use_is_not_swept(tmp_path):
+    podman, log = fake_podman(tmp_path)
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "builds").mkdir()
+    (cache / "builds" / "killed").touch()
+    other = os.open(cache / ".lock", os.O_RDWR | os.O_CREAT)
+    fcntl.flock(other, fcntl.LOCK_SH)
+    try:
+        os.close(podman_runner.lock_store(podman, cache, [], {}))
+    finally:
+        os.close(other)
+    assert calls(log) == []
+    # A later run or build sweeps it.
+    assert (cache / "builds" / "killed").exists()
+
+
+def test_store_is_not_swept_after_builds_that_finished(tmp_path):
+    podman, log = fake_podman(tmp_path)
+    (tmp_path / "cache").mkdir()
+    os.close(podman_runner.lock_store(podman, tmp_path / "cache", [], {}))
+    assert calls(log) == []
 
 
 REF = "localhost/pants-oci-run:abc"

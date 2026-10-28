@@ -50,7 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moves to `oci_podman/v2` to go with it, so bases are imported again once. Remove the old
   `oci_podman/v1` store and `/tmp/oci-podman-*` directories with
   `podman unshare rm -rf <named-caches-dir>/oci_podman/v1 /tmp/oci-podman-$(id -u)-*`. The README
-  shows how to clear the store, including what an interrupted build leaves behind.
+  shows how to clear the store.
+
+- `pants run` with local podman removes the image it imported when the run exits, instead of leaving
+  the previous one dangling whenever another image is run. What an interrupted build step leaves in
+  the podman store, its working container, is removed by the next run or build that finds the store
+  otherwise unused; runs and build steps hold a shared lock on the store to tell. Failing to remove a built
+  image is now reported.
 
 - The sandboxed builders run as one `oci-builder` executable, a scie built in the rules with pex
   from the plugin's builder scripts and a pinned python-build-standalone Python (3.11.17), instead
