@@ -1,0 +1,42 @@
+[project]
+name = "pants_backend_platforms"
+description = "Multi-platform builds for Pants backends: platform and cc_toolchain targets and a contract for building dependencies per platform."
+version = "0.1.0"
+authors = [
+    { name = "Tom Solberg", email = "me@sbg.dev" }
+]
+
+dependencies = []
+readme = "README.md"
+license = {file = "LICENSE-MIT.txt"}
+keywords = ["pantsbuild", "pants", "backend", "cross-compilation", "platforms", "toolchain"]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python",
+  "Topic :: Software Development :: Build Tools",
+]
+
+[project.urls]
+Repository = "https://github.com/tgolsson/pants-backends"
+Code = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/platforms"
+Changelog = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/platforms/CHANGELOG.md"
+
+[tool.pdm.build]
+includes = [
+    "pants_backend_platforms",
+]
+
+[build-system]
+requires = ["pdm-backend>2.0"]
+build-backend = "pdm.backend"
+
+[tool.isort]
+profile = "black"
+
+known_first_party = ["pants_backend_platforms"]
+line_length = 100
+include_trailing_comma = true
+
+[tool.black]
+line-length = 100
