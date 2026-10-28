@@ -10,13 +10,13 @@ from pants_backend_oci.util_rules import podman_runner
 
 
 @pytest.fixture
-def local_user(tmp_path, monkeypatch):
-    monkeypatch.setattr(sys, "platform", "linux")
+def runtime(tmp_path, monkeypatch):
+    """The runtime directory podman's state goes to, instead of the user's."""
     if os.getuid() == 0:
         pytest.skip("requires an unprivileged user for runtime directory ownership")
-    monkeypatch.setattr(os, "geteuid", os.getuid)
     (tmp_path / "xdg").mkdir()
     monkeypatch.setattr(podman_runner, "runtime_dir", lambda uid: tmp_path / "xdg")
+    return tmp_path / "xdg"
 
 
 def launch_args(tmp_path):
@@ -31,37 +31,64 @@ def launch_args(tmp_path):
 
 
 @pytest.mark.parametrize("interactive,tty", [(False, False), (False, True), (True, True)])
-def test_launcher_preserves_args_and_isolates_storage(tmp_path, monkeypatch, local_user, interactive, tty):
-    captured = []
-    monkeypatch.setattr(os, "execve", lambda *args: captured.append(args))
-    monkeypatch.setenv("PATH", "/host/bin:/usr/bin")
+def test_command_keeps_the_containers_args(interactive, tty):
+    args = ["-c", 'printf "%s\\n" "$1"', "shell", "a b", "$(touch bad)", "", "--tty"]
+    argv = podman_runner.command(
+        "/usr/bin/podman", ["--root", "/store"], ["oci:/image:build"], args, interactive=interactive, tty=tty
+    )
     flags = (["--interactive"] if interactive else []) + (["--tty"] if tty else [])
-    command_args = ["-c", 'printf "%s\\n" "$1"', "shell", "a b", "$(touch bad)", "", "--tty"]
-    podman_runner.main(launch_args(tmp_path) + flags + ["--", *command_args])
-    executable, argv, env = captured[0]
-    assert executable == "/usr/bin/podman"
-    image_index = argv.index("oci:/image with spaces/build:build")
-    assert argv[image_index + 1 :] == command_args
-    options = argv[:image_index]
-    assert ("--interactive" in options) == interactive
-    assert ("--tty" in options) == tty
-    assert "--rm" in options and "--quiet" in options
-    cache = tmp_path / "cache"
-    assert options[options.index("--root") + 1] == str(cache / "storage")
-    runroot = Path(options[options.index("--runroot") + 1])
-    assert runroot.parent.parent == tmp_path / "xdg"
-    assert runroot.stat().st_mode & 0o777 == 0o700
-    assert env["XDG_RUNTIME_DIR"] == str(tmp_path / "xdg")
+    assert argv == [
+        "/usr/bin/podman",
+        "--root",
+        "/store",
+        "run",
+        "--rm",
+        "--quiet",
+        *flags,
+        "oci:/image:build",
+        *args,
+    ]
+
+
+def test_storage_is_the_plugins_own_store_and_never_remote():
+    options = podman_runner.storage_args(Path("/cache"), Path("/xdg/oci-abc"))
+    assert options[options.index("--root") + 1] == "/cache/storage"
+    assert options[options.index("--runroot") + 1] == "/xdg/oci-abc/run"
+    assert options[options.index("--tmpdir") + 1] == "/xdg/oci-abc/tmp"
+    assert {"--remote=false", "--storage-driver=vfs"} <= set(options)
+
+
+def test_store_gets_a_private_runroot_and_the_host_env(tmp_path, monkeypatch, runtime):
+    monkeypatch.setenv("PATH", "/host/bin:/usr/bin")
+    monkeypatch.setenv("CONTAINER_HOST", "ssh://remote/run/podman.sock")
+    monkeypatch.setenv("CONTAINER_CONNECTION", "remote")
+    monkeypatch.setenv("SCIE_BASE", "/sandbox/.oci_builder/nce")
+    monkeypatch.delenv("HOME", raising=False)
+    cache, store_runtime, env = podman_runner.prepare_store(tmp_path / "cache")
+    assert cache == (tmp_path / "cache").resolve()
+    assert store_runtime.parent == runtime
+    assert (store_runtime / "run").stat().st_mode & 0o777 == 0o700
+    assert env["XDG_RUNTIME_DIR"] == str(runtime)
     assert env["PATH"] == "/host/bin:/usr/bin"
+    # Podman looks the home up itself; a connection or the launcher's variables don't reach it.
+    assert not {"HOME", "CONTAINER_HOST", "CONTAINER_CONNECTION", "SCIE_BASE"} & set(env)
 
 
-def test_runroot_is_the_same_for_every_run_on_a_store(tmp_path, local_user):
+def test_runroot_is_the_same_for_every_run_on_a_store(tmp_path, runtime):
     first = podman_runner.prepare_store(tmp_path / "cache")[1]
     assert podman_runner.prepare_store(tmp_path / "cache")[1] == first
     assert podman_runner.prepare_store(tmp_path / "other")[1] != first
     # Podman rejects runroots over 50 characters, so the runroot adds a fixed 21 to the runtime
     # directory, not the store's path.
-    assert len(str(first / "run")) == len(str(tmp_path / "xdg")) + 21
+    assert len(str(first / "run")) == len(str(runtime)) + 21
+
+
+@pytest.mark.parametrize(
+    "platform,euid,error", [("darwin", 1000, "local Linux podman"), ("linux", 0, "unprivileged user")]
+)
+def test_local_needs_rootless_linux(platform, euid, error):
+    with pytest.raises(podman_runner.PodmanUnavailable, match=error):
+        podman_runner.check_local("OCI run", platform, euid)
 
 
 def test_runtime_directory_is_the_session_one_when_it_is_yours(tmp_path):
@@ -85,32 +112,6 @@ def test_runtime_directory_rejects_a_fallback_that_is_not_yours(tmp_path):
     (tmp_path / "tmp" / f"podman-run-{os.getuid()}").symlink_to(tmp_path / "elsewhere")
     with pytest.raises(podman_runner.PodmanUnavailable):
         podman_runner.runtime_dir(os.getuid(), tmp_path / "run", tmp_path / "tmp")
-
-
-def test_remote_connection_is_ignored(tmp_path, monkeypatch, local_user):
-    captured = []
-    monkeypatch.setattr(os, "execve", lambda *args: captured.append(args))
-    monkeypatch.setenv("CONTAINER_HOST", "ssh://remote/run/podman.sock")
-    monkeypatch.setenv("CONTAINER_CONNECTION", "remote")
-    podman_runner.main(launch_args(tmp_path))
-    _, argv, env = captured[0]
-    assert "--remote=false" in argv
-    assert "CONTAINER_HOST" not in env and "CONTAINER_CONNECTION" not in env
-
-
-def test_root_rejected(tmp_path, monkeypatch, local_user, capsys):
-    monkeypatch.setattr(os, "geteuid", lambda: 0)
-    assert podman_runner.main(launch_args(tmp_path)) == 1
-    assert "unprivileged user" in capsys.readouterr().err
-
-
-def test_missing_podman(tmp_path, monkeypatch, local_user, capsys):
-    def missing(*args):
-        raise FileNotFoundError
-
-    monkeypatch.setattr(os, "execve", missing)
-    assert podman_runner.main(launch_args(tmp_path)) == 127
-    assert "https://podman.io/docs/installation" in capsys.readouterr().err
 
 
 def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
@@ -187,48 +188,41 @@ def remote_args(podman: str, connection: str, *extra: str) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("connection,options", [("", ["--remote"]), ("vm", ["--connection", "vm"])])
+REF = "localhost/pants-oci-run:abc"
+
+
+@pytest.mark.parametrize("options", [["--remote"], ["--connection", "vm"]])
 @pytest.mark.parametrize("exists", [0, 1])
-def test_remote_loads_the_image_once_then_runs_it(tmp_path, monkeypatch, connection, options, exists):
+def test_remote_loads_the_image_only_when_missing(tmp_path, options, exists):
+    podman, log = fake_podman(tmp_path, exists=exists)
+    assert podman_runner.prepare_remote(podman, options, "vm", "/sandbox/image.tar", REF, {}) == 0
+    expected = [[*options, "image", "exists", REF]]
+    if exists:
+        expected.append([*options, "load", "--quiet", "--input", "/sandbox/image.tar"])
+    assert calls(log) == expected
+
+
+def test_remote_load_failure_is_reported(tmp_path, capsys):
+    podman, _ = fake_podman(tmp_path, load=125)
+    assert podman_runner.prepare_remote(podman, ["--remote"], "", "/image.tar", REF, {}) == 125
+    assert "Loaded image" in capsys.readouterr().err
+
+
+def test_remote_runs_the_loaded_image(tmp_path, monkeypatch):
     # Neither a Linux host, a runtime directory nor an unprivileged user is needed remotely.
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.setattr(os, "geteuid", lambda: 0)
     monkeypatch.setenv("CONTAINER_HOST", "ssh://elsewhere/run/podman.sock")
     captured = []
     monkeypatch.setattr(os, "execve", lambda *args: captured.append(args))
-    podman, log = fake_podman(tmp_path, exists=exists)
-    command_args = ["-c", "exit 3", "a b", "", "--tty"]
-    podman_runner.main(remote_args(podman, connection, "--interactive", "--tty", "--", *command_args))
+    podman, _ = fake_podman(tmp_path, exists=0)
+    podman_runner.main(remote_args(podman, "vm", "--tty", "--", "-c", "exit 3"))
 
-    ref = "localhost/pants-oci-run:abc"
-    expected = [[*options, "image", "exists", ref]]
-    if exists:
-        expected.append([*options, "load", "--quiet", "--input", "/sandbox/image.tar"])
-    assert calls(log) == expected
-    executable, argv, env = captured[0]
+    ((executable, argv, env),) = captured
     assert executable == podman
-    assert argv == [
-        podman,
-        *options,
-        "run",
-        "--rm",
-        "--quiet",
-        "--interactive",
-        "--tty",
-        "--pull=never",
-        ref,
-        *command_args,
-    ]
-    # The plugin's own store and runtime options are for local podman only.
-    assert not {"--remote=false", "--root", "--runroot", "--storage-driver=vfs"} & set(argv)
+    options = ["--connection", "vm"]
+    assert argv == [podman, *options, "run", "--rm", "--quiet", "--tty", "--pull=never", REF, "-c", "exit 3"]
     assert "CONTAINER_HOST" not in env
-
-
-def test_remote_load_failure_is_reported(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran after a failed load"))
-    podman, _ = fake_podman(tmp_path, load=125)
-    assert podman_runner.main(remote_args(podman, "")) == 125
-    assert "Loaded image" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -247,58 +241,64 @@ def test_remote_load_failure_is_reported(tmp_path, monkeypatch, capsys):
         ),
     ],
 )
-def test_unreachable_machine_is_diagnosed(tmp_path, monkeypatch, capsys, machines, expected):
-    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran without a connection"))
-    podman, _ = fake_podman(tmp_path, exists=125, machines=machines, stderr="Cannot connect to Podman")
-    assert podman_runner.main(remote_args(podman, "")) == 125
-    err = capsys.readouterr().err
-    assert expected in err
+def test_unreachable_machine_is_diagnosed(tmp_path, machines, expected):
+    podman, _ = fake_podman(tmp_path, machines=machines)
+    message = podman_runner.diagnose_remote(podman, "", "Cannot connect to Podman", {})
+    assert expected in message
     # The default connection needn't be a machine, so podman's own error is always kept.
-    assert "Cannot connect to Podman" in err
+    assert "Cannot connect to Podman" in message
 
 
-def test_unreachable_named_connection_is_diagnosed(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran without a connection"))
-    podman, log = fake_podman(tmp_path, exists=125, stderr='connection "ci" not found')
-    assert podman_runner.main(remote_args(podman, "ci")) == 125
-    err = capsys.readouterr().err
-    assert "Could not reach podman connection 'ci'" in err
-    assert 'connection "ci" not found' in err
-    assert "podman system connection list" in err
+def test_unreachable_named_connection_is_diagnosed(tmp_path):
+    podman, log = fake_podman(tmp_path)
+    message = podman_runner.diagnose_remote(podman, "ci", 'connection "ci" not found', {})
+    assert "Could not reach podman connection 'ci'" in message
+    assert 'connection "ci" not found' in message
+    assert "podman system connection list" in message
     # A named connection isn't a machine, so podman machine isn't asked about it.
-    assert not any("machine" in call for call in calls(log))
+    assert calls(log) == []
 
 
-def test_connection_needs_the_digest(tmp_path):
-    podman, _ = fake_podman(tmp_path)
-    args = remote_args(podman, "")
-    with pytest.raises(SystemExit):
-        podman_runner.main(args[: args.index("--digest")])
-
-
-def test_connection_needs_the_archive(tmp_path, capsys):
-    podman, _ = fake_podman(tmp_path)
-    args = remote_args(podman, "")
-    archive = args.index("--archive")
-    with pytest.raises(SystemExit):
-        podman_runner.main(args[:archive] + ["--layout", "/image/build"] + args[archive + 2 :])
-    assert "--connection needs --digest and --archive" in capsys.readouterr().err
+def test_unreachable_connection_fails_the_run(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(os, "execve", lambda *args: pytest.fail("ran without a connection"))
+    podman, _ = fake_podman(tmp_path, exists=125, stderr='connection "ci" not found')
+    assert podman_runner.main(remote_args(podman, "ci")) == 125
+    assert "Could not reach podman connection 'ci'" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
-    "image,error",
+    "drop,add,error",
     [
-        ([], "one of the arguments --layout --archive is required"),
-        (["--archive", "/image.tar"], "local podman needs --layout"),
-        (["--layout", "/image/build", "--archive", "/image.tar"], "not allowed with argument"),
+        ("--digest", [], "--connection needs --digest and --archive"),
+        ("--archive", ["--layout", "/image/build"], "--connection needs --digest and --archive"),
+        ("--connection", [], "local podman needs --layout"),
     ],
 )
-def test_local_needs_only_the_layout(tmp_path, local_user, capsys, image, error):
+def test_args_must_name_the_image_for_where_it_runs(capsys, drop, add, error):
+    args = remote_args("/usr/bin/podman", "")
+    i = args.index(drop)
     with pytest.raises(SystemExit):
-        podman_runner.main(["--podman", "/usr/bin/podman", "--cache", str(tmp_path / "cache"), *image])
+        podman_runner.parse_args(args[:i] + add + args[i + 2 :])
     assert error in capsys.readouterr().err
 
 
-def test_remote_missing_podman(tmp_path, capsys):
-    assert podman_runner.main(remote_args(str(tmp_path / "missing"), "")) == 127
+def test_args_take_the_layout_or_the_archive(tmp_path, capsys):
+    with pytest.raises(SystemExit):
+        podman_runner.parse_args([*launch_args(tmp_path), "--archive", "/image.tar"])
+    assert "not allowed with argument" in capsys.readouterr().err
+
+
+def test_args_after_the_separator_are_the_containers(tmp_path):
+    args = podman_runner.parse_args([*launch_args(tmp_path), "--tty", "--", "--interactive", ""])
+    assert (args.tty, args.interactive, args.args) == (True, False, ["--interactive", ""])
+
+
+@pytest.mark.parametrize("connection", [None, ""])
+def test_missing_podman(tmp_path, monkeypatch, runtime, capsys, connection):
+    if sys.platform != "linux":
+        pytest.skip("requires Linux")
+    podman = str(tmp_path / "missing")
+    args = launch_args(tmp_path) if connection is None else remote_args("", connection)
+    args[1] = podman
+    assert podman_runner.main(args) == 127
     assert "https://podman.io/docs/installation" in capsys.readouterr().err

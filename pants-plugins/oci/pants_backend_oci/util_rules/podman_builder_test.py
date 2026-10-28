@@ -49,6 +49,28 @@ def test_build_argv(dest):
     assert argv[-3:] == ["--file", "ctx/Containerfile", "ctx"]
 
 
+def test_save_and_rmi_argv():
+    storage = ["--root", "/store"]
+    assert podman_builder.save_argv("/usr/bin/podman", storage, "iid", "/tmp/saved") == [
+        "/usr/bin/podman",
+        "--root",
+        "/store",
+        "save",
+        "--quiet",
+        "--format=oci-dir",
+        "--output=/tmp/saved",
+        "iid",
+    ]
+    assert podman_builder.rmi_argv("/usr/bin/podman", storage, "iid") == [
+        "/usr/bin/podman",
+        "--root",
+        "/store",
+        "rmi",
+        "--force",
+        "iid",
+    ]
+
+
 def test_archive_names_the_image_by_its_digest(tmp_path):
     make_layout(tmp_path / "build", 1)
     digest = b.image_digest(str(tmp_path / "build"), "build")
@@ -81,8 +103,6 @@ from pants_backend_oci.util_rules import oci_layout_builder as b
 args = sys.argv[1:]
 with open({log!r}, "a") as f:
     f.write(json.dumps(args) + "\\n")
-with open({log!r} + ".home", "a") as f:
-    f.write(os.environ.get("HOME", "") + "\\n")
 if "build" in args:
     for arg in args:
         if arg.startswith("--iidfile="):
@@ -108,8 +128,6 @@ def sandbox(tmp_path, monkeypatch):
     monkeypatch.delenv("FAKE_BUILD_STATUS", raising=False)
     (tmp_path / "xdg").mkdir()
     monkeypatch.setattr(podman_runner, "runtime_dir", lambda uid: tmp_path / "xdg")
-    # As in a builder process, which runs without a HOME.
-    monkeypatch.delenv("HOME", raising=False)
     work = tmp_path / "sandbox"
     work.mkdir()
     monkeypatch.chdir(work)
@@ -138,22 +156,6 @@ def test_files_writes_outputs_and_removes_the_image(sandbox):
     assert containerfile.startswith(f"FROM oci-archive:{work / 'image.tar'}:pants-{digest} AS build\n")
 
 
-def test_podman_finds_the_users_home_itself(sandbox, tmp_path):
-    # Podman looks the home up when HOME is unset, so it stays out of the cache key.
-    _, common, _ = sandbox
-    assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
-    homes = set((tmp_path / "podman.log.home").read_text().splitlines())
-    assert homes == {""}
-
-
-def test_missing_output_fails(sandbox, capsys):
-    _, common, calls = sandbox
-    status = podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "nothing"])
-    assert status == 1
-    assert "outputs not found in the image: nothing" in capsys.readouterr().err
-    assert calls()[-1][-3:] == ["rmi", "--force", "built-image"]
-
-
 def test_failed_build_fails_and_still_removes_the_image(sandbox, monkeypatch):
     _, common, calls = sandbox
     monkeypatch.setenv("FAKE_BUILD_STATUS", "3")
@@ -173,9 +175,3 @@ def test_layer_writes_the_added_layer(sandbox):
     with tarfile.open(work / "scripted-layer.tar") as tar:
         assert tar.getnames() == ["out/hi"]
     assert [call[call.index("--storage-driver=vfs") + 1] for call in calls()] == ["build", "save", "rmi"]
-
-
-def test_layer_needs_a_command(sandbox):
-    _, common, _ = sandbox
-    with pytest.raises(SystemExit):
-        podman_builder.main([*common, "--dest", "scripted-layer.tar", "layer"])

@@ -254,9 +254,3 @@ def test_missing_docker(sandbox, tmp_path, capsys):
     )
     assert status == 127
     assert "docker is missing" in capsys.readouterr().err
-
-
-def test_layer_needs_a_command(sandbox):
-    _, common, _ = sandbox
-    with pytest.raises(SystemExit):
-        docker_builder.main([*common, "--dest", "scripted-layer.tar", "layer"])

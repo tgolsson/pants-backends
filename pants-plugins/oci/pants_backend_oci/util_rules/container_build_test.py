@@ -143,3 +143,11 @@ def test_write_outputs_rejects_missing_outputs(tmp_path):
         container_build.write_outputs(
             str(tmp_path / "export.tar"), ["opt", "opt/*.so"], [], str(tmp_path / "o.tar")
         )
+
+
+def test_layer_needs_a_command():
+    parser = container_build.arg_parser("podman")
+    with pytest.raises(SystemExit):
+        container_build.parse_args(parser, ["--dest", "scripted-layer.tar", "layer"])
+    args, run = container_build.parse_args(parser, ["--run", '["true"]', "--dest", "out.tar", "layer"])
+    assert (args.command, run) == ("layer", ["true"])

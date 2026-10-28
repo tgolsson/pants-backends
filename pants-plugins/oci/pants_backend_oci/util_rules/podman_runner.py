@@ -33,10 +33,10 @@ class PodmanUnavailable(Exception):
     pass
 
 
-def check_local(what: str) -> None:
-    if sys.platform != "linux":
+def check_local(what: str, platform: str, euid: int) -> None:
+    if platform != "linux":
         raise PodmanUnavailable(f"{what} requires local Linux podman.")
-    if os.geteuid() == 0:
+    if euid == 0:
         raise PodmanUnavailable(f"{what} requires rootless podman: run Pants as an unprivileged user.")
 
 
@@ -100,9 +100,15 @@ def storage_args(cache: Path, runtime: Path) -> list[str]:
 
 
 def command(
-    podman: str, cache: Path, layout: str, tag: str, *, runtime: Path, interactive: bool, tty: bool
+    podman: str, options: list[str], image: list[str], args: list[str], *, interactive: bool, tty: bool
 ) -> list[str]:
-    return [*_run(podman, storage_args(cache, runtime), interactive, tty), f"oci:{layout}:{tag}"]
+    """`podman run` of `image` with the container's `args`, after podman's global `options`."""
+    argv = [podman, *options, "run", "--rm", "--quiet"]
+    if interactive:
+        argv.append("--interactive")
+    if tty:
+        argv.append("--tty")
+    return [*argv, *image, *args]
 
 
 def remote_args(connection: str) -> list[str]:
@@ -112,15 +118,6 @@ def remote_args(connection: str) -> list[str]:
 
 def remote_ref(digest: str) -> str:
     return f"{REMOTE_REPOSITORY}:{digest.removeprefix('sha256:')}"
-
-
-def _run(podman: str, options: list[str], interactive: bool, tty: bool) -> list[str]:
-    argv = [podman, *options, "run", "--rm", "--quiet"]
-    if interactive:
-        argv.append("--interactive")
-    if tty:
-        argv.append("--tty")
-    return argv
 
 
 def diagnose_remote(podman: str, connection: str, error: str, env: dict[str, str]) -> str:
@@ -175,7 +172,7 @@ def prepare_remote(
     return load.returncode
 
 
-def main(argv: list[str] | None = None) -> int:
+def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--podman", required=True)
     parser.add_argument("--cache", required=True, type=Path)
@@ -195,39 +192,34 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--connection needs --digest and --archive")
     if args.connection is None and not args.layout:
         parser.error("local podman needs --layout")
-    if args.connection is None:
-        try:
-            check_local("OCI run/repl")
-            cache, runtime, env = prepare_store(args.cache)
-        except PodmanUnavailable as e:
-            print(e, file=sys.stderr)
-            return 1
-        argv = command(
-            args.podman,
-            cache,
-            args.layout,
-            args.tag,
-            runtime=runtime,
-            interactive=args.interactive,
-            tty=args.tty,
-        )
-    else:
-        env = container_build.host_env(_REMOTE_ENV)
-        options = remote_args(args.connection)
-        ref = remote_ref(args.digest)
-        try:
-            prepared = prepare_remote(args.podman, options, args.connection, args.archive, ref, env)
-        except FileNotFoundError:
-            print(_MISSING, file=sys.stderr)
-            return 127
-        if prepared != 0:
-            return prepared
-        # The image was just found or loaded; it's never pulled from a registry.
-        argv = [*_run(args.podman, options, args.interactive, args.tty), "--pull=never", ref]
-    argv.extend(args.args[1:] if args.args[:1] == ["--"] else args.args)
-    # Exec keeps podman's signal handling and exit status, including interactive repl.
+    if args.args[:1] == ["--"]:
+        args.args = args.args[1:]
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     try:
+        if args.connection is None:
+            check_local("OCI run/repl", sys.platform, os.geteuid())
+            cache, runtime, env = prepare_store(args.cache)
+            options = storage_args(cache, runtime)
+            image = [f"oci:{args.layout}:{args.tag}"]
+        else:
+            env = container_build.host_env(_REMOTE_ENV)
+            options = remote_args(args.connection)
+            ref = remote_ref(args.digest)
+            prepared = prepare_remote(args.podman, options, args.connection, args.archive, ref, env)
+            if prepared != 0:
+                return prepared
+            # The image was just found or loaded; it's never pulled from a registry.
+            image = ["--pull=never", ref]
+        argv = command(args.podman, options, image, args.args, interactive=args.interactive, tty=args.tty)
+        # Exec keeps podman's signal handling and exit status, including interactive repl.
         os.execve(args.podman, argv, env)
+    except PodmanUnavailable as e:
+        print(e, file=sys.stderr)
+        return 1
     except FileNotFoundError:
         print(_MISSING, file=sys.stderr)
         return 127

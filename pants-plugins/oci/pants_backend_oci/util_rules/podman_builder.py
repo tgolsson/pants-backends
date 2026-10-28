@@ -63,6 +63,14 @@ def build_argv(podman: str, storage: list[str], context: str, iidfile: str, dest
     return argv
 
 
+def save_argv(podman: str, storage: list[str], image: str, saved: str) -> list[str]:
+    return [podman, *storage, "save", "--quiet", "--format=oci-dir", f"--output={saved}", image]
+
+
+def rmi_argv(podman: str, storage: list[str], image: str) -> list[str]:
+    return [podman, *storage, "rmi", "--force", image]
+
+
 def write_archive(layout: str, tag: str, archive: str) -> str:
     """Write the image tagged `tag` as an OCI archive, and return the name it's tagged with there.
 
@@ -82,7 +90,7 @@ def main(argv: list[str]) -> int:
     args, run = container_build.parse_args(parser, argv)
 
     try:
-        podman_runner.check_local("Scripted OCI build steps")
+        podman_runner.check_local("Scripted OCI build steps", sys.platform, os.geteuid())
         cache, runtime, env = podman_runner.prepare_store(args.cache)
     except podman_runner.PodmanUnavailable as e:
         print(e, file=sys.stderr)
@@ -118,8 +126,7 @@ def main(argv: list[str]) -> int:
 
             image = Path(iidfile).read_text().strip()
             saved = os.path.join(tmp, "saved")
-            save = [args.podman, *storage, "save", "--quiet", "--format=oci-dir", f"--output={saved}", image]
-            result = subprocess.run(save, env=env)
+            result = subprocess.run(save_argv(args.podman, storage, image, saved), env=env)
             if result.returncode != 0:
                 return result.returncode
             base_layers = len(oci_layout_builder.load_image(args.layout, args.tag).manifest["layers"])
@@ -131,5 +138,5 @@ def main(argv: list[str]) -> int:
             # The imported base stays in the store for the next build; the built image doesn't.
             if os.path.exists(iidfile):
                 image = Path(iidfile).read_text().strip()
-                subprocess.run([args.podman, *storage, "rmi", "--force", image], env=env, capture_output=True)
+                subprocess.run(rmi_argv(args.podman, storage, image), env=env, capture_output=True)
     return 0
