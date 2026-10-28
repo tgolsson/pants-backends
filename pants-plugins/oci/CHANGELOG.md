@@ -44,8 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the old podman. They also read podman's configuration from your home directory, like
   `pants run`, instead of from an empty private one. `pants run` no longer rejects
   `CONTAINER_HOST` / `CONTAINER_CONNECTION`: both it and build steps ignore them and run podman
-  locally. Podman's runtime state moves from private directories under `/tmp` to your runtime
-  directory (`$XDG_RUNTIME_DIR`, else `/run/user/<uid>`), which build steps now see (it is part of their cache key); the store
+  locally. Podman's runtime state moves from private directories under `/tmp` to the runtime
+  directory rootless podman uses without `XDG_RUNTIME_DIR` (`/run/user/<uid>`, else
+  `/tmp/podman-run-<uid>`), so it stays out of build steps' cache keys; the store
   moves to `oci_podman/v2` to go with it, so bases are imported again once. Remove the old
   `oci_podman/v1` store and `/tmp/oci-podman-*` directories with
   `podman unshare rm -rf <named-caches-dir>/oci_podman/v1 /tmp/oci-podman-$(id -u)-*`. The README

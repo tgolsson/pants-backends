@@ -31,10 +31,11 @@ Arguments after `--` replace its command arguments while keeping the entrypoint,
 command, so select an image whose command provides the interaction you need.
 
 Podman uses a dedicated `oci_podman/v2` store under Pants' named-cache directory, with the
-portable `vfs` storage driver. Its runtime state lives in your runtime directory,
-`$XDG_RUNTIME_DIR` (or `/run/user/<uid>`), named by a hash of the store path to keep podman's
-paths short; podman ties a store to that location, so `pants run` and scripted build steps must
-see the same `XDG_RUNTIME_DIR`. Exited containers are removed; imported images and layers remain
+portable `vfs` storage driver. Its runtime state lives where rootless podman puts it without
+`XDG_RUNTIME_DIR`: `/run/user/<uid>` when that is yours, else `/tmp/podman-run-<uid>`, in a
+directory named by a hash of the store path. `XDG_RUNTIME_DIR` itself is ignored, since podman
+ties a store to that location and `pants run` and scripted build steps see different
+environments. Exited containers are removed; imported images and layers remain
 cached across runs. This store can grow and is separate from your default podman store. A run or
 build step that is interrupted (Ctrl-C, a timeout) can also leave its container and image behind.
 To clear all of it, imported bases included, run this while no Pants build is running; the files

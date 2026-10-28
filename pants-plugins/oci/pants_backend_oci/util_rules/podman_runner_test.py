@@ -12,11 +12,11 @@ from pants_backend_oci.util_rules import podman_runner
 @pytest.fixture
 def local_user(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "xdg"))
-    uid = os.getuid()
-    if uid == 0:
+    if os.getuid() == 0:
         pytest.skip("requires an unprivileged user for runtime directory ownership")
-    monkeypatch.setattr(os, "geteuid", lambda: uid)
+    monkeypatch.setattr(os, "geteuid", os.getuid)
+    (tmp_path / "xdg").mkdir()
+    monkeypatch.setattr(podman_runner, "runtime_dir", lambda uid: tmp_path / "xdg")
 
 
 def launch_args(tmp_path):
@@ -64,11 +64,27 @@ def test_runroot_is_the_same_for_every_run_on_a_store(tmp_path, local_user):
     assert len(str(first / "run")) == len(str(tmp_path / "xdg")) + 21
 
 
-def test_runtime_directory_is_required(tmp_path, monkeypatch, local_user, capsys):
-    monkeypatch.delenv("XDG_RUNTIME_DIR")
-    monkeypatch.setattr(os, "geteuid", lambda: 2**31)
-    assert podman_runner.main(launch_args(tmp_path)) == 1
-    assert "set XDG_RUNTIME_DIR" in capsys.readouterr().err
+def test_runtime_directory_is_the_session_one_when_it_is_yours(tmp_path):
+    (tmp_path / "run" / str(os.getuid())).mkdir(parents=True)
+    found = podman_runner.runtime_dir(os.getuid(), tmp_path / "run", tmp_path / "tmp")
+    assert found == tmp_path / "run" / str(os.getuid())
+    assert not (tmp_path / "tmp").exists()
+
+
+def test_runtime_directory_falls_back_like_podman(tmp_path):
+    (tmp_path / "tmp").mkdir()
+    found = podman_runner.runtime_dir(os.getuid(), tmp_path / "run", tmp_path / "tmp")
+    assert found == tmp_path / "tmp" / f"podman-run-{os.getuid()}"
+    assert found.stat().st_mode & 0o777 == 0o700
+    assert podman_runner.runtime_dir(os.getuid(), tmp_path / "run", tmp_path / "tmp") == found
+
+
+def test_runtime_directory_rejects_a_fallback_that_is_not_yours(tmp_path):
+    (tmp_path / "tmp").mkdir()
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "tmp" / f"podman-run-{os.getuid()}").symlink_to(tmp_path / "elsewhere")
+    with pytest.raises(podman_runner.PodmanUnavailable):
+        podman_runner.runtime_dir(os.getuid(), tmp_path / "run", tmp_path / "tmp")
 
 
 def test_remote_connection_is_ignored(tmp_path, monkeypatch, local_user):
@@ -106,7 +122,11 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
-            podman_runner.__file__,
+            "-c",
+            # The real runtime directory is left alone.
+            "import sys, pathlib; from pants_backend_oci.util_rules import podman_runner as r;"
+            " d = pathlib.Path(sys.argv.pop(1)); r.runtime_dir = lambda uid: d; sys.exit(r.main())",
+            str(tmp_path),
             "--podman",
             str(fake),
             "--cache",
@@ -118,7 +138,6 @@ def test_exec_preserves_exit_status_and_argument_boundaries(tmp_path):
             "",
             "$HOME",
         ],
-        env={**os.environ, "XDG_RUNTIME_DIR": str(tmp_path / "xdg")},
         capture_output=True,
         text=True,
     )
@@ -173,7 +192,6 @@ def remote_args(podman: str, connection: str, *extra: str) -> list[str]:
 def test_remote_loads_the_image_once_then_runs_it(tmp_path, monkeypatch, connection, options, exists):
     # Neither a Linux host, a runtime directory nor an unprivileged user is needed remotely.
     monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
     monkeypatch.setattr(os, "geteuid", lambda: 0)
     monkeypatch.setenv("CONTAINER_HOST", "ssh://elsewhere/run/podman.sock")
     captured = []

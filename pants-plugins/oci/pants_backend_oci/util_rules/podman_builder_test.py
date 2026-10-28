@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from pants_backend_oci.util_rules import oci_layout_builder as b
-from pants_backend_oci.util_rules import podman_builder
+from pants_backend_oci.util_rules import podman_builder, podman_runner
 
 INIT = {"op": "init", "architecture": "amd64", "os": "linux"}
 RUN = ["/bin/sh", "-c", "echo hi > /out/hi"]
@@ -107,7 +107,8 @@ def sandbox(tmp_path, monkeypatch):
     if sys.platform != "linux" or os.geteuid() == 0:
         pytest.skip("requires an unprivileged Linux user")
     monkeypatch.delenv("FAKE_BUILD_STATUS", raising=False)
-    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "xdg"))
+    (tmp_path / "xdg").mkdir()
+    monkeypatch.setattr(podman_runner, "runtime_dir", lambda uid: tmp_path / "xdg")
     # As in a builder process, which runs without a HOME.
     monkeypatch.delenv("HOME", raising=False)
     work = tmp_path / "sandbox"

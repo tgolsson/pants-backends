@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -39,28 +40,45 @@ def check_local(what: str) -> None:
         raise PodmanUnavailable(f"{what} requires rootless podman: run Pants as an unprivileged user.")
 
 
-def runtime_dir() -> Path:
-    """The user's runtime directory, where podman keeps rootless runtime state."""
-    if os.environ.get("XDG_RUNTIME_DIR"):
-        return Path(os.environ["XDG_RUNTIME_DIR"])
-    # Where podman looks without XDG_RUNTIME_DIR, as a systemd user session creates it.
-    fallback = Path(f"/run/user/{os.geteuid()}")
-    if fallback.is_dir() and fallback.stat().st_uid == os.geteuid():
-        return fallback
-    raise PodmanUnavailable("OCI containers need a runtime directory: set XDG_RUNTIME_DIR.")
+def runtime_dir(uid: int, run_user: Path = Path("/run/user"), tmp: Path = Path("/tmp")) -> Path:
+    """The runtime directory rootless podman picks without XDG_RUNTIME_DIR.
+
+    It's derived from the user, not the environment, so `pants run` and build steps, which see
+    different environments, agree on it, and a build step's cache key doesn't name it."""
+    session = run_user / str(uid)
+    if session.is_dir() and session.stat().st_uid == uid:
+        return session
+    fallback = tmp / f"podman-run-{uid}"
+    try:
+        fallback.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    info = fallback.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != uid:
+        raise PodmanUnavailable(
+            f"{fallback} isn't a directory owned by you; podman keeps runtime state there."
+        )
+    return fallback
+
+
+def store_runtime(base: Path, cache: Path) -> Path:
+    """The runtime directory of the store at `cache`, resolved."""
+    # Podman ties a store to the runroot it was first opened with, so every run and build step on
+    # it must derive the same one. Podman also rejects runroots longer than 50 characters, so it's
+    # named by the store's identity, not its path.
+    return base / f"oci-{hashlib.sha256(os.fsencode(cache)).hexdigest()[:12]}"
 
 
 def prepare_store(cache: Path) -> tuple[Path, Path, dict[str, str]]:
     """Create the store and its runtime directory; returns both and podman's environment."""
     cache = cache.resolve()
-    # Podman ties a store to the runroot it was first opened with, so every run and build step on
-    # it must derive the same one. Podman also rejects runroots longer than 50 characters, so it's
-    # named by the store's identity, not its path.
-    identity = hashlib.sha256(os.fsencode(cache)).hexdigest()[:12]
-    runtime = runtime_dir() / f"oci-{identity}"
+    base = runtime_dir(os.geteuid())
+    runtime = store_runtime(base, cache)
     for directory in (cache, runtime, runtime / "run", runtime / "tmp"):
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     env = container_build.host_env(_REMOTE_ENV)
+    # Podman keeps the user namespace it shares across runs there.
+    env["XDG_RUNTIME_DIR"] = str(base)
     return cache, runtime, env
 
 

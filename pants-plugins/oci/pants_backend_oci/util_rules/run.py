@@ -11,7 +11,6 @@ import shlex
 from dataclasses import dataclass
 
 from pants.core.environments.target_types import EnvironmentTarget
-from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.core.util_rules.system_binaries import (
     BinaryPath,
     BinaryPathRequest,
@@ -19,7 +18,6 @@ from pants.core.util_rules.system_binaries import (
     find_binary,
 )
 from pants.engine.addresses import Address
-from pants.engine.env_vars import EnvironmentVarsRequest
 from pants.engine.platform import Platform
 from pants.engine.process import Process, ProcessResult, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
@@ -109,9 +107,6 @@ async def podman_build(
     builder: OciBuilder,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
 ) -> ProcessResult:
-    # The user's runtime directory, as `pants run` sees it: the store's runroot is derived from it,
-    # and must be the same for both.
-    runtime = await environment_vars_subset(EnvironmentVarsRequest(["XDG_RUNTIME_DIR"]), **implicitly())
     process = builder.process(
         podman_builder,
         "--podman",
@@ -126,7 +121,6 @@ async def podman_build(
             "PATH": ":".join(system_binaries.system_binary_paths),
             # Unread: it puts the podman binary in the cache key, so an upgrade reruns build steps.
             "__OCI_PODMAN_FINGERPRINT": podman.fingerprint,
-            **runtime,
         },
         output_files=request.output_files,
         output_directories=request.output_directories,

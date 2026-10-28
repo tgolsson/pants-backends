@@ -32,9 +32,6 @@ def build_process(podman: LocalPodmanBinary):
             SimpleNamespace(system_binary_paths=("/usr/bin", "/bin")),
         ],
         mock_calls={
-            "pants.core.util_rules.env_vars.environment_vars_subset": lambda *a, **k: {
-                "XDG_RUNTIME_DIR": "/run/user/1000"
-            },
             "pants.engine.process.fallible_to_exec_result_or_raise": processes.append,
         },
     )
@@ -96,6 +93,7 @@ def test_podman_upgrade_changes_the_build_process():
     assert before != after
 
 
-def test_build_steps_get_the_users_runtime_directory():
+def test_build_steps_name_no_runtime_directory():
+    # Podman's runtime directory is derived inside the step, so the cache key stays portable.
     process = build_process(LocalPodmanBinary("/usr/bin/podman", "abc"))
-    assert process.env["XDG_RUNTIME_DIR"] == "/run/user/1000"
+    assert "XDG_RUNTIME_DIR" not in process.env
