@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from importlib import resources
 
 from pants.core.goals.generate_lockfiles import (
     GenerateLockfile,
@@ -12,19 +11,18 @@ from pants.core.goals.generate_lockfiles import (
     RequestedUserResolveNames,
     UserGenerateLockfiles,
 )
-from pants.core.util_rules.adhoc_binaries import PythonBuildStandaloneBinary
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.engine.fs import CreateDigest, Digest, FileContent, MergeDigests
 from pants.engine.internals.graph import find_all_unexpanded_targets
 from pants.engine.intrinsics import create_digest, merge_digests
-from pants.engine.process import Process, fallible_to_exec_result_or_raise
+from pants.engine.process import fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import InvalidFieldException
 from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 from pants.util.strutil import softwrap
 
-from pants_backend_distroless import apt_resolver, openpgp
+from pants_backend_distroless.sandboxed import AptResolver
 from pants_backend_distroless.subsystem import AptSubsystem
 from pants_backend_distroless.target_generation import lockfile_path, resolve_inputs
 from pants_backend_distroless.target_types import (
@@ -32,13 +30,6 @@ from pants_backend_distroless.target_types import (
     DebPackagesKeyringsField,
     DebPackagesResolveField,
     DebPackagesTargetGenerator,
-)
-
-# The resolver and the modules it imports, copied into the sandbox as a package.
-_RESOLVER_PACKAGE = "__distroless"
-_RESOLVER_MODULES = [m.__name__.rpartition(".")[2] for m in (apt_resolver, openpgp)]
-_RESOLVER_MAIN = (
-    f"import sys; from {_RESOLVER_PACKAGE} import {_RESOLVER_MODULES[0]} as m; sys.exit(m.main(sys.argv[1:]))"
 )
 
 
@@ -126,40 +117,20 @@ async def setup_deb_packages_lockfile_requests(
 
 @rule(desc="Resolve Debian packages", level=LogLevel.DEBUG)
 async def generate_deb_packages_lockfile(
-    request: GenerateDebPackagesLockfile, python: PythonBuildStandaloneBinary
+    request: GenerateDebPackagesLockfile, resolver: AptResolver
 ) -> GenerateLockfileResult:
-    # Read through `importlib.resources` so this also works when the plugin is imported from a zip.
-    package = resources.files(__package__)
-    resolver = await create_digest(
-        CreateDigest(
-            [
-                FileContent(f"{_RESOLVER_PACKAGE}/__init__.py", b""),
-                *(
-                    FileContent(
-                        f"{_RESOLVER_PACKAGE}/{module}.py", package.joinpath(f"{module}.py").read_bytes()
-                    )
-                    for module in _RESOLVER_MODULES
-                ),
-                FileContent("request.json", request.inputs_json.encode()),
-            ]
-        )
-    )
-    input_digest = await merge_digests(MergeDigests([resolver, request.keyrings]))
+    inputs = await create_digest(CreateDigest([FileContent("request.json", request.inputs_json.encode())]))
+    input_digest = await merge_digests(MergeDigests([inputs, request.keyrings]))
 
     # The sources are pinned to snapshots, so caching the result like any other process is correct.
     result = await fallible_to_exec_result_or_raise(
         **implicitly(
-            Process(
-                argv=(
-                    python.path,
-                    "-c",
-                    _RESOLVER_MAIN,
-                    "--request",
-                    "request.json",
-                    "--output",
-                    request.lockfile_dest,
-                    *verification_args(request.keyring_paths, request.allow_unsigned),
-                ),
+            resolver.process(
+                "--request",
+                "request.json",
+                "--output",
+                request.lockfile_dest,
+                *verification_args(request.keyring_paths, request.allow_unsigned),
                 input_digest=input_digest,
                 output_files=(request.lockfile_dest,),
                 description=f"Resolve Debian packages for the `{request.resolve_name}` resolve",

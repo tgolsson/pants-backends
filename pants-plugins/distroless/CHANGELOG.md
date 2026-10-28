@@ -19,3 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   apt's rule (where apt only warns).
 - The README covers moving from a Python base image: the `/usr/bin/python3.X` pex shebang and
   pex's harmless `ldd` warning.
+- The resolver runs from `apt-resolver`, a scie with its own pinned Python, so a resolve's cache key
+  names no host path and its result can be shared across checkouts and through a remote cache. The
+  Python is set by the new `[apt].resolver_python_version` and `[apt].resolver_pbs_release`.

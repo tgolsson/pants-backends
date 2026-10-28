@@ -17,8 +17,9 @@ does:
   `Priority: required` one, then the highest version, then the first by name;
 * excluded packages count as installed (they satisfy any constraint) and are never traversed.
 
-This module only uses the standard library: the lockfile rules copy it into the sandbox together
-with `openpgp` and call `main`, and both the rules and the tests import it directly.
+This module only uses the standard library: the lockfile rules build it together with `openpgp`
+into the `apt-resolver` scie, whose entry point is `main`, while target generation and the tests
+import it directly.
 """
 
 from __future__ import annotations
@@ -569,7 +570,7 @@ def fetch_index(
     return packages
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--request", required=True, help="JSON file with the normalized inputs.")
     parser.add_argument("--output", required=True)

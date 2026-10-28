@@ -155,6 +155,15 @@ architecture separately, much like rules_distroless does:
 
 `Recommends` and `Suggests` are not installed, and `Conflicts` and `Breaks` are not checked.
 
+The resolver runs in a sandboxed process from `apt-resolver`, a [scie](https://github.com/a-scie/jump)
+the plugin builds with pex from its own resolver code and a pinned python-build-standalone Python,
+CPython `3.11.17` from release `20261009` (set `[apt].resolver_python_version` and
+`[apt].resolver_pbs_release` to use another). Since it names nothing on the host, a resolve's
+cached result can be shared across checkouts, and across machines through a remote cache. It is built once per machine, downloading
+that Python and pex's `science` tool from GitHub the first time, and unpacks into the
+`apt_resolver` named cache. The Python and `science` are checked only against the checksum files
+published in the same GitHub releases, through pex.
+
 #### Packages already in the base image
 
 A layer replaces any file the base image has at the same path, and nothing warns about it. If a

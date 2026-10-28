@@ -8,7 +8,8 @@ import pytest
 from pants.core.goals.generate_lockfiles import GenerateLockfileResult, UserGenerateLockfiles
 from pants.core.target_types import http_source
 from pants.core.target_types import rules as core_target_type_rules
-from pants.core.util_rules import adhoc_binaries
+from pants.core.util_rules import system_binaries
+from pants.engine import process
 from pants.engine.addresses import Address, Addresses
 from pants.engine.fs import Digest, DigestContents
 from pants.engine.target import (
@@ -20,7 +21,7 @@ from pants.engine.target import (
 )
 from pants.testutil.rule_runner import QueryRule, RuleRunner, engine_error
 
-from pants_backend_distroless import lockfile, subsystem, target_generation
+from pants_backend_distroless import lockfile, sandboxed, subsystem, target_generation
 from pants_backend_distroless.apt_resolver import normalize_inputs
 from pants_backend_distroless.apt_resolver_test import stanza, write_repo
 from pants_backend_distroless.openpgp_test import fixture
@@ -46,7 +47,9 @@ def rule_runner() -> RuleRunner:
             *lockfile.rules(),
             *subsystem.rules(),
             *target_generation.rules(),
-            *adhoc_binaries.rules(),
+            *sandboxed.rules(),
+            *system_binaries.rules(),
+            *process.rules(),
             *core_target_type_rules(),
             QueryRule(UserGenerateLockfiles, [lockfile.RequestedDebPackagesUserResolveNames]),
             QueryRule(GenerateLockfileResult, [lockfile.GenerateDebPackagesLockfile]),
@@ -92,7 +95,7 @@ def write_project(rule_runner: RuleRunner, lockfile: dict | None, build: str = B
     if lockfile is not None:
         files["debs/bookworm.lock.json"] = json.dumps(lockfile)
     rule_runner.write_files(files)
-    rule_runner.set_options(['--apt-resolves={"bookworm": "debs/bookworm.lock.json"}'])
+    rule_runner.set_options(['--apt-resolves={"bookworm": "debs/bookworm.lock.json"}'], env_inherit={"PATH"})
 
 
 def valid_lockfile() -> dict:
