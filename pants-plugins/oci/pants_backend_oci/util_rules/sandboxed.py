@@ -61,6 +61,9 @@ _SOURCES = "__oci_builder_src"
 _OUTPUT = "__oci_builder"
 _EXE = f"{_OUTPUT}/oci-builder"
 _CACHE = "oci_builder"
+_PEX_ROOT = f".{_CACHE}/pex"
+# Made absolute by `OciBuilder.scie_base`, as scie-jump requires.
+_SCIE_BASE = f".{_CACHE}/nce"
 
 
 def sandboxed_modules(*modules: ModuleType) -> CreateDigest:
@@ -81,12 +84,13 @@ def sandboxed_modules(*modules: ModuleType) -> CreateDigest:
 
 @dataclass(frozen=True)
 class OciBuilder:
-    """The `oci-builder` executable: `digest` holds it, mounted so that it is at `exe`. `home` is
-    the sandbox's named cache, where it unpacks."""
+    """The `oci-builder` executable: `digest` holds it, mounted so that it is at `exe`. It unpacks
+    into the sandbox's named cache: its Python under `scie_base`, its venv under the pex root it was
+    built with, relative to the sandbox."""
 
     digest: Digest
     exe: str = _EXE
-    home: str = f"{{chroot}}/.{_CACHE}"
+    scie_base: str = f"{{chroot}}/{_SCIE_BASE}"
 
     @property
     def immutable_input_digests(self) -> dict[str, Digest]:
@@ -110,16 +114,34 @@ class OciBuilder:
         **kwargs: Any,
     ) -> Process:
         """A process running `module.main` with `args` in a sandbox holding `input_digest`."""
-        assert "HOME" not in (env or {}), "builders run without a HOME"
         return Process(
             argv=self.argv(module, *args),
             description=description,
             input_digest=input_digest,
             immutable_input_digests={**(immutable_input_digests or {}), **self.immutable_input_digests},
-            # The scie and pex record the cache's real path, so what they install outlives the sandbox.
-            env={**(env or {}), "HOME": self.home, builder_main.CACHE_HOME: "1"},
+            env={**(env or {}), "SCIE_BASE": self.scie_base},
             append_only_caches={**(append_only_caches or {}), _CACHE: f".{_CACHE}"},
             **kwargs,
+        )
+
+    def run_process(
+        self,
+        module: ModuleType,
+        *args: str,
+        description: str,
+        input_digest: Digest = EMPTY_DIGEST,
+        env: Mapping[str, str] | None = None,
+        immutable_input_digests: Mapping[str, Digest] | None = None,
+    ) -> Process:
+        """`process` for `pants run`, which runs it from the workspace: it changes into the sandbox
+        first, so its pex root is the named cache there too."""
+        return Process(
+            argv=("/bin/sh", "-c", 'cd "$0" && exec "$@"', "{chroot}", *self.argv(module, *args)),
+            description=description,
+            input_digest=input_digest,
+            immutable_input_digests={**(immutable_input_digests or {}), **self.immutable_input_digests},
+            env={**(env or {}), "SCIE_BASE": self.scie_base},
+            append_only_caches={_CACHE: f".{_CACHE}"},
         )
 
 
@@ -142,8 +164,11 @@ async def build_oci_builder(
                     # Pex otherwise names the building Python's minor version.
                     "--python-shebang=#!/usr/bin/env python3",
                     # Runs from an installed venv, so a warm start costs no more than plain Python
-                    # (once its setup is shared; see `home`).
+                    # (once its setup is shared; see `scie_base`).
                     "--venv",
+                    # The scie's configure step drops `PEX_ROOT`, so the venv's place is built in:
+                    # the named cache, through its link in the sandbox.
+                    f"--runtime-pex-root={_PEX_ROOT}",
                     "--scie=eager",
                     "--scie-only",
                     # Its own Python, independent of the one running Pants, so a Pants upgrade
@@ -162,7 +187,7 @@ async def build_oci_builder(
     )
     digest = await remove_prefix(RemovePrefix(result.output_digest, _OUTPUT))
     if platform in (Platform.linux_x86_64, Platform.linux_arm64):
-        return OciBuilder(digest, home=f"/proc/self/cwd/.{_CACHE}")
+        return OciBuilder(digest, scie_base=f"/proc/self/cwd/{_SCIE_BASE}")
     # Elsewhere `{chroot}` keeps the sandbox's path out of the cache key, but each sandbox redoes the
     # scie's venv setup (a fraction of a second).
     return OciBuilder(digest)

@@ -95,26 +95,18 @@ async def podman_run(
             "--digest",
             request.bundle.image_sha,
         )
-    exe, *runner_args = builder.argv(
+    flags = (*(["--interactive"] if request.interactive else []), *(["--tty"] if request.tty else []))
+    return builder.run_process(
         podman_runner,
         "--podman",
         podman.path,
         "--cache",
         str(caches.val / PODMAN_CACHE / PODMAN_STORE_VERSION),
         *image,
-    )
-    # The run happens outside the sandbox, so the builder is addressed through `{chroot}`. It
-    # unpacks under the user's own `~/.cache`, as the run isn't cached.
-    args = [f"{{chroot}}/{exe}", *runner_args]
-    if request.interactive:
-        args.append("--interactive")
-    if request.tty:
-        args.append("--tty")
-    args.append("--")
-    return Process(
-        args,
+        *flags,
+        "--",
         input_digest=input_digest,
-        immutable_input_digests={**builder.immutable_input_digests, **layout},
+        immutable_input_digests=layout,
         description=f"Running {request.address}",
     )
 
@@ -154,6 +146,7 @@ async def run_oci_command_target(request: RunImageBundleCommand) -> RunRequest:
         args=process.argv,
         extra_env=process.env,
         immutable_input_digests=process.immutable_input_digests,
+        append_only_caches=process.append_only_caches,
     )
 
 
@@ -172,6 +165,7 @@ async def run_oci_command_repl(request: OciRepl) -> ReplRequest:
         args=process.argv,
         extra_env=process.env,
         immutable_input_digests=process.immutable_input_digests,
+        append_only_caches=process.append_only_caches,
     )
 
 

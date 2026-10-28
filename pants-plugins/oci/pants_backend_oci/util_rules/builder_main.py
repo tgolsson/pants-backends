@@ -23,13 +23,8 @@ MODULES = (
     "podman_runner",
 )
 
-# Set when `HOME` only points the scie at its cache; the builders themselves run without one.
-CACHE_HOME = "__OCI_BUILDER_CACHE_HOME"
-
 
 def main() -> int:
-    if os.environ.pop(CACHE_HOME, None):
-        os.environ.pop("HOME", None)
     if len(sys.argv) < 2 or sys.argv[1] not in MODULES:
         print(f"usage: {sys.argv[0]} {{{','.join(MODULES)}}} [args...]", file=sys.stderr)
         return 2

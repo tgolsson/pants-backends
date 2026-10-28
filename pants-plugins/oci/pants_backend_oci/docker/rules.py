@@ -45,10 +45,7 @@ async def docker_build(
     builder: OciBuilder,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
 ) -> ProcessResult:
-    env = dict(await environment_vars_subset(EnvironmentVarsRequest(docker_options.env_vars), **implicitly()))
-    # The builder's HOME points its scie at a cache, so a configured one goes by another name.
-    if "HOME" in env:
-        env[docker_builder.DOCKER_HOME] = env.pop("HOME")
+    env = await environment_vars_subset(EnvironmentVarsRequest(docker_options.env_vars), **implicitly())
     process = builder.process(
         docker_builder,
         "--docker",
@@ -98,14 +95,15 @@ async def docker_run(
     if request.tty:
         run_args.append("--tty")
     run = docker.run_image(name, docker_run_args=(*run_args, *options.run_args), env=env)
-    exe, *runner_args = builder.argv(
-        docker_runner, "--archive", "{chroot}/image.tar", "--run", json.dumps(run.argv)
-    )
-    # The run happens outside the sandbox, so the builder is addressed through `{chroot}`.
-    return Process(
-        [f"{{chroot}}/{exe}", *runner_args, "--"],
+    return builder.run_process(
+        docker_runner,
+        "--archive",
+        "{chroot}/image.tar",
+        "--run",
+        json.dumps(run.argv),
+        "--",
         input_digest=archive.output_digest,
-        immutable_input_digests={**(run.immutable_input_digests or {}), **builder.immutable_input_digests},
+        immutable_input_digests=run.immutable_input_digests,
         env=_in_chroot(run.env),
         description=f"Running {request.address}",
     )

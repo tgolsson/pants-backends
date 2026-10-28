@@ -14,7 +14,6 @@ from pants_backend_oci.docker.rules import (
     docker_build,
     docker_run,
 )
-from pants_backend_oci.util_rules import docker_builder
 from pants_backend_oci.util_rules.image_bundle import ImageBundle
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
@@ -55,7 +54,8 @@ def test_run_loads_the_archive_and_runs_it_like_the_docker_backend(interactive, 
     )
     (request,) = archive_requests
     assert (request.output_filename, request.name) == ("image.tar", "pants-abc:latest")
-    assert process.argv[:2] == ("{chroot}/" + OciBuilder.exe, "docker_runner")
+    assert process.argv[4:6] == (OciBuilder.exe, "docker_runner")
+    assert process.append_only_caches == {"oci_builder": ".oci_builder"}
     assert process.argv[-1] == "--"
     assert process.argv[process.argv.index("--archive") + 1] == "{chroot}/image.tar"
     run = json.loads(process.argv[process.argv.index("--run") + 1])
@@ -90,7 +90,7 @@ def test_build_runs_the_builder_with_the_docker_backends_environment():
     assert process.output_files == ("layer.tar",)
 
 
-def test_build_passes_a_configured_home_under_another_name():
+def test_build_passes_a_configured_home():
     processes = []
 
     def env_with_home(request, **kwargs):
@@ -111,6 +111,4 @@ def test_build_passes_a_configured_home_under_another_name():
         },
     )
     (process,) = processes
-    assert process.env[docker_builder.DOCKER_HOME] == "/configured/home"
-    # The builder's own HOME stays the scie's cache.
-    assert process.env["HOME"] == OciBuilder(EMPTY_DIGEST).home
+    assert process.env["HOME"] == "/configured/home"

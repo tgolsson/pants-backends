@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import os
-import pwd
 import shutil
 import subprocess
 import sys
@@ -88,9 +87,6 @@ def main(argv: list[str]) -> int:
     except podman_runner.PodmanUnavailable as e:
         print(e, file=sys.stderr)
         return 1
-    # Builders run without a HOME. Podman reads its per-user configuration from the user's home, as
-    # it does for `pants run`; looking it up here keeps it out of the cache key.
-    env["HOME"] = pwd.getpwuid(os.getuid()).pw_dir
     storage = podman_runner.storage_args(cache, runtime)
 
     archive = os.path.abspath(_ARCHIVE)

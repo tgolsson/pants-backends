@@ -127,7 +127,7 @@ def test_local_podman_reads_the_layout_without_an_archive(interactive, tty):
     assert ("--interactive" in result.argv) == interactive
     assert ("--tty" in result.argv) == tty
     assert "/caches/oci_podman/v2" in result.argv
-    assert result.argv[:2] == ("{chroot}/" + OciBuilder.exe, "podman_runner")
+    assert result.argv[4:6] == (OciBuilder.exe, "podman_runner")
 
 
 @pytest.mark.parametrize(

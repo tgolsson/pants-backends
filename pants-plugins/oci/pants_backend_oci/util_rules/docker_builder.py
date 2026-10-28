@@ -17,7 +17,6 @@ from __future__ import annotations
 import copy
 import json
 import os
-import pwd
 import subprocess
 import sys
 import tarfile
@@ -33,9 +32,6 @@ _CONTEXT = "docker-context"
 _MISSING = "docker is missing. Install it: https://docs.docker.com/engine/install/"
 # Times that would otherwise survive in a layer's PAX headers.
 _PAX_TIMES = frozenset({"mtime", "atime", "ctime"})
-# A HOME from `[docker].env_vars`, which reaches the builder under this name: its own HOME only
-# points the scie at its cache.
-DOCKER_HOME = "__OCI_DOCKER_HOME"
 
 
 def image_name(layout: str, tag: str) -> str:
@@ -114,9 +110,6 @@ def main(argv: list[str]) -> int:
     args, run = container_build.parse_args(parser, argv)
 
     env = container_build.host_env()
-    # Builders run without a HOME. The Docker CLI reads its configuration and plugins, buildx
-    # included, from the user's home; looking it up here keeps it out of the cache key.
-    env["HOME"] = env.pop(DOCKER_HOME, None) or pwd.getpwuid(os.getuid()).pw_dir
 
     archive = os.path.abspath(_ARCHIVE)
     try:

@@ -25,7 +25,7 @@ from pants_backend_oci.util_rules import oci_layout_builder
 
 _GLOB = re.compile(r"[*?[]")
 # Set by launching `oci-builder`, and naming host paths.
-_LAUNCHER_ENV = frozenset({"PEX", "SCIE", "SCIE_ARGV0", "VIRTUAL_ENV"})
+_LAUNCHER_ENV = frozenset({"PEX", "SCIE", "SCIE_ARGV0", "SCIE_BASE", "VIRTUAL_ENV"})
 
 
 def host_env(drop: frozenset[str] = frozenset()) -> dict[str, str]:

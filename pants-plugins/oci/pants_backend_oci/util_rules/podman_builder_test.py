@@ -6,7 +6,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import pwd
 import sys
 import tarfile
 from pathlib import Path
@@ -83,7 +82,7 @@ args = sys.argv[1:]
 with open({log!r}, "a") as f:
     f.write(json.dumps(args) + "\\n")
 with open({log!r} + ".home", "a") as f:
-    f.write(os.environ["HOME"] + "\\n")
+    f.write(os.environ.get("HOME", "") + "\\n")
 if "build" in args:
     for arg in args:
         if arg.startswith("--iidfile="):
@@ -139,11 +138,12 @@ def test_files_writes_outputs_and_removes_the_image(sandbox):
     assert containerfile.startswith(f"FROM oci-archive:{work / 'image.tar'}:pants-{digest} AS build\n")
 
 
-def test_podman_gets_the_users_home(sandbox, tmp_path):
+def test_podman_finds_the_users_home_itself(sandbox, tmp_path):
+    # Podman looks the home up when HOME is unset, so it stays out of the cache key.
     _, common, _ = sandbox
     assert podman_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
     homes = set((tmp_path / "podman.log.home").read_text().splitlines())
-    assert homes == {pwd.getpwuid(os.getuid()).pw_dir}
+    assert homes == {""}
 
 
 def test_missing_output_fails(sandbox, capsys):

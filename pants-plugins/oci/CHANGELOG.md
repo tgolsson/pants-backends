@@ -58,7 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   processes now name nothing on the host, so their cache keys are the same on every machine and
   builds share remote-cache hits; only building `oci-builder` itself, once per machine, does not.
   Building it downloads that Python and pex's `science` tool from GitHub the first time. It unpacks
-  once per machine into the new `oci_builder` named cache, so builders need no home directory. Layer
+  once per machine into the new `oci_builder` named cache, `pants run` included, so builders need no
+  home directory: podman and the Docker CLI look up the user's home themselves. Layer
   compression no longer depends on the Python Pants runs on. The plugin registers Pants' pex
   rules for this. Image digests are unchanged. `[oci].builder_python_version` and
   `[oci].builder_pbs_release` select that Python.

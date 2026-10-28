@@ -6,8 +6,6 @@ from __future__ import annotations
 import gzip
 import io
 import json
-import os
-import pwd
 import sys
 import tarfile
 from pathlib import Path
@@ -132,7 +130,7 @@ args = sys.argv[1:]
 with open({log!r}, "a") as f:
     f.write(json.dumps(args) + "\\n")
 with open({log!r} + ".home", "a") as f:
-    f.write(os.environ["HOME"] + "\\n")
+    f.write(os.environ.get("HOME", "") + "\\n")
 if args[0] == "load":
     with tarfile.open(args[args.index("--input") + 1]) as tar:
         print("Loaded image:", json.load(tar.extractfile("manifest.json"))[0]["RepoTags"][0])
@@ -190,11 +188,12 @@ def test_files_loads_the_base_by_name_and_writes_outputs(sandbox, capfd):
     assert capfd.readouterr().out == ""
 
 
-def test_docker_gets_the_users_home(sandbox, tmp_path):
+def test_docker_finds_the_users_home_itself(sandbox, tmp_path):
+    # The Docker CLI looks the home up when HOME is unset, so it stays out of the cache key.
     _, common, _ = sandbox
     assert docker_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
     homes = set((tmp_path / "docker.log.home").read_text().splitlines())
-    assert homes == {pwd.getpwuid(os.getuid()).pw_dir}
+    assert homes == {""}
 
 
 def test_failed_load_fails_with_its_output(sandbox, monkeypatch, capfd):
@@ -243,7 +242,7 @@ def test_a_step_that_changes_nothing_adds_an_empty_layer(sandbox):
 
 def test_docker_gets_a_configured_home(sandbox, tmp_path, monkeypatch):
     _, common, _ = sandbox
-    monkeypatch.setenv(docker_builder.DOCKER_HOME, "/configured/home")
+    monkeypatch.setenv("HOME", "/configured/home")
     assert docker_builder.main([*common, "--dest", "out.tar", "files", "--output", "out"]) == 0
     homes = set((tmp_path / "docker.log.home").read_text().splitlines())
     assert homes == {"/configured/home"}
