@@ -607,6 +607,47 @@ def test_main_exports_an_archive(
     assert entry["annotations"][b.REF_NAME] == "app:1"
 
 
+def test_layout_index_matches_the_archive(tmp_path: Path) -> None:
+    layout = archived_image(tmp_path)
+    archive = tmp_path / "image.tar"
+    digest = b.write_archive(str(layout), "build", str(archive), "app:1")
+
+    described = b.write_layout_index(str(layout), "build", str(tmp_path / "out"), "app:1")
+
+    with tarfile.open(archive) as tar:
+        assert (tmp_path / "out" / "index.json").read_bytes() == tar.extractfile("index.json").read()
+        assert (tmp_path / "out" / "oci-layout").read_bytes() == tar.extractfile("oci-layout").read()
+        archived = sorted(f"sha256:{n[len('blobs/sha256/') :]}" for n in tar.getnames() if n.count("/") == 2)
+    assert described == {"digest": digest, "blobs": archived}
+    assert sorted(os.listdir(tmp_path / "out")) == ["index.json", "oci-layout"]
+
+
+def test_layout_index_reads_only_metadata(tmp_path: Path) -> None:
+    layout = archived_image(tmp_path)
+    _, manifest, _ = image(layout)
+    for layer in manifest["layers"]:
+        os.remove(b.blob_path(str(layout), layer["digest"]))
+
+    described = b.write_layout_index(str(layout), "build", str(tmp_path / "out"), None)
+
+    (entry,) = json.loads((tmp_path / "out" / "index.json").read_bytes())["manifests"]
+    assert "annotations" not in entry
+    assert {layer["digest"] for layer in manifest["layers"]} <= set(described["blobs"])
+
+
+def test_main_exports_a_layout_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    archived_image(tmp_path)
+
+    assert b.main(["export-layout", "dist/image", "--name", "app:1"]) == 0
+    described = json.loads(capsys.readouterr().out)
+    assert described["digest"] == b.image_digest("build", "build")
+    (entry,) = json.loads((tmp_path / "dist" / "image" / "index.json").read_bytes())["manifests"]
+    assert entry["annotations"][b.REF_NAME] == "app:1"
+
+
 def files_tree(root: Path, mtime: int) -> dict[str, bool]:
     long_name = f"deep/{'d' * 60}/{'f' * 60}.txt"
     write(root / "app" / "run.sh", b"#!/bin/sh\n")

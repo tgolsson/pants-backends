@@ -148,6 +148,24 @@ This trims the store to about 10 GB. Files over 512 KiB, such as layers, are kep
 store's LMDB shards, so the limit doesn't cap the size of a single layer. To reclaim the space at
 once, delete the store directory while no Pants process is running.
 
+## Packaging as an OCI layout
+
+`pants package` writes an image as an OCI archive, `<name>.tar`, by default. Writing a multi-GB
+archive, and Pants hashing and storing it, takes minutes. `pants publish` pays that cost too,
+because Pants packages every image before it pushes it, even though the push itself reads the
+image's layout and not the archive. To write an OCI image layout directory, `<name>/`, instead:
+
+``` toml
+[oci]
+package_output = "layout"
+```
+
+The layout's blobs are the ones already in the Pants store, so packaging and publishing a large
+image no longer writes a copy of it. The image and its digest are the same either way. Tools read
+the two forms differently: `docker load` and `podman load` need the archive, while
+`podman run oci:dist/<path>/<name>`, `skopeo copy oci:dist/<path>/<name> …` and
+`crane push dist/<path>/<name> …` read the layout.
+
 ## Scripted build steps
 
 `commands=` on `oci_image_build` and `oci_build_layer` runs a command inside the image. It is an

@@ -2,7 +2,8 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 """Writes OCI image layouts: creating an empty image, adding layers, editing the config,
-normalising pulled layouts, exporting an image as an OCI archive and writing files as a layer.
+normalising pulled layouts, exporting an image as an OCI archive or layout and writing files as a
+layer.
 
 This module runs inside a sandboxed process, with the rules only deciding what to do, so it uses
 only the standard library and never imports Pants.
@@ -248,13 +249,12 @@ def _archive_info(name: str, size: int = 0, directory: bool = False) -> tarfile.
     return info
 
 
-def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
-    """Write the image tagged `tag` as an OCI archive holding only its own blobs, and return its
-    manifest digest.
+def _export_index(layout: str, tag: str, name: str | None) -> tuple[dict, dict, dict, list[str]]:
+    """The image tagged `tag`: its descriptor, its manifest, an `index.json` holding only it, and
+    its own blobs, sorted.
 
-    The image is named `name`, if given, in `index.json`, both as its ref name (podman) and its
-    containerd image name (`docker load` with OCI support). A Docker `manifest.json` naming it in
-    `RepoTags`, like `docker save` writes, lets older `docker load`s read it too.
+    The image is named `name`, if given, in the index, both as its ref name (podman) and its
+    containerd image name (`docker load` with OCI support).
     """
     desc = tagged_descriptor(read_index(layout), tag)
     if desc.get("mediaType") not in (MANIFEST_MEDIA_TYPE, DOCKER_MANIFEST):
@@ -263,10 +263,6 @@ def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
     blobs = sorted(
         {desc["digest"], manifest["config"]["digest"], *(layer["digest"] for layer in manifest["layers"])}
     )
-
-    def arcname(digest: str) -> str:
-        return os.path.relpath(blob_path(layout, digest), layout).replace(os.sep, "/")
-
     annotations = {k: v for k, v in desc.get("annotations", {}).items() if k != REF_NAME}
     if name:
         annotations.update({REF_NAME: name, "io.containerd.image.name": name})
@@ -274,6 +270,34 @@ def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
     if not annotations:
         del entry["annotations"]
     index = {"schemaVersion": 2, "mediaType": INDEX_MEDIA_TYPE, "manifests": [entry]}
+    return desc, manifest, index, blobs
+
+
+def write_layout_index(layout: str, tag: str, out: str, name: str | None) -> dict:
+    """Write the `index.json` and `oci-layout` of a layout `out` holding only the image tagged
+    `tag`, named as in `write_archive`, and return its manifest `digest` and the `blobs` it needs.
+
+    Only the index, manifest and config are read, so the layer blobs needn't be present: the rules
+    add the blobs to `out/blobs/` from the image's layout.
+    """
+    desc, _, index, blobs = _export_index(layout, tag, name)
+    _replace_file(os.path.join(out, "index.json"), _json(index))
+    _replace_file(os.path.join(out, "oci-layout"), _json({"imageLayoutVersion": "1.0.0"}))
+    return {"digest": desc["digest"], "blobs": blobs}
+
+
+def write_archive(layout: str, tag: str, archive: str, name: str | None) -> str:
+    """Write the image tagged `tag` as an OCI archive holding only its own blobs, and return its
+    manifest digest.
+
+    The image is named `name`, if given, as `_export_index` describes. A Docker `manifest.json`
+    naming it in `RepoTags`, like `docker save` writes, lets older `docker load`s read it too.
+    """
+    desc, manifest, index, blobs = _export_index(layout, tag, name)
+
+    def arcname(digest: str) -> str:
+        return os.path.relpath(blob_path(layout, digest), layout).replace(os.sep, "/")
+
     docker_manifest = [
         {
             "Config": arcname(manifest["config"]["digest"]),
@@ -778,6 +802,11 @@ def main(argv: list[str]) -> int:
     export_parser = commands.add_parser("export", help="Write the image as a named OCI archive.")
     export_parser.add_argument("archive")
     export_parser.add_argument("--name")
+    export_layout_parser = commands.add_parser(
+        "export-layout", help="Write the index of a named OCI layout of the image and describe it."
+    )
+    export_layout_parser.add_argument("out")
+    export_layout_parser.add_argument("--name")
     commands.add_parser("set-cmd", help="Replace the image's cmd with the args after `--`, if any.")
     args = parser.parse_args(argv)
 
@@ -795,6 +824,8 @@ def main(argv: list[str]) -> int:
             digest = files_to_blob(read_files_list(args.files_from), args.out, args.level, args.threads)
         elif args.command == "export":
             digest = write_archive(args.layout, args.tag, args.archive, args.name)
+        elif args.command == "export-layout":
+            digest = _json(write_layout_index(args.layout, args.tag, args.out, args.name)).decode()
         elif args.command == "set-cmd":
             ops = [{"op": "config", "cmd": cmd}] if cmd else []
             digest = apply(args.layout, args.tag, ops)

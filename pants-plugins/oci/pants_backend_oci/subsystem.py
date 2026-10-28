@@ -22,6 +22,11 @@ class OciRunner(Enum):
     docker = "docker"
 
 
+class OciPackageOutput(Enum):
+    archive = "archive"
+    layout = "layout"
+
+
 class OciSubsystem(Subsystem):
     options_scope = "oci"
     help = "Generic options for the OCI subsystem."
@@ -32,6 +37,16 @@ class OciSubsystem(Subsystem):
         What runs images for `pants run` and OCI repl, and scripted build steps. `docker` needs the
         `pants.backend.docker` and `pants_backend_oci.docker` backends, and uses their `[docker]`
         options to find and configure Docker."""),
+    )
+
+    package_output = EnumOption(
+        default=OciPackageOutput.archive,
+        help=softwrap("""
+        What `pants package` writes for an image. `archive` writes an OCI archive, `<name>.tar`, that
+        `docker load` and `podman load` read. `layout` writes an OCI image layout directory,
+        `<name>/`, from blobs already in Pants' store, so a large image is packaged without writing
+        and storing a copy of it. `pants publish` packages every image it pushes, so `layout` makes
+        publishing faster too. The image and its digest are the same either way."""),
     )
 
     podman_connection = StrOption(

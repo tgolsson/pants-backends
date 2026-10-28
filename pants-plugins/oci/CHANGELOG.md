@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- The new `[oci].package_output = "layout"` makes `pants package` write an image as an OCI layout
+  directory, `<name>/`, instead of an archive, `<name>.tar`. The layout reuses the blobs already in
+  the Pants store, so packaging, and `pants publish`, which packages every image it pushes, no
+  longer write and store a multi-GB copy of a large image. The archive is still the default. See
+  "Packaging as an OCI layout" in the README.
+
 - Assembling an image no longer copies layer blobs. The assembly process sees only the base's
   index, manifest and config and each layer's descriptor, and the layer blobs are merged into the
   layout afterwards. On a 3 GB image, the assemble step of an incremental rebuild went from 25 s to

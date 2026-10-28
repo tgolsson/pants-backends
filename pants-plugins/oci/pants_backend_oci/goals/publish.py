@@ -104,7 +104,8 @@ async def publish_oci_image(request: PublishImageRequest) -> PublishProcesses:
         )
 
     # Push the image's OCI layout rather than the packaged archive: crane reads an archive through
-    # its Docker `manifest.json` and would push a re-encoded manifest with a different digest.
+    # its Docker `manifest.json` and would push a re-encoded manifest with a different digest. The
+    # package, an archive or a layout (`[oci].package_output`), is only read for its sha.
     wrapped_target = await resolve_target(
         WrappedTargetRequest(field_set.address, description_of_origin="publish_oci_image"), **implicitly()
     )
