@@ -6,8 +6,8 @@ the backend runs `cmake -G Ninja` once, reads the generated `build.ninja`, and r
 `CMakeLists.txt` is declared twice, and the unit of caching is the edge, not the project.
 CMake provides the build artefacts; tests, packaging and dependencies are Pants' business.
 
-**Status: alpha.** Linux, host gcc/clang, Ninja generator, local execution only (the host
-compilers are resolved on the machine).
+**Status: alpha.** Linux hosts, cross builds through a `cmake_toolchain_file`, Ninja generator,
+local execution only (the compilers are found on the machine).
 
 ## Targets
 
@@ -23,7 +23,8 @@ compilers are resolved on the machine).
 - `cmake_target`: one CMake `STATIC`, `SHARED`, `MODULE` library or `EXECUTABLE`, named by
   `project` (the `cmake_project`'s address, inferred as a dependency) and `cmake_name`
   (defaults to the target name). `pants package` writes its outputs at their build paths,
-  `dist/<build_dir>/libfoo.a`. Object libraries are internal and are not addressed.
+  `dist/<build_dir>/libfoo.a`, and those for other `platforms` under `dist/<platform>/` (see
+  Platforms). Object libraries are internal and are not addressed.
 - `cmake_test`: a test executable **Pants** compiles from `sources` (optional when
   dependencies provide the translation units) and links against the `cmake_target` libraries
   in `dependencies`, in the order written, as CMake would build a consumer of them (see How
@@ -59,13 +60,19 @@ backend_packages = [
 ]
 ```
 
+## Platforms
+
+The compilers and `ar` come from the `cc_toolchain` ([pants-backend-platforms](../platforms))
+for the host and the platform being built; without any, `gcc`, `g++` and `ar` for the host. A
+`cmake_target` builds for its `platforms`, a `cmake_test` for the host. Enable
+`pants_backend_platforms` to declare `platform` and `cc_toolchain` targets.
+
+The backend adds `cmake_toolchain_file` to `cc_toolchain`, passed as `CMAKE_TOOLCHAIN_FILE`: a
+cross build needs one for `CMAKE_SYSTEM_NAME`. See the field's help for what it may contain.
+
 ## Subsystems
 
-- `[cmake]`: the pinned CMake download (`version`, `known_versions`) and the host compilers
-  (`c_compiler`, `cxx_compiler`, resolved on the system binary path). The `--version` output
-  of the compilers and of `ar`, `ranlib` and `ld` is fingerprinted into every process, so a
-  host toolchain upgrade on a persistent cache invalidates correctly (glibc and kernel headers
-  are not).
+- `[cmake]`: the pinned CMake download (`version`, `known_versions`).
 - `[ninja]`: the pinned Ninja download. Ninja is only needed by configure; the replay never
   runs it.
 - `[cmake-test-runner]`: `skip`.
@@ -114,4 +121,5 @@ backend_packages = [
   in the top-level directory's scope, so directory-scoped settings of a subdirectory do not
   reach a test. The backend owns `CMAKE_PROJECT_INCLUDE`; a project that sets it itself
   loses it.
-- Windows is out of scope; macOS needs the `[cmake]` download pins and a compiler mapping.
+- `cmake_args` are the same for every platform.
+- Pants on Windows is out of scope, and a macOS host is untested.

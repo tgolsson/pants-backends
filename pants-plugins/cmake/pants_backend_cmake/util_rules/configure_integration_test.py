@@ -1,5 +1,7 @@
 """Configures a small C project with the real (downloaded) CMake and the host compiler."""
 
+import os
+
 import pytest
 from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
@@ -14,6 +16,11 @@ from pants_backend_cmake.testutil import GenTarget, codegen_rules
 from pants_backend_cmake.util_rules import configure, toolchain
 from pants_backend_cmake.util_rules.canonicalize import PLACEHOLDER
 from pants_backend_cmake.util_rules.configure import ConfiguredProject, ConfigureRequest
+from pants_backend_platforms import register as platforms
+from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
+from pants_backend_platforms.util_rules.platforms import TargetPlatform
+
+HOST_PLATFORM = TargetPlatform(HOST, HOST_OS, HOST_ARCH)
 
 CMAKELISTS = """\
 cmake_minimum_required(VERSION 3.20)
@@ -35,6 +42,7 @@ def rule_runner() -> RuleRunner:
             *external_tool.rules(),
             *source_files.rules(),
             *system_binaries.rules(),
+            *platforms.rules(),
             *cmake.rules(),
             *ninja.rules(),
             *toolchain.rules(),
@@ -42,7 +50,7 @@ def rule_runner() -> RuleRunner:
             *codegen_rules(),
             QueryRule(ConfiguredProject, [ConfigureRequest]),
         ],
-        target_types=[*targets(), GenTarget],
+        target_types=[*targets(), *platforms.target_types(), GenTarget],
     )
 
 
@@ -59,7 +67,9 @@ def test_configure_small_project(rule_runner: RuleRunner) -> None:
         }
     )
     rule_runner.set_options([], env_inherit={"PATH"})
-    configured = rule_runner.request(ConfiguredProject, [ConfigureRequest(Address("", target_name="proj"))])
+    configured = rule_runner.request(
+        ConfiguredProject, [ConfigureRequest(Address("", target_name="proj"), HOST_PLATFORM)]
+    )
 
     assert configured.project_dir == ""
     assert configured.build_dir == "build"
@@ -101,7 +111,45 @@ def test_configure_small_project(rule_runner: RuleRunner) -> None:
     assert edge.inputs == (f"{PLACEHOLDER}/lib.c",)
     assert f"-I{PLACEHOLDER}/include" in configured.graph.command(edge)
     assert configured.graph.command(edge).startswith(configured.toolchain.c_compiler.path)
-    assert len(configured.toolchain.binutils) == 3
+
+
+TOOLCHAIN_FILES = {
+    "BUILD": 'cmake_project(name="proj", sources=["CMakeLists.txt", "t.h.in", "t.c"])\n'
+    f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
+    f'cc_toolchain(name="native", host="{HOST}", target="{HOST}", cc="gcc", cxx="g++", ar="ar", '
+    'cmake_toolchain_file="native.cmake")\n',
+    "CMakeLists.txt": "cmake_minimum_required(VERSION 3.20)\nproject(t LANGUAGES C)\n"
+    "configure_file(t.h.in t.h)\nadd_library(t STATIC t.c)\n",
+    "t.h.in": '#define FROM_TOOLCHAIN "@FROM_TOOLCHAIN@"\n',
+    "t.c": "int t(void) { return 0; }\n",
+}
+
+
+def _configure_with_toolchain_file(rule_runner: RuleRunner, toolchain_file: str) -> dict[str, str]:
+    rule_runner.write_files({**TOOLCHAIN_FILES, "native.cmake": toolchain_file})
+    rule_runner.set_options([], env_inherit={"PATH"})
+    configured = rule_runner.request(
+        ConfiguredProject, [ConfigureRequest(Address("", target_name="proj"), HOST_PLATFORM)]
+    )
+    return {
+        fc.path: fc.content.decode() for fc in rule_runner.request(DigestContents, [configured.generated])
+    }
+
+
+def test_toolchain_file(rule_runner: RuleRunner) -> None:
+    generated = _configure_with_toolchain_file(rule_runner, 'set(FROM_TOOLCHAIN "one")\n')
+    assert generated["build/t.h"] == '#define FROM_TOOLCHAIN "one"\n'
+    generated = _configure_with_toolchain_file(rule_runner, 'set(FROM_TOOLCHAIN "two")\n')
+    assert generated["build/t.h"] == '#define FROM_TOOLCHAIN "two"\n'
+
+
+@pytest.mark.skipif(not os.path.exists("/usr/bin/cc"), reason="needs a second C compiler path")
+def test_toolchain_file_must_not_set_the_compiler(rule_runner: RuleRunner) -> None:
+    with pytest.raises(
+        ExecutionError,
+        match=r"configure did not use the `cc_toolchain`'s tools: CMAKE_C_COMPILER is `/usr/bin/cc`",
+    ):
+        _configure_with_toolchain_file(rule_runner, "set(CMAKE_C_COMPILER /usr/bin/cc)\n")
 
 
 # A project in a subdirectory whose library compiles a translation unit a codegen dependency
@@ -124,7 +172,7 @@ def test_configure_with_generated_source(rule_runner: RuleRunner) -> None:
     rule_runner.write_files(GENERATED_FILES)
     rule_runner.set_options([], env_inherit={"PATH"})
     configured = rule_runner.request(
-        ConfiguredProject, [ConfigureRequest(Address("proj", target_name="proj"))]
+        ConfiguredProject, [ConfigureRequest(Address("proj", target_name="proj"), HOST_PLATFORM)]
     )
 
     # The generated file exists at configure (a placeholder) and keeps its content for the build.
@@ -149,7 +197,9 @@ def test_sources_overlapping_generated_file_is_an_error(rule_runner: RuleRunner)
     )
     rule_runner.set_options([], env_inherit={"PATH"})
     with pytest.raises(ExecutionError) as error:
-        rule_runner.request(ConfiguredProject, [ConfigureRequest(Address("proj", target_name="proj"))])
+        rule_runner.request(
+            ConfiguredProject, [ConfigureRequest(Address("proj", target_name="proj"), HOST_PLATFORM)]
+        )
     message = str(error.value)
     assert "proj:proj: `sources` and a dependency both provide ['proj/gen/answer.cpp']" in message
     assert '"!gen/answer.cpp"' in message

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pants.core.util_rules.external_tool import TemplatedExternalTool
 from pants.engine.platform import Platform
-from pants.option.option_types import StrOption
-from pants.util.strutil import softwrap
 
 _PLATFORM_MAPPING = {
     "linux_x86_64": "linux-x86_64",
@@ -16,12 +14,7 @@ _PLATFORM_MAPPING = {
 class CMakeTool(TemplatedExternalTool):
     options_scope = "cmake"
     name = "cmake"
-    help = softwrap(
-        """
-        The CMake used to configure `cmake_project` targets, and the host compilers CMake is
-        pointed at.
-        """
-    )
+    help = "The CMake used to configure `cmake_project` targets."
 
     default_version = "3.31.12"
     default_known_versions = [
@@ -34,15 +27,6 @@ class CMakeTool(TemplatedExternalTool):
         "https://github.com/Kitware/CMake/releases/download/v{version}/cmake-{version}-{platform}.tar.gz"
     )
     default_url_platform_mapping = _PLATFORM_MAPPING
-
-    c_compiler = StrOption(
-        default="gcc",
-        help="The C compiler, a name resolved on the system binary path or an absolute path.",
-    )
-    cxx_compiler = StrOption(
-        default="g++",
-        help="The C++ compiler, a name resolved on the system binary path or an absolute path.",
-    )
 
     def generate_exe(self, plat: Platform) -> str:
         base = f"cmake-{self.version}-{_PLATFORM_MAPPING[plat.value]}"

@@ -10,6 +10,7 @@ from pants_backend_cmake.util_rules import (
     targets,
     toolchain,
 )
+from pants_backend_platforms import register as platforms
 
 
 def target_types():
@@ -18,6 +19,7 @@ def target_types():
 
 def rules():
     return [
+        *platforms.rules(),
         *cmake.rules(),
         *ninja.rules(),
         *toolchain.rules(),

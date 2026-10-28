@@ -81,6 +81,8 @@ from pants_backend_cmake.util_rules.targets import (
     parse_address,
     resolve_cmake_target,
 )
+from pants_backend_platforms.target_types import PlatformsField
+from pants_backend_platforms.util_rules.platforms import KnownPlatforms
 
 C = "c"
 CXX = "cxx"
@@ -317,7 +319,7 @@ async def _libraries_in_declared_order(target: Target, address: Address) -> list
 
 
 @rule(desc="Build CMake test")
-async def build_test(request: TestBuildRequest, platform: Platform) -> BuiltTest:
+async def build_test(request: TestBuildRequest, platform: Platform, known: KnownPlatforms) -> BuiltTest:
     address = request.address
     wrapped = await resolve_target(
         WrappedTargetRequest(address, description_of_origin="cmake_test"), **implicitly()
@@ -332,8 +334,15 @@ async def build_test(request: TestBuildRequest, platform: Platform) -> BuiltTest
             f"{address}: `dependencies` must name at least one `cmake_target` library: the test "
             "is compiled as a consumer of it and run from its project's build directory"
         )
+    for t in library_targets:
+        if known.host not in known.listed(t[PlatformsField]):
+            raise TestBuildError(
+                f"{address}: tests build for the host, {known.host.name}, but `{t.address}` does "
+                "not list it in `platforms`"
+            )
     resolved = await concurrently(
-        resolve_cmake_target(CMakeTargetRequest(t.address), **implicitly()) for t in library_targets
+        resolve_cmake_target(CMakeTargetRequest(t.address, known.host), **implicitly())
+        for t in library_targets
     )
     projects = sorted({str(r.project.address) for r in resolved})
     if len(projects) > 1:

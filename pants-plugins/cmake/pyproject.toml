@@ -6,7 +6,7 @@ authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
 
-dependencies = []
+dependencies = ["pants_backend_platforms>=0.1.0"]
 readme = "README.md"
 license = {file = "LICENSE-MIT.txt"}
 keywords = ["pantsbuild", "pants", "backend", "cmake", "ninja", "c", "c++"]

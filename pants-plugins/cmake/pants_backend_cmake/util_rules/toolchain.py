@@ -1,8 +1,6 @@
 """The tools every configure, scan and replay process runs with: the pinned CMake and Ninja
-downloads and the host compilers and binutils. The `--version` output of each host tool is
-fingerprinted into the process environment, so a host toolchain upgrade invalidates a
-persistent cache. (A downloaded toolchain would put the tools in the key by digest instead;
-that is a hermetic toolchain, not implemented yet.)"""
+downloads, and the `cc_toolchain` (pants-backend-platforms) for the platform being built, with
+its `cmake_toolchain_file` when it has one."""
 
 from __future__ import annotations
 
@@ -10,34 +8,60 @@ import os
 from dataclasses import dataclass
 
 from pants.core.util_rules.external_tool import DownloadedExternalTool, download_external_tool
-from pants.core.util_rules.system_binaries import (
-    BinaryPath,
-    BinaryPathRequest,
-    BinaryPathTest,
-    SystemBinariesSubsystem,
-    find_binary,
-)
-from pants.engine.fs import Digest
+from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
+from pants.core.util_rules.system_binaries import BinaryPath
+from pants.engine.fs import EMPTY_DIGEST, Digest
+from pants.engine.internals.graph import resolve_target
 from pants.engine.platform import Platform
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
+from pants.engine.target import OptionalSingleSourceField, WrappedTargetRequest
 from pants.util.frozendict import FrozenDict
 
 from pants_backend_cmake.subsystems.cmake import CMakeTool
 from pants_backend_cmake.subsystems.ninja import NinjaTool
+from pants_backend_platforms.target_types import CcToolchainTarget
+from pants_backend_platforms.util_rules.platforms import TargetPlatform
+from pants_backend_platforms.util_rules.toolchain import (
+    CcToolchain,
+    CcToolchainRequest,
+    resolve_cc_toolchain,
+)
 
 CMAKE_DIR = "__cmake"
 NINJA_DIR = "__ninja"
-_BINUTILS = ("ar", "ranlib", "ld")
+
+
+class CMakeToolchainFileField(OptionalSingleSourceField):
+    alias = "cmake_toolchain_file"
+    expected_file_extensions = (".cmake",)
+    help = (
+        "A CMake toolchain file for this toolchain's target, such as one setting "
+        "`CMAKE_SYSTEM_NAME`. It must not set the compilers or `ar`, which come from this "
+        "`cc_toolchain`, and configure gets this file alone, not files it `include()`s."
+    )
+
+
+@dataclass(frozen=True)
+class CMakeToolchainRequest:
+    platform: TargetPlatform
 
 
 @dataclass(frozen=True)
 class CMakeToolchain:
     cmake: DownloadedExternalTool
     ninja: DownloadedExternalTool
-    c_compiler: BinaryPath
-    cxx_compiler: BinaryPath
-    binutils: tuple[BinaryPath, ...]
-    search_path: tuple[str, ...]
+    cc: CcToolchain
+    toolchain_file: str | None
+    """Relative to the build root; in `toolchain_file_digest`."""
+    toolchain_file_digest: Digest
+
+    @property
+    def c_compiler(self) -> BinaryPath:
+        return self.cc.cc
+
+    @property
+    def cxx_compiler(self) -> BinaryPath:
+        return self.cc.cxx
 
     @property
     def immutable_input_digests(self) -> FrozenDict[str, Digest]:
@@ -57,61 +81,29 @@ class CMakeToolchain:
 
     @property
     def env(self) -> FrozenDict[str, str]:
-        """Shared by every process: the host search path (CMake's `find_program` and the
-        replayed `ar`/`ranlib` need it) and the tool fingerprints."""
-        return FrozenDict(
-            {
-                "PATH": os.pathsep.join(self.search_path),
-                "__PANTS_CMAKE_C_COMPILER": self.c_compiler.fingerprint,
-                "__PANTS_CMAKE_CXX_COMPILER": self.cxx_compiler.fingerprint,
-                "__PANTS_CMAKE_BINUTILS": ",".join(b.fingerprint for b in self.binutils),
-            }
-        )
-
-
-def _request(spec: str, search_path) -> BinaryPathRequest:
-    if os.path.isabs(spec):
-        return BinaryPathRequest(
-            binary_name=os.path.basename(spec),
-            search_path=[os.path.dirname(spec)],
-            test=BinaryPathTest(args=["--version"]),
-        )
-    return BinaryPathRequest(
-        binary_name=spec, search_path=search_path, test=BinaryPathTest(args=["--version"])
-    )
+        return self.cc.env
 
 
 @rule(desc="Resolve the CMake toolchain")
 async def resolve_cmake_toolchain(
-    cmake: CMakeTool,
-    ninja: NinjaTool,
-    platform: Platform,
-    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
+    request: CMakeToolchainRequest, cmake: CMakeTool, ninja: NinjaTool, platform: Platform
 ) -> CMakeToolchain:
-    search_path = system_binaries.system_binary_paths
-    requests = [
-        _request(cmake.c_compiler, search_path),
-        _request(cmake.cxx_compiler, search_path),
-        *(_request(name, search_path) for name in _BINUTILS),
-    ]
-    cmake_tool, ninja_tool, *found = await concurrently(
+    cmake_tool, ninja_tool, cc = await concurrently(
         download_external_tool(cmake.get_request(platform)),
         download_external_tool(ninja.get_request(platform)),
-        *(find_binary(request, **implicitly()) for request in requests),
+        resolve_cc_toolchain(CcToolchainRequest(request.platform), **implicitly()),
     )
-    paths = [
-        paths.first_path_or_raise(request, rationale="build CMake projects")
-        for request, paths in zip(requests, found)
-    ]
-    return CMakeToolchain(
-        cmake=cmake_tool,
-        ninja=ninja_tool,
-        c_compiler=paths[0],
-        cxx_compiler=paths[1],
-        binutils=tuple(paths[2:]),
-        search_path=tuple(search_path),
-    )
+    toolchain_file, toolchain_file_digest = None, EMPTY_DIGEST
+    if cc.address is not None:
+        wrapped = await resolve_target(
+            WrappedTargetRequest(cc.address, description_of_origin="cmake toolchain"), **implicitly()
+        )
+        field = wrapped.target[CMakeToolchainFileField]
+        if field.value:
+            files = await determine_source_files(SourceFilesRequest([field]))
+            toolchain_file, toolchain_file_digest = files.files[0], files.snapshot.digest
+    return CMakeToolchain(cmake_tool, ninja_tool, cc, toolchain_file, toolchain_file_digest)
 
 
 def rules():
-    return collect_rules()
+    return [*collect_rules(), CcToolchainTarget.register_plugin_field(CMakeToolchainFileField)]

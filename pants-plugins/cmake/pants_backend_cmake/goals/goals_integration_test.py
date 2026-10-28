@@ -1,6 +1,7 @@
 """`package` and `test` on a small C project with the real CMake and the host compiler: the
 libraries come from CMake, the tests are compiled and linked by Pants as consumers."""
 
+import shutil
 from typing import Any
 
 import pytest
@@ -18,7 +19,14 @@ from pants.engine.internals.parametrize import Parametrize
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.intrinsics import create_digest
 from pants.engine.rules import QueryRule, rule
-from pants.engine.target import Dependencies, DependenciesRequest, Tags, Target
+from pants.engine.target import (
+    Dependencies,
+    DependenciesRequest,
+    HydratedSources,
+    HydrateSourcesRequest,
+    Tags,
+    Target,
+)
 from pants.engine.unions import UnionRule
 from pants.source import source_root
 from pants.testutil.rule_runner import RuleRunner
@@ -35,6 +43,9 @@ from pants_backend_cmake.goals.wrapper import (
 from pants_backend_cmake.target_types import CMakeTestSourcesField
 from pants_backend_cmake.testutil import GenTarget, codegen_rules
 from pants_backend_cmake.util_rules import executable
+from pants_backend_cmake.util_rules.toolchain import CMakeToolchainFileField
+from pants_backend_platforms import register as platforms_register
+from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
 
 CMAKELISTS = """\
 cmake_minimum_required(VERSION 3.20)
@@ -195,6 +206,7 @@ def _rule_runner(*extra_rules: object) -> RuleRunner:
         ],
         target_types=[
             *register.target_types(),
+            *platforms_register.target_types(),
             CCSourcesGeneratorTarget,
             FilesGeneratorTarget,
             RelocatedFiles,
@@ -482,4 +494,103 @@ def test_cmake_test_includes_source_roots(rule_runner: RuleRunner) -> None:
     )
     rule_runner.set_options(["--source-root-patterns=['/', '/vendor/fw']"], env_inherit={"PATH"})
     result = _test(rule_runner, Address("", target_name="rooted"))
+    assert result.exit_code == 0, result.stderr_bytes.decode()
+
+
+MINGW_CC = next(
+    (cc for cc in ("x86_64-w64-mingw32-gcc-win32", "x86_64-w64-mingw32-gcc") if shutil.which(cc)), None
+)
+WINDOWS = "windows-x86_64"
+PLATFORMS_BUILD = f"""\
+platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")
+platform(name="{WINDOWS}", os="windows", arch="x86_64")
+cc_toolchain(name="native", host="{HOST}", target="{HOST}", cc="gcc", cxx="g++", ar="ar")
+cc_toolchain(
+    name="mingw",
+    host="{HOST}",
+    target="{WINDOWS}",
+    cc="{MINGW_CC}",
+    cxx="{(MINGW_CC or "").replace("-gcc", "-g++")}",
+    ar="x86_64-w64-mingw32-ar",
+    cmake_toolchain_file="windows.cmake",
+)
+"""
+
+
+def _with_platforms(build: str, platforms: str, *names: str) -> str:
+    for name in names:
+        build = build.replace(
+            f'name="{name}", project=":proj"', f'name="{name}", project=":proj", {platforms}'
+        )
+    return build
+
+
+@pytest.mark.skipif(MINGW_CC is None or not shutil.which("x86_64-w64-mingw32-ar"), reason="needs MinGW-w64")
+def test_package_for_windows(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner,
+        BUILD=_with_platforms(BUILD, f'platforms=["{HOST}", "{WINDOWS}"]', "demo", "shared"),
+        **{
+            "platforms/BUILD": PLATFORMS_BUILD,
+            "platforms/windows.cmake": "set(CMAKE_SYSTEM_NAME Windows)\nset(CMAKE_SYSTEM_PROCESSOR x86_64)\n",
+        },
+    )
+    rule_runner.set_options([f"--platforms-enabled=['{WINDOWS}']"], env_inherit={"PATH"})
+
+    library = _package(rule_runner, "demo")
+    assert [a.relpath for a in library.artifacts] == ["build/libdemo.a", f"{WINDOWS}/build/libdemo.a"]
+    contents = {fc.path: fc.content for fc in rule_runner.request(DigestContents, [library.digest])}
+    assert b"lib.c.obj" not in contents["build/libdemo.a"]
+    assert b"lib.c.obj" in contents[f"{WINDOWS}/build/libdemo.a"]
+
+    shared = _package(rule_runner, "shared")
+    assert sorted(a.relpath for a in shared.artifacts) == [
+        "build/libshared.so",
+        f"{WINDOWS}/build/libshared.dll",
+        f"{WINDOWS}/build/libshared.dll.a",
+    ]
+    contents = {fc.path: fc.content for fc in rule_runner.request(DigestContents, [shared.digest])}
+    assert contents["build/libshared.so"].startswith(b"\x7fELF")
+    assert contents[f"{WINDOWS}/build/libshared.dll"].startswith(b"MZ")
+
+
+def test_toolchain_file_is_optional() -> None:
+    rule_runner = _rule_runner(QueryRule(HydratedSources, [HydrateSourcesRequest]))
+    _write_project(rule_runner, **{"platforms/BUILD": PLATFORMS_BUILD})
+    native = rule_runner.get_target(Address("platforms", target_name="native"))
+    hydrated = rule_runner.request(HydratedSources, [HydrateSourcesRequest(native[CMakeToolchainFileField])])
+    assert hydrated.snapshot.files == ()
+
+
+def test_cmake_test_needs_the_host_platform(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner,
+        BUILD=_with_platforms(BUILD, f'platforms=["{WINDOWS}"]', "demo")
+        + 'cmake_test(name="wintest", sources=["wintest.c"], dependencies=[":demo"])\n',
+        **{
+            "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
+            f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n',
+            "wintest.c": "int main(void) { return 0; }\n",
+        },
+    )
+    result = _test(rule_runner, Address("", target_name="wintest"))
+    assert result.exit_code == 1
+    assert f"tests build for the host, {HOST}, but `//:demo` does not list it" in result.stderr_bytes.decode()
+
+
+def test_cmake_test_builds_for_the_host_only(rule_runner: RuleRunner) -> None:
+    # No toolchain builds for Windows, so building the library for it would fail.
+    _write_project(
+        rule_runner,
+        BUILD=_with_platforms(BUILD, f'platforms=["{HOST}", "{WINDOWS}"]', "demo")
+        + 'cmake_test(name="hosttest", sources=["hosttest.c"], dependencies=[":demo"])\n',
+        **{
+            "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
+            f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n'
+            f'cc_toolchain(name="native", host="{HOST}", target="{HOST}", cc="gcc", cxx="g++", ar="ar")\n',
+            "hosttest.c": '#include "demo.h"\nint main(void) { return demo() == DEMO_ANSWER ? 0 : 1; }\n',
+        },
+    )
+    rule_runner.set_options([f"--platforms-enabled=['{WINDOWS}']"], env_inherit={"PATH"})
+    result = _test(rule_runner, Address("", target_name="hosttest"))
     assert result.exit_code == 0, result.stderr_bytes.decode()

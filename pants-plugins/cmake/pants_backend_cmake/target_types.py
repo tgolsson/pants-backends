@@ -18,6 +18,8 @@ from pants.engine.target import (
 )
 from pants.util.strutil import softwrap
 
+from pants_backend_platforms.target_types import PlatformsField
+
 TRANSLATION_UNIT_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".c++")
 
 
@@ -170,6 +172,7 @@ class CMakeTargetTarget(Target):
         CMakeTargetNameField,
         CMakeTargetDependenciesField,
         CMakeBuildTypeField,
+        PlatformsField,
     )
     help = softwrap(
         """

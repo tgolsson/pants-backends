@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from pants.backend.cc.target_types import CCSourceField
@@ -61,12 +63,18 @@ from pants_backend_cmake.util_rules.canonicalize import (
     tool_paths,
 )
 from pants_backend_cmake.util_rules.probes import PROBES_DIR, PROBES_SCRIPT, PROBES_SCRIPT_NAME
-from pants_backend_cmake.util_rules.toolchain import CMakeToolchain
+from pants_backend_cmake.util_rules.toolchain import (
+    CMakeToolchain,
+    CMakeToolchainRequest,
+    resolve_cmake_toolchain,
+)
+from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
 
 @dataclass(frozen=True)
 class ConfigureRequest:
     address: Address
+    platform: TargetPlatform
 
 
 @dataclass(frozen=True)
@@ -109,6 +117,20 @@ def matches_any(relative_path: str, patterns: tuple[str, ...]) -> bool:
     return False
 
 
+_USED_TOOL_RE = re.compile(r'^set\((CMAKE_C_COMPILER|CMAKE_CXX_COMPILER|CMAKE_AR) "([^"]*)"\)$', re.MULTILINE)
+
+
+def tool_mismatches(compiler_files: Iterable[str], expected: Mapping[str, str]) -> list[str]:
+    """The tools CMake recorded in `CMakeFiles/<version>/CMake<LANG>Compiler.cmake` that are not
+    the expected ones: a toolchain file's plain `set()` of a compiler shadows the `-D` cache entry."""
+    used = {m.group(1): m.group(2) for text in compiler_files for m in _USED_TOOL_RE.finditer(text)}
+    return [
+        f"{var} is `{used[var]}`, not `{path}`"
+        for var, path in expected.items()
+        if used.get(var, path) != path
+    ]
+
+
 def overlap_error(address: Address, sources: tuple[str, ...], extra: tuple[str, ...]) -> str | None:
     """Two copies of one path must never reach a compile: which one won would depend on merge
     order."""
@@ -125,7 +147,8 @@ def overlap_error(address: Address, sources: tuple[str, ...], extra: tuple[str, 
 
 
 @rule(desc="Configure CMake project", level=LogLevel.DEBUG)
-async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain) -> ConfiguredProject:
+async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
+    toolchain = await resolve_cmake_toolchain(CMakeToolchainRequest(request.platform), **implicitly())
     wrapped = await resolve_target(
         WrappedTargetRequest(request.address, description_of_origin="cmake configure"), **implicitly()
     )
@@ -175,7 +198,9 @@ async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain
         create_digest(CreateDigest([Directory(build_dir)])),
         create_digest(CreateDigest([FileContent(probes_path, PROBES_SCRIPT.encode())])),
     )
-    input_digest = await merge_digests(MergeDigests([real_digest, placeholder_digest, probes_digest]))
+    input_digest = await merge_digests(
+        MergeDigests([real_digest, placeholder_digest, probes_digest, toolchain.toolchain_file_digest])
+    )
 
     build_type = target[CMakeBuildTypeField].value
     argv = [
@@ -189,6 +214,12 @@ async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain
         f"-DCMAKE_MAKE_PROGRAM={{chroot}}/{toolchain.ninja_exe}",
         f"-DCMAKE_C_COMPILER={toolchain.c_compiler.path}",
         f"-DCMAKE_CXX_COMPILER={toolchain.cxx_compiler.path}",
+        f"-DCMAKE_AR={toolchain.cc.ar.path}",
+        *(
+            [f"-DCMAKE_TOOLCHAIN_FILE={{chroot}}/{toolchain.toolchain_file}"]
+            if toolchain.toolchain_file
+            else []
+        ),
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         f"-DCMAKE_PROJECT_INCLUDE={{chroot}}/{probes_path}",
         *([f"-DCMAKE_BUILD_TYPE={build_type}"] if build_type else []),
@@ -210,7 +241,7 @@ async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain
 
     # Everything generated, except the cache, the compiler-id artefacts and the logs; the
     # cache is read once for the tool paths it records and then dropped.
-    generated, rules_ninja, cache = await concurrently(
+    generated, rules_ninja, cache, compiler_files = await concurrently(
         digest_subset_to_digest(
             DigestSubset(
                 result.output_digest,
@@ -232,7 +263,23 @@ async def configure_project(request: ConfigureRequest, toolchain: CMakeToolchain
         digest_subset_to_digest(
             DigestSubset(result.output_digest, PathGlobs([f"{build_dir}/CMakeCache.txt"]))
         ),
+        digest_subset_to_digest(
+            DigestSubset(result.output_digest, PathGlobs([f"{build_dir}/CMakeFiles/*/CMake*Compiler.cmake"]))
+        ),
     )
+    mismatches = tool_mismatches(
+        (fc.content.decode(errors="replace") for fc in await get_digest_contents(compiler_files)),
+        {
+            "CMAKE_C_COMPILER": toolchain.c_compiler.path,
+            "CMAKE_CXX_COMPILER": toolchain.cxx_compiler.path,
+            "CMAKE_AR": toolchain.cc.ar.path,
+        },
+    )
+    if mismatches:
+        raise ValueError(
+            f"{request.address}: configure did not use the `cc_toolchain`'s tools: "
+            f"{'; '.join(mismatches)}. A `cmake_toolchain_file` must not set the compilers or `ar`."
+        )
     kept = await merge_digests(MergeDigests([generated, rules_ninja]))
     contents, cache_contents = await concurrently(get_digest_contents(kept), get_digest_contents(cache))
     if not cache_contents:

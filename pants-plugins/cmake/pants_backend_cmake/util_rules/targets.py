@@ -28,6 +28,7 @@ from pants_backend_cmake.util_rules.configure import (
     ConfigureRequest,
     configure_project,
 )
+from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
 
 async def parse_address(value: str, relative_to: str, description_of_origin: str) -> Address:
@@ -64,6 +65,7 @@ async def infer_cmake_project_dependency(request: InferCMakeProjectDependency) -
 @dataclass(frozen=True)
 class CMakeTargetRequest:
     address: Address
+    platform: TargetPlatform
 
 
 @dataclass(frozen=True)
@@ -88,7 +90,7 @@ async def resolve_cmake_target(request: CMakeTargetRequest) -> ResolvedCMakeTarg
     )
     if not project_wrapped.target.has_field(CMakeProjectSourcesField):
         raise ValueError(f"{request.address}: `project` must name a `cmake_project`, not {project_address}")
-    configured = await configure_project(ConfigureRequest(project_address), **implicitly())
+    configured = await configure_project(ConfigureRequest(project_address, request.platform), **implicitly())
     name = target[CMakeTargetNameField].value or request.address.target_name
     info = configured.targets.get(name)
     if info is None or not info.addressable:
