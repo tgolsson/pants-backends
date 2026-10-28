@@ -51,12 +51,12 @@ def top_layer(archive: Path) -> list[str]:
             return tar.getnames()
 
 
-def pants(tmpdir: str, runner: str, *args: str):
+def pants(tmpdir: str, runner: str, isolated: list[str], *args: str):
     return run_pants(
         [
             "--backend-packages=pants_backend_oci",
             *runner_args(runner),
-            "--keep-sandboxes=on_failure",
+            *isolated,
             "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
             f"--pants-distdir={tmpdir}/dist",
             *args,
@@ -65,7 +65,7 @@ def pants(tmpdir: str, runner: str, *args: str):
 
 
 @RUNNERS
-def test_scripted_layer_extract_and_image(runner: str) -> None:
+def test_scripted_layer_extract_and_image(runner: str, isolated_pants_args: list[str]) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": DEBIAN
@@ -108,6 +108,7 @@ def test_scripted_layer_extract_and_image(runner: str) -> None:
         result = pants(
             tmpdir,
             runner,
+            isolated_pants_args,
             "package",
             *(f"{tmpdir}/oci:{t}" for t in ("layer", "globbed", "extract", "image")),
         )
@@ -132,8 +133,8 @@ def test_scripted_layer_extract_and_image(runner: str) -> None:
             "var/lib/apt/.wh.lists",
         ]
 
-        no_outputs = pants(tmpdir, runner, "package", f"{tmpdir}/oci:no-outputs")
-        result = pants(tmpdir, runner, "run", f"{tmpdir}/oci:image")
+        no_outputs = pants(tmpdir, runner, isolated_pants_args, "package", f"{tmpdir}/oci:no-outputs")
+        result = pants(tmpdir, runner, isolated_pants_args, "run", f"{tmpdir}/oci:image")
 
     no_outputs.assert_failure()
     assert "has no `outputs`" in no_outputs.stderr
@@ -143,7 +144,7 @@ def test_scripted_layer_extract_and_image(runner: str) -> None:
 
 
 @RUNNERS
-def test_failing_command_fails_the_build(runner: str) -> None:
+def test_failing_command_fails_the_build(runner: str, isolated_pants_args: list[str]) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": DEBIAN
@@ -165,8 +166,8 @@ def test_failing_command_fails_the_build(runner: str) -> None:
     }
 
     with setup_tmpdir(build_inputs) as tmpdir:
-        failed = pants(tmpdir, runner, "package", f"{tmpdir}/oci:layer")
-        missing = pants(tmpdir, runner, "package", f"{tmpdir}/oci:missing")
+        failed = pants(tmpdir, runner, isolated_pants_args, "package", f"{tmpdir}/oci:layer")
+        missing = pants(tmpdir, runner, isolated_pants_args, "package", f"{tmpdir}/oci:missing")
 
     failed.assert_failure()
     assert "Run build step for" in failed.stderr
@@ -175,7 +176,7 @@ def test_failing_command_fails_the_build(runner: str) -> None:
 
 
 @RUNNERS
-def test_list_commands_run_without_a_shell(runner: str) -> None:
+def test_list_commands_run_without_a_shell(runner: str, isolated_pants_args: list[str]) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": DEBIAN
@@ -200,6 +201,7 @@ def test_list_commands_run_without_a_shell(runner: str) -> None:
         result = pants(
             tmpdir,
             runner,
+            isolated_pants_args,
             "--oci-command-shell=['/no/such/shell']",
             "package",
             f"{tmpdir}/oci:layer",

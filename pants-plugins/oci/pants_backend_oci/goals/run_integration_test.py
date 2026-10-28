@@ -38,7 +38,7 @@ def runner_args(runner: str) -> list[str]:
 
 
 @RUNNERS
-def test_run_oci_container(runner: str) -> None:
+def test_run_oci_container(runner: str, isolated_pants_args: list[str]) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -70,6 +70,7 @@ def test_run_oci_container(runner: str) -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                *isolated_pants_args,
                 *runner_args(runner),
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
@@ -84,7 +85,9 @@ def test_run_oci_container(runner: str) -> None:
 
 
 @RUNNERS
-def test_run_args_override_the_command_and_keep_exit_status(runner: str) -> None:
+def test_run_args_override_the_command_and_keep_exit_status(
+    runner: str, isolated_pants_args: list[str]
+) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -106,6 +109,7 @@ def test_run_args_override_the_command_and_keep_exit_status(runner: str) -> None
             result = run_pants(
                 [
                     "--backend-packages=pants_backend_oci",
+                    *isolated_pants_args,
                     *runner_args(runner),
                     "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
                     "run",
@@ -123,7 +127,7 @@ def test_run_args_override_the_command_and_keep_exit_status(runner: str) -> None
 
 
 @RUNNERS
-def test_run_oci_container_file(runner: str) -> None:
+def test_run_oci_container_file(runner: str, isolated_pants_args: list[str]) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -162,6 +166,7 @@ def test_run_oci_container_file(runner: str) -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                *isolated_pants_args,
                 *runner_args(runner),
                 "--backend-packages=pants.backend.python",
                 "--keep-sandboxes=on_failure",
@@ -177,7 +182,7 @@ def test_run_oci_container_file(runner: str) -> None:
 
 
 @RUNNERS
-def test_run_oci_container_files(runner: str) -> None:
+def test_run_oci_container_files(runner: str, isolated_pants_args: list[str]) -> None:
     build_inputs = {
         "BUILD_ROOT": "",
         "oci/BUILD": dedent("""\
@@ -216,6 +221,7 @@ def test_run_oci_container_files(runner: str) -> None:
         result = run_pants(
             [
                 "--backend-packages=pants_backend_oci",
+                *isolated_pants_args,
                 *runner_args(runner),
                 "--backend-packages=pants.backend.python",
                 "--pants-ignore=['.python-build-standalone', '.*/', '/dist/', '__pycache__']",
