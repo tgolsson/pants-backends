@@ -13,55 +13,33 @@ compilers are resolved on the machine).
 
 - `cmake_project`: the project. `sources` is what CMake reads: CMake files, configure-time
   inputs, and any source or header no dependency provides. Files matching
-  `configure_placeholders` (sources and headers by default) are given to configure as
-  zero-byte placeholders, so editing one never reruns configure, only adding or removing one
-  does; everything else (`CMakeLists.txt`, `*.cmake`, `configure_file` inputs, `file(READ)`
-  inputs) is given as is. `dependencies` are `files`, `cc_sources` and codegen targets
-  producing either (such as `cpp_generate`, below); their files are mounted next to the
-  sources for the compile and link steps, and configure sees only those matching
-  `configure_placeholders`, as placeholders. A
-  path both `sources` and a dependency provide is an error, here and for `cmake_test`: drop
-  it from one of them (`"!gen/registry.cpp"` in `sources`).
-  `cmake_args`, `build_dir` (default `build`) and `build_type` are passed to CMake.
+  `configure_placeholders` (sources and headers by default) reach configure as zero-byte
+  placeholders, so editing one never reruns configure; everything else is given as is.
+  `dependencies` are `files`, `cc_sources` and codegen targets producing either (such as
+  `cpp_generate`); their files are mounted for the compile and link steps, and configure sees
+  only those matching `configure_placeholders`. A path both `sources` and a dependency
+  provide is an error (drop it with `"!gen/registry.cpp"`). `cmake_args`, `build_dir`
+  (default `build`) and `build_type` are passed to CMake.
 - `cmake_target`: one CMake `STATIC`, `SHARED`, `MODULE` library or `EXECUTABLE`, named by
   `project` (the `cmake_project`'s address, inferred as a dependency) and `cmake_name`
   (defaults to the target name). `pants package` writes its outputs at their build paths,
   `dist/<build_dir>/libfoo.a`. Object libraries are internal and are not addressed.
-- `cmake_test`: a test executable **Pants** compiles from `sources` (translation units and
-  the headers they include; optional when dependencies provide them) and links against the
-  `cmake_target` libraries in `dependencies`, then runs with `args` from the libraries'
-  build directory. The test is not a CMake target and nothing is read from CTest, but CMake
-  still decides how a consumer of each library is built: configure injects a *consumer
-  probe* per library and language (a hidden executable linking the library, see
-  `util_rules/probes.py`), and the test's translation units are compiled with the probe's
-  compile line (the library's PUBLIC and INTERFACE defines, include directories and options,
-  transitively, plus the project's global flags for that language) and linked with the
-  probe's link line (the library, everything it links against, system libraries such as
-  `-lm`, CMake's link flags and driver). PRIVATE settings of the library do not leak.
-  Libraries are taken in the order written; the first one's flags come first. The test adds
-  `include_dirs`, then `-I<root>` for every source root owning one of its or its
-  dependencies' files (so a vendored framework under its own root needs no `include_dirs`),
-  `defines`, `compiler_args` and `linker_args`. Translation units of direct `files`,
-  `cc_sources` or codegen dependencies are compiled in (a vendored test framework, a
-  generated runner, but never a library's own sources); their other files are staged for the
-  run, as are `runtime_package_dependencies`. `timeout` and `extra_env_vars` apply. A test
-  that fails to compile or link is reported as a failed test.
-- `cmake_tests`: a generator: one `cmake_test` per directory with translation units under
-  `sources`, named after the directory (`tests:cc#unit/ops/abs`), with that directory's
-  translation units and every header matched. The other fields apply to all generated
-  tests; `overrides={"c_abi": {"compiler_args": [...]}}` adjusts single ones.
+- `cmake_test`: a test executable **Pants** compiles from `sources` (optional when
+  dependencies provide the translation units) and links against the `cmake_target` libraries
+  in `dependencies`, in the order written, as CMake would build a consumer of them (see How
+  it works); nothing PRIVATE leaks. It adds `include_dirs`, `-I<root>` for every source root
+  owning one of its files, `defines`, `compiler_args` and `linker_args`, and runs with `args`
+  from the libraries' build directory. Translation units of direct `files`, `cc_sources` or
+  codegen dependencies are compiled in (a vendored framework, a generated runner; never a
+  library's own sources), and their other files are staged for the run with
+  `runtime_package_dependencies`. A test that fails to build is a failed test.
+- `cmake_tests`: a generator of one `cmake_test` per directory with translation units under
+  `sources` (`tests:cc#unit/ops/abs`); `overrides={"c_abi": {...}}` adjusts single ones.
 
-Another backend can run tests under a wrapper (an emulator, a tracer): it subclasses
-`CMakeTestWrapperRequest` (`goals/wrapper.py`), implements `is_applicable(target)` and a rule
-returning a `CMakeTestWrapper` (an argv prefix, digests mounted read-only into the sandbox,
-env), and registers it with a `UnionRule`. Typically it also adds a field to `cmake_test`
-with `register_plugin_field`, and to the `cmake_tests` generator with
-`register_plugin_field(..., as_moved_field=True)`, and reads it in `is_applicable`. At most
-one wrapper may apply to a test, and its env is set over the test's own. A wrapper that cannot
-be set up (its rule raises `CMakeTestWrapperError`, or a process it runs fails) is reported as
-a failed test; any other exception is a bug in the wrapper and fails the goal. Test executables
-are built under their address without its parameters, so `parametrize` over such a field (one
-that does not change the build) runs one build several ways.
+Another backend can run tests under a wrapper (an emulator, a tracer) through the
+`CMakeTestWrapperRequest` union; `goals/wrapper.py` documents the contract. Test executables
+are built under their address without parameters, so `parametrize` over a wrapper's field runs
+one build several ways.
 
 ## `cpp_generate`
 
@@ -86,9 +64,8 @@ backend_packages = [
 - `[cmake]`: the pinned CMake download (`version`, `known_versions`) and the host compilers
   (`c_compiler`, `cxx_compiler`, resolved on the system binary path). The `--version` output
   of the compilers and of `ar`, `ranlib` and `ld` is fingerprinted into every process, so a
-  host toolchain upgrade on a persistent cache invalidates correctly. (glibc and kernel
-  headers are not fingerprinted; a downloaded toolchain would put the whole toolchain in the
-  key by digest.)
+  host toolchain upgrade on a persistent cache invalidates correctly (glibc and kernel headers
+  are not).
 - `[ninja]`: the pinned Ninja download. Ninja is only needed by configure; the replay never
   runs it.
 - `[cmake-test-runner]`: `skip`.
@@ -110,10 +87,12 @@ backend_packages = [
    exactly its own inputs: the source, the headers it includes (from a per-TU `-M` scan), the
    configure-time generated files, and the outputs of the producers of its declared inputs.
    The engine schedules the dataflow and memoizes shared edges.
-4. **Test** (`pants test`): each test translation unit is scanned and compiled as its own
-   process with the consumer probe's flags, linked with the probe's link line against the
-   libraries built by the replay, and the executable runs from the build directory on the
-   libraries' runtime outputs.
+4. **Test** (`pants test`): configure injects a *consumer probe* per library and language, a
+   hidden executable linking the library (`util_rules/probes.py`). Each test translation unit
+   is scanned and compiled as its own process with the probe's compile line (PUBLIC and
+   INTERFACE requirements, transitively, plus the project's flags), linked with its link line
+   (the link closure and CMake's driver) against the replayed libraries, and the executable
+   runs from the build directory.
 
 ## Limitations
 
@@ -124,6 +103,8 @@ backend_packages = [
   Compiler launchers (`CMAKE_<LANG>_COMPILER_LAUNCHER`, `CMAKE_<LANG>_CLANG_TIDY`) are
   stripped for the scan but kept for the compile, where they need their own environment.
 - Ninja `dyndep` (C++ modules), `subninja` and validation inputs are not handled.
+- Two dependencies providing one path with different contents fail with the engine's
+  digest-merge error, which does not name the targets.
 - Debug and coverage builds embed the compile sandbox path (`DW_AT_comp_dir`, `.gcda`
   paths); `-ffile-prefix-map`/`-fprofile-prefix-map` are not injected yet.
 - Parametrized projects package to the same `dist/<build_dir>/` path.
