@@ -28,5 +28,6 @@
   configure, so a generated translation unit named in `add_library` configures.
 - A path both a `cmake_project`'s `sources` and one of its dependencies provide is a configure
   error naming the path and the `!` glob that drops it from `sources`.
+- `cmake_test.sources` is optional; translation units can come from `dependencies` alone.
 - `cmake_test` compiles with `-I<root>` for every source root owning one of its files or its
   dependencies' files, after `include_dirs`.

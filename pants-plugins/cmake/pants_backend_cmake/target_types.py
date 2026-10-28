@@ -30,10 +30,11 @@ class CMakeProjectSourcesField(MultipleSourcesField):
     required = True
     help = softwrap(
         """
-        Everything the build reads: CMake files, sources and headers. Configure sees the files
-        matching `configure_placeholders` as zero-byte placeholders (CMake only checks that
-        sources exist), so editing one never reruns configure; adding or removing one does.
-        Every other file is given to configure as is.
+        What CMake reads: the CMake files and configure-time inputs, plus any source or header
+        not provided by `dependencies` (preferably `cc_sources` targets own those). Configure
+        sees the files matching `configure_placeholders` as zero-byte placeholders (CMake only
+        checks that sources exist), so editing one never reruns configure; adding or removing one
+        does. Every other file is given to configure as is.
         """
     )
 
@@ -185,12 +186,11 @@ class CMakeTargetTarget(Target):
 
 class CMakeTestSourcesField(MultipleSourcesField):
     alias = "sources"
-    required = True
     help = softwrap(
         f"""
         The test's translation units ({", ".join(f"`{s}`" for s in TRANSLATION_UNIT_SUFFIXES)})
-        and the headers they include. Every translation unit is compiled and linked into one
-        executable.
+        and the headers they include; optional when `dependencies` provide them. Every
+        translation unit is compiled and linked into one executable.
         """
     )
 
@@ -204,7 +204,8 @@ class CMakeTestDependenciesField(Dependencies):
         targets that generate them (`relocated_files`, `cpp_generate`). A file with a
         translation-unit suffix in those is compiled into the executable (a vendored test
         framework, a generated runner); every other file is staged next to the build directory
-        when the test runs.
+        when the test runs. Not a library's own `cc_sources`: those would be compiled into the
+        test.
         """
     )
 

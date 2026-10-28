@@ -368,7 +368,7 @@ async def build_test(request: TestBuildRequest, platform: Platform) -> BuiltTest
     file_paths = tuple(sorted({*sources.files, *extra.files}))
     units = list(dict.fromkeys(p for p in (*sources.files, *extra.files) if is_translation_unit(p)))
     if not units:
-        raise TestBuildError(f"{address}: `sources` has no translation unit to compile")
+        raise TestBuildError(f"{address}: no translation unit to compile in `sources` or `dependencies`")
     # Optional roots: a file outside every root needs no include directory.
     roots = await get_optional_source_roots(SourceRootsRequest.for_files(file_paths))
     root_dirs = sorted(

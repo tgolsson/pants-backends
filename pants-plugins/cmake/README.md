@@ -11,15 +11,15 @@ compilers are resolved on the machine).
 
 ## Targets
 
-- `cmake_project`: the project. `sources` is everything the build reads: CMake files,
-  configure-time inputs, sources and headers. Files matching `configure_placeholders`
-  (sources and headers by default) are given to configure as zero-byte placeholders, so
-  editing one never reruns configure, only adding or removing one does; everything else
-  (`CMakeLists.txt`, `*.cmake`, `configure_file` inputs, `file(READ)` inputs) is given as
-  is. `dependencies` are `files`, `cc_sources` and codegen targets producing either (such as
-  `cpp_generate`, below); their files are mounted next to the sources for the compile and
-  link steps. Configure sees those matching `configure_placeholders` as placeholders, so a
-  generated translation unit named in `add_library` configures, and none of the others. A
+- `cmake_project`: the project. `sources` is what CMake reads: CMake files, configure-time
+  inputs, and any source or header no dependency provides. Files matching
+  `configure_placeholders` (sources and headers by default) are given to configure as
+  zero-byte placeholders, so editing one never reruns configure, only adding or removing one
+  does; everything else (`CMakeLists.txt`, `*.cmake`, `configure_file` inputs, `file(READ)`
+  inputs) is given as is. `dependencies` are `files`, `cc_sources` and codegen targets
+  producing either (such as `cpp_generate`, below); their files are mounted next to the
+  sources for the compile and link steps, and configure sees only those matching
+  `configure_placeholders`, as placeholders. A
   path both `sources` and a dependency provide is an error, here and for `cmake_test`: drop
   it from one of them (`"!gen/registry.cpp"` in `sources`).
   `cmake_args`, `build_dir` (default `build`) and `build_type` are passed to CMake.
@@ -28,21 +28,22 @@ compilers are resolved on the machine).
   (defaults to the target name). `pants package` writes its outputs at their build paths,
   `dist/<build_dir>/libfoo.a`. Object libraries are internal and are not addressed.
 - `cmake_test`: a test executable **Pants** compiles from `sources` (translation units and
-  the headers they include) and links against the `cmake_target` libraries in
-  `dependencies`, then runs with `args` from the libraries' build directory. The test is not
-  a CMake target and nothing is read from CTest, but CMake still decides how a consumer of
-  each library is built: configure injects a *consumer probe* per library and language (a
-  hidden executable linking the library, see `util_rules/probes.py`), and the test's
-  translation units are compiled with the probe's compile line (the library's PUBLIC and
-  INTERFACE defines, include directories and options, transitively, plus the project's
-  global flags for that language) and linked with the probe's link line (the library,
-  everything it links against, system libraries such as `-lm`, CMake's link flags and
-  driver). PRIVATE settings of the library do not leak. Libraries are taken in the order
-  written; the first one's flags come first. The test adds `include_dirs`, then `-I<root>`
-  for every source root owning one of its or its dependencies' files (so a vendored framework
-  under its own root needs no `include_dirs`), `defines`, `compiler_args` and `linker_args`.
-  Translation units found in `files`, `cc_sources` or codegen dependencies are compiled in
-  (a vendored test framework, a generated runner); their other files are staged for the
+  the headers they include; optional when dependencies provide them) and links against the
+  `cmake_target` libraries in `dependencies`, then runs with `args` from the libraries'
+  build directory. The test is not a CMake target and nothing is read from CTest, but CMake
+  still decides how a consumer of each library is built: configure injects a *consumer
+  probe* per library and language (a hidden executable linking the library, see
+  `util_rules/probes.py`), and the test's translation units are compiled with the probe's
+  compile line (the library's PUBLIC and INTERFACE defines, include directories and options,
+  transitively, plus the project's global flags for that language) and linked with the
+  probe's link line (the library, everything it links against, system libraries such as
+  `-lm`, CMake's link flags and driver). PRIVATE settings of the library do not leak.
+  Libraries are taken in the order written; the first one's flags come first. The test adds
+  `include_dirs`, then `-I<root>` for every source root owning one of its or its
+  dependencies' files (so a vendored framework under its own root needs no `include_dirs`),
+  `defines`, `compiler_args` and `linker_args`. Translation units of direct `files`,
+  `cc_sources` or codegen dependencies are compiled in (a vendored test framework, a
+  generated runner, but never a library's own sources); their other files are staged for the
   run, as are `runtime_package_dependencies`. `timeout` and `extra_env_vars` apply. A test
   that fails to compile or link is reported as a failed test.
 - `cmake_tests`: a generator: one `cmake_test` per directory with translation units under

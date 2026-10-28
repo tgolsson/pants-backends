@@ -4,6 +4,7 @@ libraries come from CMake, the tests are compiled and linked by Pants as consume
 from typing import Any
 
 import pytest
+from pants.backend.cc.target_types import CCSourcesGeneratorTarget
 from pants.core import target_types as core_target_types
 from pants.core.goals import package as core_package
 from pants.core.goals import test as core_test
@@ -192,7 +193,13 @@ def _rule_runner(*extra_rules: object) -> RuleRunner:
             QueryRule(Addresses, [DependenciesRequest]),
             QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
         ],
-        target_types=[*register.target_types(), FilesGeneratorTarget, RelocatedFiles, GenTarget],
+        target_types=[
+            *register.target_types(),
+            CCSourcesGeneratorTarget,
+            FilesGeneratorTarget,
+            RelocatedFiles,
+            GenTarget,
+        ],
         objects={"parametrize": Parametrize},
     )
 
@@ -399,6 +406,32 @@ def test_package_compiles_generated_source(rule_runner: RuleRunner) -> None:
     assert [a.relpath for a in library.artifacts] == ["build/libanswer.a"]
     result = _test(rule_runner, Address("", target_name="answer_test"))
     assert result.exit_code == 0, result.stderr_bytes.decode()
+
+
+def test_sources_from_cc_sources_dependencies(rule_runner: RuleRunner) -> None:
+    # Every C file comes from `cc_sources`; the project's `sources` is only CMakeLists.txt.
+    _write_project(
+        rule_runner,
+        BUILD=BUILD.replace(
+            'sources=["CMakeLists.txt", "*.c", "*.cpp", "include/*.h", "private/*.h"])',
+            'sources=["CMakeLists.txt"], dependencies=[":lib"])',
+        )
+        + 'cc_sources(name="lib", sources=["*.c", "*.cpp", "include/*.h", "private/*.h"])\n'
+        + 'cc_sources(name="owned", sources=["owned/*.c"])\n'
+        + 'cmake_test(name="owned_test", dependencies=[":demo", ":owned"])\n',
+        **{"owned/main.c": '#include "demo.h"\nint main(void) { return demo() == 42 ? 0 : 1; }\n'},
+    )
+    library = _package(rule_runner, "demo")
+    assert [a.relpath for a in library.artifacts] == ["build/libdemo.a"]
+    result = _test(rule_runner, Address("", target_name="owned_test"))
+    assert result.exit_code == 0, result.stderr_bytes.decode()
+
+
+def test_cmake_test_without_translation_units_is_a_failed_test(rule_runner: RuleRunner) -> None:
+    _write_project(rule_runner, BUILD=BUILD + 'cmake_test(name="empty", dependencies=[":demo"])\n')
+    result = _test(rule_runner, Address("", target_name="empty"))
+    assert result.exit_code == 1
+    assert "no translation unit to compile in `sources` or `dependencies`" in result.stderr_bytes.decode()
 
 
 def test_cmake_test_compiles_generated_runner(rule_runner: RuleRunner) -> None:
