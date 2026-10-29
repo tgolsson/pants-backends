@@ -18,8 +18,8 @@ from pants.engine.target import AllTargets
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
-from pants_backend_platforms.subsystems import PlatformsSubsystem
-from pants_backend_platforms.target_types import (
+from pants_backend_cc.subsystems import CcToolchainsSubsystem
+from pants_backend_cc.target_types import (
     CcToolchainArField,
     CcToolchainCcField,
     CcToolchainCxxField,
@@ -90,7 +90,7 @@ async def resolve_cc_toolchain(
     all_targets: AllTargets,
     system_binaries: SystemBinariesSubsystem.EnvironmentAware,
     bash: BashBinary,
-    subsystem: PlatformsSubsystem,
+    subsystem: CcToolchainsSubsystem,
 ) -> CcToolchain:
     toolchains = [t for t in all_targets if isinstance(t, CcToolchainTarget)]
     for tgt in toolchains:
@@ -105,13 +105,13 @@ async def resolve_cc_toolchain(
         and t[CcToolchainTargetField].value == request.platform.name
     ]
     native = request.platform == known.host
-    strict = " `[platforms].strict_toolchains` requires one for native builds too." if native else ""
+    strict = " `[cc-toolchains].strict` requires one for native builds too." if native else ""
     if len(matches) == 1:
         address = matches[0].address
         specs = tuple(
             matches[0][f].value for f in (CcToolchainCcField, CcToolchainCxxField, CcToolchainArField)
         )
-    elif native and not matches and not subsystem.strict_toolchains:
+    elif native and not matches and not subsystem.strict:
         specs = _IMPLICIT_NATIVE
     elif toolchains:
         pairs = sorted(

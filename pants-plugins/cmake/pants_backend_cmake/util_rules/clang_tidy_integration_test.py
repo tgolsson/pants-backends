@@ -1,5 +1,5 @@
-"""clang-tidy from the default lockfile on a small project built with the real CMake and the host
-compiler."""
+"""clang-tidy from the default lockfile over the compile steps of a small project configured with
+the real CMake and the host compiler."""
 
 from __future__ import annotations
 
@@ -22,10 +22,11 @@ from pants.engine.rules import QueryRule
 from pants.source import source_root
 from pants.testutil.python_rule_runner import PythonRuleRunner
 
+from pants_backend_cc import register as cc_register
+from pants_backend_cc.lint.clang_tidy import register
+from pants_backend_cc.lint.clang_tidy.rules import ClangTidyFieldSet, ClangTidyRequest
+from pants_backend_cc.testutil import GenTarget, codegen_rules
 from pants_backend_cmake import register as cmake_register
-from pants_backend_cmake.lint.clang_tidy import register
-from pants_backend_cmake.lint.clang_tidy.rules import ClangTidyFieldSet, ClangTidyRequest
-from pants_backend_cmake.testutil import GenTarget, codegen_rules
 from pants_backend_platforms import register as platforms_register
 
 CMAKELISTS = """\
@@ -98,7 +99,12 @@ def rule_runner() -> PythonRuleRunner:
             *codegen_rules(),
             QueryRule(LintResult, [ClangTidyRequest.Batch]),
         ],
-        target_types=[*cmake_register.target_types(), *platforms_register.target_types(), GenTarget],
+        target_types=[
+            *cmake_register.target_types(),
+            *platforms_register.target_types(),
+            *cc_register.target_types(),
+            GenTarget,
+        ],
     )
 
 
@@ -186,3 +192,21 @@ def test_paths_without_translation_units_fail(rule_runner: PythonRuleRunner) -> 
         ExecutionError, match=r"//:proj: no translation unit is under `clang_tidy_paths` \['scr'\]"
     ):
         _lint(rule_runner, DROP, BUILD=build)
+
+
+def test_generated_translation_units_are_not_linted(rule_runner: PythonRuleRunner) -> None:
+    generated = {
+        "CMakeLists.txt": CMAKELISTS + "configure_file(src/gen.cpp.in gen.cpp)\n"
+        "add_library(configured STATIC ${CMAKE_BINARY_DIR}/gen.cpp)\n",
+        "src/gen.cpp.in": RECURSIVE.format(name="configured"),
+    }
+    everything = FILES["BUILD"].replace('clang_tidy_paths=["src"]', 'clang_tidy_paths=["."]')
+    result = _lint(rule_runner, DROP, BUILD=everything, **generated)
+    assert _reported(result, "other/recursive.cpp:1:5: error: function 'other'") == 1, result.stdout
+    assert "'configured'" not in result.stdout
+
+    build_dir = FILES["BUILD"].replace('clang_tidy_paths=["src"]', 'clang_tidy_paths=["build"]')
+    with pytest.raises(
+        ExecutionError, match=r"//:proj: no translation unit is under `clang_tidy_paths` \['build'\]"
+    ):
+        _lint(rule_runner, DROP, BUILD=build_dir, **generated)

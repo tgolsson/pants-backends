@@ -1,0 +1,17 @@
+{
+  "version": 5,
+  "valid_for_interpreter_constraints": [
+    "CPython<3.15,>=3.9"
+  ],
+  "generated_with_requirements": [
+    "clang-tidy==18.1.8"
+  ],
+  "manylinux": "manylinux2014",
+  "requirement_constraints": [],
+  "only_binary": [],
+  "no_binary": [],
+  "excludes": [],
+  "overrides": [],
+  "sources": [],
+  "description": "The default lockfile of `[clang-tidy]` (pants_backend_cc). To regenerate it, lock the subsystem's `default_requirements` for its `default_interpreter_constraints` with `pants generate-lockfiles` in a scratch repository and copy the result here, keeping this metadata at version 5 for Pants 2.31."
+}

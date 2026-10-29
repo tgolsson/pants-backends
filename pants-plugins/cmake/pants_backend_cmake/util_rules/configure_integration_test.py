@@ -10,9 +10,10 @@ from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 
+from pants_backend_cc import register as cc
+from pants_backend_cc.testutil import GenTarget, codegen_rules
 from pants_backend_cmake.subsystems import cmake, ninja
 from pants_backend_cmake.target_types import targets
-from pants_backend_cmake.testutil import GenTarget, codegen_rules
 from pants_backend_cmake.util_rules import configure, toolchain
 from pants_backend_cmake.util_rules.canonicalize import PLACEHOLDER
 from pants_backend_cmake.util_rules.configure import ConfiguredProject, ConfigureRequest
@@ -42,7 +43,7 @@ def rule_runner() -> RuleRunner:
             *external_tool.rules(),
             *source_files.rules(),
             *system_binaries.rules(),
-            *platforms.rules(),
+            *cc.rules(),
             *cmake.rules(),
             *ninja.rules(),
             *toolchain.rules(),
@@ -50,7 +51,7 @@ def rule_runner() -> RuleRunner:
             *codegen_rules(),
             QueryRule(ConfiguredProject, [ConfigureRequest]),
         ],
-        target_types=[*targets(), *platforms.target_types(), GenTarget],
+        target_types=[*targets(), *platforms.target_types(), *cc.target_types(), GenTarget],
     )
 
 

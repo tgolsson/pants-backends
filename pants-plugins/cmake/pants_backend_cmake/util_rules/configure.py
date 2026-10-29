@@ -45,6 +45,7 @@ from pants.engine.target import DependenciesRequest, SourcesField, WrappedTarget
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
+from pants_backend_cc.util_rules.fields import overlap_error
 from pants_backend_cmake.ninja.graph import CMakeTargetInfo, discover_targets
 from pants_backend_cmake.ninja.parser import NinjaGraph, parse_ninja
 from pants_backend_cmake.target_types import (
@@ -129,21 +130,6 @@ def tool_mismatches(compiler_files: Iterable[str], expected: Mapping[str, str]) 
         for var, path in expected.items()
         if used.get(var, path) != path
     ]
-
-
-def overlap_error(address: Address, sources: tuple[str, ...], extra: tuple[str, ...]) -> str | None:
-    """Two copies of one path must never reach a compile: which one won would depend on merge
-    order."""
-    overlap = sorted(set(sources) & set(extra))
-    if not overlap:
-        return None
-    first = overlap[0]
-    prefix = f"{address.spec_path}/" if address.spec_path else ""
-    relative = first[len(prefix) :] if first.startswith(prefix) else first
-    return (
-        f"{address}: `sources` and a dependency both provide {overlap}; drop it from one of them, "
-        f'e.g. "!{relative}" in `sources`'
-    )
 
 
 @rule(desc="Configure CMake project", level=LogLevel.DEBUG)

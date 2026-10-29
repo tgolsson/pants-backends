@@ -5,16 +5,11 @@
 - Initial release: `cmake_project` and `cmake_target`, pinned CMake and Ninja, placeholder
   configure with a sandbox-independent configured tree, one cached process per Ninja edge for
   `package`.
-- `cmake_test` and the `cmake_tests` generator: tests compiled and linked by Pants as consumers
-  of `cmake_target` libraries, with CMake's consumer probes, run from the build directory.
-  Parametrizations of a test share its build.
-- `CMakeTestWrapperRequest`: run `cmake_test` executables under a wrapper.
-- `dependencies` of `cmake_project` and `cmake_test` bring `files`, `cc_sources` and codegen
-  producing either; `cmake_test.sources` is optional, and source roots become `-I` flags. A
+- Static and shared `cmake_target`s are pants-backend-cc libraries, read from CMake's
+  consumer probes, for `cc_test`.
+- `dependencies` of `cmake_project` bring `files`, `cc_sources` and codegen producing either. A
   path both `sources` and a dependency provide is an error.
-- `pants_backend_cmake.generate`: `cpp_generate`, formatted with `[clang-format]`.
-- `pants_backend_cmake.lint.clang_tidy`: `[clang-tidy]` under `pants lint`, one process per
-  compile edge in the edge's sandbox; `clang_tidy_paths` on `cmake_project`.
-- Platforms through pants-backend-platforms: compilers from `cc_toolchain`,
-  `cmake_toolchain_file`, and `platforms` on `cmake_target`. **Breaking:** `[cmake].c_compiler`
-  and `[cmake].cxx_compiler` are removed.
+- `cmake_project` provides pants-backend-cc compile steps, one per compile edge in the edge's
+  sandbox, and has `clang_tidy_paths` for `pants_backend_cc.lint.clang_tidy`.
+- Platforms through pants-backend-platforms: compilers from `cc_toolchain` (pants-backend-cc),
+  `cmake_toolchain_file`, and `platforms` on `cmake_target`.

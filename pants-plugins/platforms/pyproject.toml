@@ -1,6 +1,6 @@
 [project]
 name = "pants_backend_platforms"
-description = "Multi-platform builds for Pants backends: platform and cc_toolchain targets and a contract for building dependencies per platform."
+description = "Multi-platform builds for Pants backends: platform targets and a contract for building dependencies per platform."
 version = "0.1.0"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
@@ -9,7 +9,7 @@ authors = [
 dependencies = []
 readme = "README.md"
 license = {file = "LICENSE-MIT.txt"}
-keywords = ["pantsbuild", "pants", "backend", "cross-compilation", "platforms", "toolchain"]
+keywords = ["pantsbuild", "pants", "backend", "cross-compilation", "platforms"]
 
 classifiers = [
   "Development Status :: 3 - Alpha",

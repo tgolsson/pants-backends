@@ -1,7 +1,7 @@
 [tool.isort]
 profile = "black"
 line_length = 100
-known_first_party = ["pants_backend_oci", "pants_backend_mdbook", "pants_backend_kustomize", "pants_backend_k8s", "pants_backend_secrets", "pants_backend_bitwarden", "pants_backend_distroless", "pants_backend_cmake", "pants_backend_generate", "pants_backend_platforms"]
+known_first_party = ["pants_backend_oci", "pants_backend_mdbook", "pants_backend_kustomize", "pants_backend_k8s", "pants_backend_secrets", "pants_backend_bitwarden", "pants_backend_distroless", "pants_backend_cc", "pants_backend_cmake", "pants_backend_generate", "pants_backend_platforms"]
 
 default_section = "THIRDPARTY"
 

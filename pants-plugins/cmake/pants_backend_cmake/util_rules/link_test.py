@@ -6,18 +6,15 @@ from pathlib import Path
 import pytest
 from pants.util.frozendict import FrozenDict
 
+from pants_backend_cc.util_rules.compile import ASM, CXX, C
+from pants_backend_cc.util_rules.library import CcLibraryError
 from pants_backend_cmake.ninja.graph import discover_targets
 from pants_backend_cmake.ninja.parser import NinjaEdge, parse_ninja
-from pants_backend_cmake.util_rules.executable import (
-    CXX,
-    C,
-    TestBuildError,
+from pants_backend_cmake.util_rules.link import (
     compile_flags,
     consumer_compile_flags,
     consumer_link,
     edge_language,
-    language,
-    merge_flags,
 )
 
 TESTDATA = Path(__file__).parent.parent / "ninja" / "testdata"
@@ -106,18 +103,13 @@ def capture():
     return graph, discover_targets(graph)
 
 
-def test_language():
-    assert language("a.c") == C
-    assert language("a.cpp") == CXX
-    assert language("a.cc") == CXX
-
-
 def test_edge_language():
     def edge(rule):
         return NinjaEdge(rule, ("o",), (), ("i",), (), (), FrozenDict(), None)
 
     assert edge_language(edge("C_COMPILER__x_")) == C
     assert edge_language(edge("CXX_EXECUTABLE_LINKER__x_")) == CXX
+    assert edge_language(edge("ASM_NASM_COMPILER__x_")) == ASM
     assert edge_language(edge("CUSTOM_COMMAND")) is None
 
 
@@ -162,15 +154,5 @@ def test_consumer_link(graph, targets):
 
 def test_missing_probe_is_an_error(capture):
     graph, targets = capture
-    with pytest.raises(TestBuildError, match="no consumer probe `__pants_probe_demo_C`"):
+    with pytest.raises(CcLibraryError, match="no consumer probe `__pants_probe_demo_C`"):
         consumer_compile_flags(graph, targets, "..", "demo", C)
-
-
-def test_merge_flags():
-    assert merge_flags(("-DA", "-I../a", "-O2"), ("-DB", "-O2", "-I../b"), ("-DA",)) == (
-        "-DA",
-        "-I../a",
-        "-O2",
-        "-DB",
-        "-I../b",
-    )

@@ -1,12 +1,9 @@
-"""`pants test` for `cmake_test` targets: the executable Pants compiled and linked (see
-`util_rules/executable.py`), run from the libraries' build directory with the target's `args`.
-Staged with it: the libraries it links against, the packages in `runtime_package_dependencies`,
-and the files of its `dependencies`. A test that fails to build, or whose wrapper
-cannot be set up, is a failed test, not a crashed goal. Another backend can run the executable
-under a wrapper (`wrapper.py`)."""
+"""`pants test` for `cc_test`: runs what `util_rules/executable.py` builds. A test that fails
+to build, or whose wrapper cannot be set up, is a failed test rather than a crashed goal."""
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,45 +35,46 @@ from pants.option.option_types import SkipOption
 from pants.option.subsystem import Subsystem
 from pants.util.logging import LogLevel
 
-from pants_backend_cmake.goals.wrapper import CMakeTestWrapperError, cmake_test_wrapper
-from pants_backend_cmake.target_types import (
-    CMakeTestArgsField,
-    CMakeTestExtraEnvVarsField,
-    CMakeTestRuntimePackageDependenciesField,
-    CMakeTestSourcesField,
-    CMakeTestTimeoutField,
+from pants_backend_cc.goals.wrapper import CcTestWrapperError, cc_test_wrapper
+from pants_backend_cc.target_types import (
+    CcTestArgsField,
+    CcTestExtraEnvVarsField,
+    CcTestRuntimePackageDependenciesField,
+    CcTestSourcesField,
+    CcTestTimeoutField,
 )
-from pants_backend_cmake.util_rules.executable import TestBuildError, TestBuildRequest, build_test
-from pants_backend_cmake.util_rules.scan import ScanError
+from pants_backend_cc.util_rules.executable import TestBuildError, TestBuildRequest, build_test
+from pants_backend_cc.util_rules.library import CcLibraryError
+from pants_backend_cc.util_rules.scan import ScanError
 
 
-class CMakeTestSubsystem(Subsystem):
-    options_scope = "cmake-test-runner"
-    name = "CMake tests"
-    help = "Builds and runs `cmake_test` executables."
+class CcTestSubsystem(Subsystem):
+    options_scope = "cc-test-runner"
+    name = "C/C++ tests"
+    help = "Builds and runs `cc_test` executables."
 
     skip = SkipOption("test")
 
 
 @dataclass(frozen=True)
-class CMakeTestFieldSet(TestFieldSet):
-    required_fields = (CMakeTestSourcesField, CMakeTestArgsField)
+class CcTestFieldSet(TestFieldSet):
+    required_fields = (CcTestSourcesField, CcTestArgsField)
 
-    sources: CMakeTestSourcesField
-    args: CMakeTestArgsField
-    timeout: CMakeTestTimeoutField
-    extra_env_vars: CMakeTestExtraEnvVarsField
-    runtime_package_dependencies: CMakeTestRuntimePackageDependenciesField
+    sources: CcTestSourcesField
+    args: CcTestArgsField
+    timeout: CcTestTimeoutField
+    extra_env_vars: CcTestExtraEnvVarsField
+    runtime_package_dependencies: CcTestRuntimePackageDependenciesField
 
 
-class CMakeTestRequest(TestRequest):
-    tool_subsystem = CMakeTestSubsystem
-    field_set_type = CMakeTestFieldSet
+class CcTestRequest(TestRequest):
+    tool_subsystem = CcTestSubsystem
+    field_set_type = CcTestFieldSet
     supports_debug = True
 
 
 async def _test_process(
-    field_set: CMakeTestFieldSet,
+    field_set: CcTestFieldSet,
     test_subsystem: TestSubsystem,
     test_extra_env: TestExtraEnv,
     union_membership: UnionMembership,
@@ -91,18 +89,17 @@ async def _test_process(
     wrapped = await resolve_target(
         WrappedTargetRequest(field_set.address, description_of_origin="<infallible>"), **implicitly()
     )
-    wrapper = await cmake_test_wrapper(wrapped.target, union_membership)
-    project = built.project
+    wrapper = await cc_test_wrapper(wrapped.target, union_membership)
     input_digest = await merge_digests(
-        MergeDigests([project.build_dir_digest, built.runtime, built.data, *(p.digest for p in packages)])
+        MergeDigests([built.runtime, built.data, *(p.digest for p in packages)])
     )
-    executable = built.executable[len(project.build_dir) + 1 :]
+    executable = os.path.relpath(built.executable, built.cwd or ".")
     return Process(
         argv=(*wrapper.argv_prefix, f"./{executable}", *(field_set.args.value or ())),
         description=f"Run {field_set.address}",
         input_digest=input_digest,
         immutable_input_digests=wrapper.immutable_input_digests,
-        working_directory=project.build_dir,
+        working_directory=built.cwd or None,
         env={**test_extra_env.env, **field_env, **wrapper.env},
         timeout_seconds=field_set.timeout.calculate_from_global_options(test_subsystem),
         cache_scope=ProcessCacheScope.PER_SESSION if test_subsystem.force else ProcessCacheScope.SUCCESSFUL,
@@ -110,9 +107,7 @@ async def _test_process(
     )
 
 
-def _build_failure(
-    field_set: CMakeTestFieldSet, error: Exception, test_subsystem: TestSubsystem
-) -> TestResult:
+def _build_failure(field_set: CcTestFieldSet, error: Exception, test_subsystem: TestSubsystem) -> TestResult:
     return TestResult(
         exit_code=1,
         stdout_bytes=b"",
@@ -125,9 +120,9 @@ def _build_failure(
     )
 
 
-@rule(desc="Run CMake test", level=LogLevel.DEBUG)
-async def run_cmake_test(
-    batch: CMakeTestRequest.Batch[CMakeTestFieldSet, Any],
+@rule(desc="Run C/C++ test", level=LogLevel.DEBUG)
+async def run_cc_test(
+    batch: CcTestRequest.Batch[CcTestFieldSet, Any],
     test_subsystem: TestSubsystem,
     test_extra_env: TestExtraEnv,
     union_membership: UnionMembership,
@@ -135,7 +130,13 @@ async def run_cmake_test(
     field_set = batch.single_element
     try:
         process = await _test_process(field_set, test_subsystem, test_extra_env, union_membership)
-    except (ProcessExecutionFailure, ScanError, TestBuildError, CMakeTestWrapperError) as error:
+    except (
+        ProcessExecutionFailure,
+        ScanError,
+        TestBuildError,
+        CcLibraryError,
+        CcTestWrapperError,
+    ) as error:
         return _build_failure(field_set, error, test_subsystem)
     results = []
     for _ in range(test_subsystem.attempts_default):
@@ -148,9 +149,9 @@ async def run_cmake_test(
     )
 
 
-@rule(desc="Set up CMake test for debugging", level=LogLevel.DEBUG)
-async def debug_cmake_test(
-    batch: CMakeTestRequest.Batch[CMakeTestFieldSet, Any],
+@rule(desc="Set up C/C++ test for debugging", level=LogLevel.DEBUG)
+async def debug_cc_test(
+    batch: CcTestRequest.Batch[CcTestFieldSet, Any],
     test_subsystem: TestSubsystem,
     test_extra_env: TestExtraEnv,
     union_membership: UnionMembership,
@@ -160,4 +161,4 @@ async def debug_cmake_test(
 
 
 def rules():
-    return [*collect_rules(), *CMakeTestRequest.rules()]
+    return [*collect_rules(), *CcTestRequest.rules()]

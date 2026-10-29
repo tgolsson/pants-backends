@@ -1,4 +1,4 @@
-"""`cmake_tests`: one `cmake_test` per directory of translation units."""
+"""`cc_tests`: one `cc_test` per directory of translation units."""
 
 from __future__ import annotations
 
@@ -10,25 +10,25 @@ from pants.engine.target import GeneratedTargets, GenerateTargetsRequest, Source
 from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.logging import LogLevel
 
-from pants_backend_cmake.target_types import (
-    CMakeTestsGeneratorTarget,
-    CMakeTestSourcesField,
-    CMakeTestsSourcesField,
-    CMakeTestTarget,
+from pants_backend_cc.target_types import (
+    CcTestsGeneratorTarget,
+    CcTestSourcesField,
+    CcTestsSourcesField,
+    CcTestTarget,
     is_translation_unit,
 )
 
 
-class GenerateCMakeTestsRequest(GenerateTargetsRequest):
-    generate_from = CMakeTestsGeneratorTarget
+class GenerateCcTestsRequest(GenerateTargetsRequest):
+    generate_from = CcTestsGeneratorTarget
 
 
-@rule(desc="Generate cmake_test targets", level=LogLevel.DEBUG)
-async def generate_cmake_tests(
-    request: GenerateCMakeTestsRequest, union_membership: UnionMembership
+@rule(desc="Generate cc_test targets", level=LogLevel.DEBUG)
+async def generate_cc_tests(
+    request: GenerateCcTestsRequest, union_membership: UnionMembership
 ) -> GeneratedTargets:
     generator = request.generator
-    paths = await resolve_source_paths(SourcesPathsRequest(generator[CMakeTestsSourcesField]), **implicitly())
+    paths = await resolve_source_paths(SourcesPathsRequest(generator[CcTestsSourcesField]), **implicitly())
     spec_path = generator.address.spec_path
     units_by_dir: dict[str, list[str]] = {}
     headers: list[str] = []
@@ -47,10 +47,10 @@ async def generate_cmake_tests(
             f"Generated: {sorted(units_by_dir)}"
         )
     targets = [
-        CMakeTestTarget(
+        CcTestTarget(
             {
                 **request.template,
-                CMakeTestSourcesField.alias: (*units, *headers),
+                CcTestSourcesField.alias: (*units, *headers),
                 **overrides.get(name, {}),
             },
             request.template_address.create_generated(name),
@@ -62,4 +62,4 @@ async def generate_cmake_tests(
 
 
 def rules():
-    return [*collect_rules(), UnionRule(GenerateTargetsRequest, GenerateCMakeTestsRequest)]
+    return [*collect_rules(), UnionRule(GenerateTargetsRequest, GenerateCcTestsRequest)]

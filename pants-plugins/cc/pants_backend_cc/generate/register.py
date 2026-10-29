@@ -1,18 +1,20 @@
 """`cpp_generate`: an optional sub-backend, since its formatter is a pex and needs
-`pants.backend.python`, which `pants_backend_cmake` itself does not."""
+`pants.backend.python`, which `pants_backend_cc` itself does not."""
 
 from __future__ import annotations
 
 from pants.backend.cc.target_types import CCSourceField
 
 try:
-    from pants_backend_cmake.generate import clang_format
-    from pants_backend_cmake.generate.clang_format import ClangFormatOutputsRequest
+    from pants_backend_cc.generate import clang_format
+    from pants_backend_cc.generate.clang_format import ClangFormatOutputsRequest
     from pants_backend_generate.specialization import GenerateSpecialization
-except ImportError as e:
+except ModuleNotFoundError as e:
+    if e.name != "pants_backend_generate":
+        raise
     raise ImportError(
-        "`pants_backend_cmake.generate` needs the `pants-backend-generate` distribution: install "
-        "`pants_backend_cmake[generate]` or add `pants-backend-generate` to `[GLOBAL].plugins`."
+        "`pants_backend_cc.generate` needs the `pants-backend-generate` distribution: install "
+        "`pants_backend_cc[generate]` or add `pants-backend-generate` to `[GLOBAL].plugins`."
     ) from e
 
 cpp_generate = GenerateSpecialization(

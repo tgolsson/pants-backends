@@ -20,7 +20,7 @@ class ClangTidy(PythonToolBase):
     help_short = softwrap(
         """
         clang-tidy (https://clang.llvm.org/extra/clang-tidy/) over the translation units of
-        `cmake_project` targets, from its PyPI wheel (https://pypi.org/project/clang-tidy/).
+        targets with `clang_tidy_paths`, from its PyPI wheel (https://pypi.org/project/clang-tidy/).
         """
     )
 
@@ -30,7 +30,7 @@ class ClangTidy(PythonToolBase):
     register_interpreter_constraints = True
     default_interpreter_constraints = ["CPython>=3.9,<3.15"]
 
-    default_lockfile_resource = ("pants_backend_cmake.lint.clang_tidy", "clang_tidy.lock")
+    default_lockfile_resource = ("pants_backend_cc.lint.clang_tidy", "clang_tidy.lock")
 
     skip = SkipOption("lint")
     args = ArgsListOption(example="--checks=-*,bugprone-*")

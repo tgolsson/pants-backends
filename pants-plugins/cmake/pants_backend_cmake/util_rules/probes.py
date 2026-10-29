@@ -6,8 +6,8 @@ library. CMake then writes into `build.ninja` exactly what a consumer of that li
 compiled and linked with: its PUBLIC and INTERFACE defines, include directories and options,
 transitively, with the directory's global flags for that language; and the full transitive
 link line (`libfoo.a -lm`, the static libraries behind it, system libraries). PRIVATE
-requirements of the library are not in it, because CMake never gives them to a consumer. The
-test build reads these edges instead of guessing from the library's own compile lines. The
+requirements of the library are not in it, because CMake never gives them to a consumer.
+`link.py` reads these edges instead of guessing from the library's own compile lines. The
 probes are never built.
 """
 

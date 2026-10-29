@@ -6,7 +6,7 @@ authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]
 
-dependencies = ["pants_backend_platforms>=0.1.0"]
+dependencies = ["pants_backend_cc>=0.1.0", "pants_backend_platforms>=0.1.0"]
 readme = "README.md"
 license = {file = "LICENSE-MIT.txt"}
 keywords = ["pantsbuild", "pants", "backend", "cmake", "ninja", "c", "c++"]
@@ -16,9 +16,6 @@ classifiers = [
   "Programming Language :: Python",
   "Topic :: Software Development :: Build Tools",
 ]
-
-[project.optional-dependencies]
-generate = ["pants_backend_generate>=0.1.0"]
 
 [project.urls]
 Repository = "https://github.com/tgolsson/pants-backends"

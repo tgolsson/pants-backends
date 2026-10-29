@@ -1,5 +1,5 @@
 """The tools every configure, scan and replay process runs with: the pinned CMake and Ninja
-downloads, and the `cc_toolchain` (pants-backend-platforms) for the platform being built, with
+downloads, and the `cc_toolchain` (pants-backend-cc) for the platform being built, with
 its `cmake_toolchain_file` when it has one."""
 
 from __future__ import annotations
@@ -17,15 +17,15 @@ from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import OptionalSingleSourceField, WrappedTargetRequest
 from pants.util.frozendict import FrozenDict
 
-from pants_backend_cmake.subsystems.cmake import CMakeTool
-from pants_backend_cmake.subsystems.ninja import NinjaTool
-from pants_backend_platforms.target_types import CcToolchainTarget
-from pants_backend_platforms.util_rules.platforms import TargetPlatform
-from pants_backend_platforms.util_rules.toolchain import (
+from pants_backend_cc.target_types import CcToolchainTarget
+from pants_backend_cc.util_rules.toolchain import (
     CcToolchain,
     CcToolchainRequest,
     resolve_cc_toolchain,
 )
+from pants_backend_cmake.subsystems.cmake import CMakeTool
+from pants_backend_cmake.subsystems.ninja import NinjaTool
+from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
 CMAKE_DIR = "__cmake"
 NINJA_DIR = "__ninja"

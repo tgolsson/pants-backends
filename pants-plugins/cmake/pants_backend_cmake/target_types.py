@@ -1,30 +1,17 @@
 from __future__ import annotations
 
-from pants.core.goals.test import (
-    RuntimePackageDependenciesField,
-    TestExtraEnvVarsField,
-    TestTimeoutField,
-)
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
     BoolField,
     Dependencies,
     MultipleSourcesField,
-    OverridesField,
     StringField,
     StringSequenceField,
     Target,
-    TargetGenerator,
 )
 from pants.util.strutil import softwrap
 
 from pants_backend_platforms.target_types import PlatformsField
-
-TRANSLATION_UNIT_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".c++")
-
-
-def is_translation_unit(path: str) -> bool:
-    return path.endswith(TRANSLATION_UNIT_SUFFIXES)
 
 
 class CMakeProjectSourcesField(MultipleSourcesField):
@@ -182,161 +169,5 @@ class CMakeTargetTarget(Target):
     )
 
 
-# ---------------------------------------------------------------------------------------------
-# Tests: compiled and linked by Pants against `cmake_target` libraries; CMake is not involved.
-# ---------------------------------------------------------------------------------------------
-
-
-class CMakeTestSourcesField(MultipleSourcesField):
-    alias = "sources"
-    help = softwrap(
-        f"""
-        The test's translation units ({", ".join(f"`{s}`" for s in TRANSLATION_UNIT_SUFFIXES)})
-        and the headers they include; optional when `dependencies` provide them. Every
-        translation unit is compiled and linked into one executable.
-        """
-    )
-
-
-class CMakeTestDependenciesField(Dependencies):
-    help = softwrap(
-        """
-        The `cmake_target` libraries the executable links against, in the order written here
-        (the first one's flags come first; each library brings everything it links against
-        itself, as CMake resolves it), plus `files`, `resources` and `cc_sources` targets, or
-        targets that generate them (`relocated_files`, `cpp_generate`). A file with a
-        translation-unit suffix in those is compiled into the executable (a vendored test
-        framework, a generated runner); every other file is staged next to the build directory
-        when the test runs. Not a library's own `cc_sources`: those would be compiled into the
-        test.
-        """
-    )
-
-
-class CMakeTestIncludeDirsField(StringSequenceField):
-    alias = "include_dirs"
-    default = ()
-    help = softwrap(
-        """
-        Include directories for the test's translation units, relative to this BUILD file. They
-        come before the source roots of the test's and its dependencies' files, which are added
-        too.
-        """
-    )
-
-
-class CMakeTestDefinesField(StringSequenceField):
-    alias = "defines"
-    default = ()
-    help = "Preprocessor definitions for the test's translation units, as `NAME` or `NAME=VALUE`."
-
-
-class CMakeTestCompilerArgsField(StringSequenceField):
-    alias = "compiler_args"
-    default = ()
-    help = softwrap(
-        """
-        Extra arguments for every compile, after the flags CMake gives a consumer of the
-        libraries in `dependencies`: their PUBLIC and INTERFACE defines, include directories
-        and options, and the project's global flags for the translation unit's language. The
-        libraries' PRIVATE settings are not included.
-        """
-    )
-
-
-class CMakeTestLinkerArgsField(StringSequenceField):
-    alias = "linker_args"
-    default = ()
-    help = softwrap(
-        """
-        Extra arguments for the link, after the objects and the link line CMake gives a
-        consumer of the libraries (the libraries themselves, everything they link against,
-        system libraries such as `-lm`). The link runs the C++ compiler when the test has C++
-        translation units or CMake links a C consumer of one of the libraries with it, else
-        the C compiler, with CMake's link flags for that language.
-        """
-    )
-
-
-class CMakeTestArgsField(StringSequenceField):
-    alias = "args"
-    default = ()
-    help = "Arguments the test executable is run with."
-
-
-class CMakeTestTimeoutField(TestTimeoutField):
-    pass
-
-
-class CMakeTestExtraEnvVarsField(TestExtraEnvVarsField):
-    pass
-
-
-class CMakeTestRuntimePackageDependenciesField(RuntimePackageDependenciesField):
-    pass
-
-
-_TEST_SETTINGS_FIELDS = (
-    CMakeTestDependenciesField,
-    CMakeTestIncludeDirsField,
-    CMakeTestDefinesField,
-    CMakeTestCompilerArgsField,
-    CMakeTestLinkerArgsField,
-    CMakeTestArgsField,
-    CMakeTestTimeoutField,
-    CMakeTestExtraEnvVarsField,
-    CMakeTestRuntimePackageDependenciesField,
-)
-
-
-class CMakeTestTarget(Target):
-    alias = "cmake_test"
-    core_fields = (*COMMON_TARGET_FIELDS, CMakeTestSourcesField, *_TEST_SETTINGS_FIELDS)
-    help = softwrap(
-        """
-        A test executable Pants compiles from `sources` and links against the `cmake_target`
-        libraries in `dependencies`, then runs with `args` from the libraries' build directory
-        for `pants test`. CMake only builds the libraries.
-        """
-    )
-
-
-class CMakeTestsSourcesField(MultipleSourcesField):
-    alias = "sources"
-    required = True
-    help = softwrap(
-        """
-        Globs for the translation units and headers of every test, relative to this BUILD file.
-        Each directory with translation units becomes one `cmake_test` named after the directory
-        (`.` for this one), with that directory's translation units and all the headers.
-        """
-    )
-
-
-class CMakeTestsOverridesField(OverridesField):
-    help = softwrap(
-        """
-        Field values for individual generated tests, keyed by directory (the generated name):
-        `overrides={"c_abi": {"compiler_args": ["-std=c11"]}}`. A value replaces the field
-        for that test (an overridden `dependencies` must list the libraries again). A key
-        naming no generated test is an error.
-        """
-    )
-
-
-class CMakeTestsGeneratorTarget(TargetGenerator):
-    alias = "cmake_tests"
-    core_fields = (*COMMON_TARGET_FIELDS, CMakeTestsSourcesField, CMakeTestsOverridesField)
-    generated_target_cls = CMakeTestTarget
-    copied_fields = COMMON_TARGET_FIELDS
-    moved_fields = _TEST_SETTINGS_FIELDS
-    help = softwrap(
-        """
-        Generates one `cmake_test` per directory of translation units under `sources`. The
-        other fields apply to every generated test; `overrides` adjusts single ones.
-        """
-    )
-
-
 def targets():
-    return [CMakeProjectTarget, CMakeTargetTarget, CMakeTestTarget, CMakeTestsGeneratorTarget]
+    return [CMakeProjectTarget, CMakeTargetTarget]

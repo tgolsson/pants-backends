@@ -1,5 +1,5 @@
 """`package` and `test` on a small C project with the real CMake and the host compiler: the
-libraries come from CMake, the tests are compiled and linked by Pants as consumers."""
+libraries come from CMake, and `cc_test`s consume them through their link interface."""
 
 import shutil
 from typing import Any
@@ -14,35 +14,25 @@ from pants.core.goals.test import TestResult
 from pants.core.target_types import FilesGeneratorTarget, RelocatedFiles
 from pants.core.util_rules import env_vars, external_tool, source_files, system_binaries
 from pants.engine.addresses import Address, Addresses
-from pants.engine.fs import CreateDigest, DigestContents, FileContent
+from pants.engine.fs import DigestContents
 from pants.engine.internals.parametrize import Parametrize
-from pants.engine.internals.scheduler import ExecutionError
-from pants.engine.intrinsics import create_digest
-from pants.engine.rules import QueryRule, rule
+from pants.engine.rules import QueryRule
 from pants.engine.target import (
     Dependencies,
     DependenciesRequest,
     HydratedSources,
     HydrateSourcesRequest,
-    Tags,
-    Target,
 )
-from pants.engine.unions import UnionRule
 from pants.source import source_root
 from pants.testutil.rule_runner import RuleRunner
-from pants.util.frozendict import FrozenDict
 
+from pants_backend_cc import register as cc_register
+from pants_backend_cc.goals.test import CcTestFieldSet, CcTestRequest
+from pants_backend_cc.testutil import GenTarget, codegen_rules
+from pants_backend_cc.toy_library import ToyLibraryTarget, toy_library_rules
+from pants_backend_cc.util_rules import executable
 from pants_backend_cmake import register
 from pants_backend_cmake.goals.package import CMakeTargetFieldSet
-from pants_backend_cmake.goals.test import CMakeTestFieldSet, CMakeTestRequest
-from pants_backend_cmake.goals.wrapper import (
-    CMakeTestWrapper,
-    CMakeTestWrapperError,
-    CMakeTestWrapperRequest,
-)
-from pants_backend_cmake.target_types import CMakeTestSourcesField
-from pants_backend_cmake.testutil import GenTarget, codegen_rules
-from pants_backend_cmake.util_rules import executable
 from pants_backend_cmake.util_rules.toolchain import CMakeToolchainFileField
 from pants_backend_platforms import register as platforms_register
 from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
@@ -74,7 +64,7 @@ files(name="data", sources=["data/*.txt"])
 # nothing PRIVATE; the link line brings `libbase.a` and `-lm` behind demo. The framework's
 # check.c is compiled into every test; the C tests link a C++ library, so the link runs the
 # C++ driver.
-cmake_tests(
+cc_tests(
     name="tests",
     sources=["tests/**/*.c", "tests/**/*.h"],
     dependencies=[":demo", ":shared", ":cxxlib", ":framework"],
@@ -86,7 +76,7 @@ cmake_tests(
     },
 )
 
-cmake_test(
+cc_test(
     name="single",
     sources=["single.c", "extra/single.h"],
     dependencies=[":demo"],
@@ -132,62 +122,9 @@ FILES = {
 }
 
 
-class WrapTagged(CMakeTestWrapperRequest):
-    @classmethod
-    def is_applicable(cls, target: Target) -> bool:
-        return "wrapped" in (target[Tags].value or ())
-
-
-@rule
-async def wrap_tagged(request: WrapTagged) -> CMakeTestWrapper:
-    script = await create_digest(
-        CreateDigest(
-            [FileContent("run.sh", b'#!/bin/sh\necho "wrapped by $WRAPPER"\nexec "$@"\n', is_executable=True)]
-        )
-    )
-    return CMakeTestWrapper(
-        argv_prefix=("{chroot}/wrapper/run.sh",),
-        immutable_input_digests=FrozenDict({"wrapper": script}),
-        env=FrozenDict({"WRAPPER": "demo"}),
-    )
-
-
-class WrapTaggedToo(WrapTagged):
-    """A second wrapper for the same tests, which is an error."""
-
-
-@rule
-async def wrap_tagged_too(request: WrapTaggedToo) -> CMakeTestWrapper:
-    return CMakeTestWrapper()
-
-
-class WrapBroken(CMakeTestWrapperRequest):
-    @classmethod
-    def is_applicable(cls, target: Target) -> bool:
-        return "broken-wrapper" in (target[Tags].value or ())
-
-
-@rule
-async def wrap_broken(request: WrapBroken) -> CMakeTestWrapper:
-    raise CMakeTestWrapperError("no emulator today")
-
-
-class WrapBuggy(CMakeTestWrapperRequest):
-    @classmethod
-    def is_applicable(cls, target: Target) -> bool:
-        return "buggy-wrapper" in (target[Tags].value or ())
-
-
-@rule
-async def wrap_buggy(request: WrapBuggy) -> CMakeTestWrapper:
-    raise ValueError("a bug in the wrapper")
-
-
 def _rule_runner(*extra_rules: object) -> RuleRunner:
     return RuleRunner(
         rules=[
-            wrap_tagged,
-            UnionRule(CMakeTestWrapperRequest, WrapTagged),
             *extra_rules,
             *external_tool.rules(),
             *source_files.rules(),
@@ -200,17 +137,19 @@ def _rule_runner(*extra_rules: object) -> RuleRunner:
             *codegen_rules(),
             *register.rules(),
             QueryRule(BuiltPackage, [CMakeTargetFieldSet]),
-            QueryRule(TestResult, [CMakeTestRequest.Batch]),
+            QueryRule(TestResult, [CcTestRequest.Batch]),
             QueryRule(Addresses, [DependenciesRequest]),
             QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
         ],
         target_types=[
             *register.target_types(),
             *platforms_register.target_types(),
+            *cc_register.target_types(),
             CCSourcesGeneratorTarget,
             FilesGeneratorTarget,
             RelocatedFiles,
             GenTarget,
+            ToyLibraryTarget,
         ],
         objects={"parametrize": Parametrize},
     )
@@ -233,7 +172,7 @@ def _package(rule_runner: RuleRunner, name: str) -> BuiltPackage:
 
 def _test(rule_runner: RuleRunner, address: Address) -> TestResult:
     target = rule_runner.get_target(address)
-    batch: Any = CMakeTestRequest.Batch("", (CMakeTestFieldSet.create(target),), None)
+    batch: Any = CcTestRequest.Batch("", (CcTestFieldSet.create(target),), None)
     return rule_runner.request(TestResult, [batch])
 
 
@@ -249,23 +188,6 @@ def test_package(rule_runner: RuleRunner) -> None:
 
     shared = _package(rule_runner, "shared")
     assert [a.relpath for a in shared.artifacts] == ["build/libshared.so"]
-
-
-def test_generated_tests(rule_runner: RuleRunner) -> None:
-    _write_project(rule_runner)
-    generated = rule_runner.get_target(_generated("tests/pass"))
-    # The directory's translation units plus every header under the generator's sources.
-    assert generated[CMakeTestSourcesField].value == ("tests/pass/main.c", "tests/pass/helper.h")
-    assert rule_runner.get_target(_generated("tests/failing"))[CMakeTestSourcesField].value == (
-        "tests/failing/main.c",
-        "tests/pass/helper.h",
-    )
-
-
-def test_unknown_override_key(rule_runner: RuleRunner) -> None:
-    _write_project(rule_runner, BUILD=BUILD.replace('"tests/failing": {"args": []}', '"nope": {"args": []}'))
-    with pytest.raises(ExecutionError, match="names tests that are not generated: \\['nope'\\]"):
-        rule_runner.get_target(_generated("tests/pass"))
 
 
 def test_run_tests(rule_runner: RuleRunner) -> None:
@@ -286,13 +208,6 @@ def test_run_tests(rule_runner: RuleRunner) -> None:
     with_data = _test(rule_runner, _generated("tests/data"))
     assert with_data.exit_code == 0, with_data.stderr_bytes.decode()
     assert "hello world" in with_data.stdout_bytes.decode()
-
-
-def test_build_failure_is_a_failed_test(rule_runner: RuleRunner) -> None:
-    _write_project(rule_runner)
-    broken = _test(rule_runner, _generated("tests/broken"))
-    assert broken.exit_code == 1
-    assert "not_declared_anywhere" in broken.stderr_bytes.decode()
 
 
 def test_missing_header_names_the_test_and_the_include(rule_runner: RuleRunner) -> None:
@@ -319,65 +234,6 @@ def test_project_dependency_is_inferred(rule_runner: RuleRunner) -> None:
     target = rule_runner.get_target(Address("", target_name="demo"))
     addresses = rule_runner.request(Addresses, [DependenciesRequest(target[Dependencies])])
     assert Address("", target_name="proj") in addresses
-
-
-def test_wrapper(rule_runner: RuleRunner) -> None:
-    _write_project(
-        rule_runner, BUILD=BUILD.replace('name="single",', 'name="single",\n    tags=["wrapped"],')
-    )
-    # The wrapper's script is mounted at `{chroot}/wrapper`, runs before the executable with
-    # the wrapper's env, and the test's own result comes through.
-    single = _test(rule_runner, Address("", target_name="single"))
-    assert single.exit_code == 0, single.stderr_bytes.decode()
-    assert "wrapped by demo" in single.stdout_bytes.decode()
-
-    # A test no wrapper applies to runs as is.
-    passing = _test(rule_runner, _generated("tests/pass"))
-    assert passing.exit_code == 0, passing.stderr_bytes.decode()
-    assert "wrapped" not in passing.stdout_bytes.decode()
-
-
-def test_wrapper_problems_are_failed_tests() -> None:
-    rule_runner = _rule_runner(
-        wrap_tagged_too,
-        UnionRule(CMakeTestWrapperRequest, WrapTaggedToo),
-        wrap_broken,
-        UnionRule(CMakeTestWrapperRequest, WrapBroken),
-        wrap_buggy,
-        UnionRule(CMakeTestWrapperRequest, WrapBuggy),
-    )
-    _write_project(
-        rule_runner,
-        BUILD=BUILD.replace('name="single",', 'name="single",\n    tags=["wrapped"],')
-        + 'cmake_test(name="broken", sources=["single.c", "extra/single.h"], dependencies=[":demo"],'
-        ' include_dirs=["extra"], defines=["SINGLE_SCALE=2"], tags=["broken-wrapper"])\n'
-        + 'cmake_test(name="buggy", sources=["single.c", "extra/single.h"], dependencies=[":demo"],'
-        ' include_dirs=["extra"], defines=["SINGLE_SCALE=2"], tags=["buggy-wrapper"])\n',
-    )
-    # Two wrappers apply to `single`; the wrapper of `broken` cannot be set up. Each is that
-    # test's failure, not the goal's. A wrapper whose rule has a bug is not a failed test.
-    two = _test(rule_runner, Address("", target_name="single"))
-    assert two.exit_code == 1
-    assert "more than one test wrapper applies: ['WrapTagged', 'WrapTaggedToo']" in two.stderr_bytes.decode()
-    broken = _test(rule_runner, Address("", target_name="broken"))
-    assert broken.exit_code == 1
-    assert "WrapBroken failed: no emulator today" in broken.stderr_bytes.decode()
-    with pytest.raises(ExecutionError, match="a bug in the wrapper"):
-        _test(rule_runner, Address("", target_name="buggy"))
-
-
-def test_generated_data_files(rule_runner: RuleRunner) -> None:
-    # A dependency that generates files (here `relocated_files`) is staged like a `files` one.
-    _write_project(
-        rule_runner,
-        BUILD=BUILD.replace('"dependencies": [":demo", ":data"]', '"dependencies": [":demo", ":moved"]')
-        + 'files(name="raw", sources=["raw/*.txt"])\n'
-        + 'relocated_files(name="moved", files_targets=[":raw"], src="raw", dest="data")\n',
-        **{"raw/input.txt": "moved\n"},
-    )
-    with_data = _test(rule_runner, _generated("tests/data"))
-    assert with_data.exit_code == 0, with_data.stderr_bytes.decode()
-    assert "hello moved" in with_data.stdout_bytes.decode()
 
 
 def test_parametrizations_share_the_build(rule_runner: RuleRunner) -> None:
@@ -407,7 +263,7 @@ def test_package_compiles_generated_source(rule_runner: RuleRunner) -> None:
         BUILD=BUILD.replace('"private/*.h"])', '"private/*.h"], dependencies=[":gen"])')
         + 'test_gen(name="gen", sources=["gen/answer.cpp.in"])\n'
         + 'cmake_target(name="answer", project=":proj")\n'
-        + 'cmake_test(name="answer_test", sources=["answer_test.c"], dependencies=[":answer"])\n',
+        + 'cc_test(name="answer_test", sources=["answer_test.c"], dependencies=[":answer"])\n',
         **{
             "CMakeLists.txt": CMAKELISTS + "add_library(answer STATIC gen/answer.cpp)\n",
             "gen/answer.cpp.in": 'extern "C" int answer(void) { return 42; }\n',
@@ -430,70 +286,12 @@ def test_sources_from_cc_sources_dependencies(rule_runner: RuleRunner) -> None:
         )
         + 'cc_sources(name="lib", sources=["*.c", "*.cpp", "include/*.h", "private/*.h"])\n'
         + 'cc_sources(name="owned", sources=["owned/*.c"])\n'
-        + 'cmake_test(name="owned_test", dependencies=[":demo", ":owned"])\n',
+        + 'cc_test(name="owned_test", dependencies=[":demo", ":owned"])\n',
         **{"owned/main.c": '#include "demo.h"\nint main(void) { return demo() == 42 ? 0 : 1; }\n'},
     )
     library = _package(rule_runner, "demo")
     assert [a.relpath for a in library.artifacts] == ["build/libdemo.a"]
     result = _test(rule_runner, Address("", target_name="owned_test"))
-    assert result.exit_code == 0, result.stderr_bytes.decode()
-
-
-def test_cmake_test_without_translation_units_is_a_failed_test(rule_runner: RuleRunner) -> None:
-    _write_project(rule_runner, BUILD=BUILD + 'cmake_test(name="empty", dependencies=[":demo"])\n')
-    result = _test(rule_runner, Address("", target_name="empty"))
-    assert result.exit_code == 1
-    assert "no translation unit to compile in `sources` or `dependencies`" in result.stderr_bytes.decode()
-
-
-def test_cmake_test_compiles_generated_runner(rule_runner: RuleRunner) -> None:
-    _write_project(
-        rule_runner,
-        BUILD=BUILD
-        + 'test_gen(name="runner", sources=["runner/runner.cpp.in"])\n'
-        + 'cmake_test(name="with_runner", sources=["runner/cases.c"], dependencies=[":demo", ":runner"])\n',
-        **{
-            "runner/runner.cpp.in": 'extern "C" int run_cases(void);\nint main() { return run_cases(); }\n',
-            "runner/cases.c": '#include "demo.h"\nint run_cases(void) { return demo() == 42 ? 0 : 1; }\n',
-        },
-    )
-    result = _test(rule_runner, Address("", target_name="with_runner"))
-    assert result.exit_code == 0, result.stderr_bytes.decode()
-
-
-def test_cmake_test_sources_overlapping_generated_runner_is_a_failed_test(rule_runner: RuleRunner) -> None:
-    _write_project(
-        rule_runner,
-        BUILD=BUILD
-        + 'test_gen(name="runner", sources=["runner/runner.cpp.in"])\n'
-        + 'cmake_test(name="stale", sources=["runner/*.c", "runner/*.cpp"], '
-        'dependencies=[":demo", ":runner"])\n',
-        **{
-            "runner/runner.cpp.in": "int main() { return 0; }\n",
-            "runner/runner.cpp": "int main() { return 1; }\n",
-            "runner/cases.c": "int run_cases(void) { return 0; }\n",
-        },
-    )
-    result = _test(rule_runner, Address("", target_name="stale"))
-    assert result.exit_code == 1
-    message = result.stderr_bytes.decode()
-    assert "`sources` and a dependency both provide ['runner/runner.cpp']" in message
-    assert '"!runner/runner.cpp" in `sources`' in message
-
-
-def test_cmake_test_includes_source_roots(rule_runner: RuleRunner) -> None:
-    _write_project(
-        rule_runner,
-        BUILD=BUILD
-        + 'files(name="vendor", sources=["vendor/fw/*.h"])\n'
-        + 'cmake_test(name="rooted", sources=["rooted.c"], dependencies=[":demo", ":vendor"])\n',
-        **{
-            "vendor/fw/unity_like.h": "#define UNITY_LIKE 1\n",
-            "rooted.c": '#include "unity_like.h"\nint main(void) { return UNITY_LIKE == 1 ? 0 : 1; }\n',
-        },
-    )
-    rule_runner.set_options(["--source-root-patterns=['/', '/vendor/fw']"], env_inherit={"PATH"})
-    result = _test(rule_runner, Address("", target_name="rooted"))
     assert result.exit_code == 0, result.stderr_bytes.decode()
 
 
@@ -562,11 +360,11 @@ def test_toolchain_file_is_optional() -> None:
     assert hydrated.snapshot.files == ()
 
 
-def test_cmake_test_needs_the_host_platform(rule_runner: RuleRunner) -> None:
+def test_cc_test_needs_the_host_platform(rule_runner: RuleRunner) -> None:
     _write_project(
         rule_runner,
         BUILD=_with_platforms(BUILD, f'platforms=["{WINDOWS}"]', "demo")
-        + 'cmake_test(name="wintest", sources=["wintest.c"], dependencies=[":demo"])\n',
+        + 'cc_test(name="wintest", sources=["wintest.c"], dependencies=[":demo"])\n',
         **{
             "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
             f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n',
@@ -578,12 +376,12 @@ def test_cmake_test_needs_the_host_platform(rule_runner: RuleRunner) -> None:
     assert f"tests build for the host, {HOST}, but `//:demo` does not list it" in result.stderr_bytes.decode()
 
 
-def test_cmake_test_builds_for_the_host_only(rule_runner: RuleRunner) -> None:
+def test_cc_test_builds_for_the_host_only(rule_runner: RuleRunner) -> None:
     # No toolchain builds for Windows, so building the library for it would fail.
     _write_project(
         rule_runner,
         BUILD=_with_platforms(BUILD, f'platforms=["{HOST}", "{WINDOWS}"]', "demo")
-        + 'cmake_test(name="hosttest", sources=["hosttest.c"], dependencies=[":demo"])\n',
+        + 'cc_test(name="hosttest", sources=["hosttest.c"], dependencies=[":demo"])\n',
         **{
             "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
             f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n'
@@ -593,4 +391,120 @@ def test_cmake_test_builds_for_the_host_only(rule_runner: RuleRunner) -> None:
     )
     rule_runner.set_options([f"--platforms-enabled=['{WINDOWS}']"], env_inherit={"PATH"})
     result = _test(rule_runner, Address("", target_name="hosttest"))
+    assert result.exit_code == 0, result.stderr_bytes.decode()
+
+
+def test_cc_test_of_an_executable_is_a_failed_test(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner,
+        BUILD=BUILD
+        + 'cmake_target(name="tool", project=":proj")\n'
+        + 'cc_test(name="of_tool", sources=["single.c", "extra/single.h"], dependencies=[":tool"])\n',
+        **{
+            "CMakeLists.txt": CMAKELISTS + "add_executable(tool tool.c)\n",
+            "tool.c": "int main(void) { return 0; }\n",
+        },
+    )
+    result = _test(rule_runner, Address("", target_name="of_tool"))
+    assert result.exit_code == 1
+    assert (
+        "//:of_tool: cannot link against CMake target `tool` of //:tool (EXECUTABLE)"
+        in result.stderr_bytes.decode()
+    )
+
+
+# A second project, in another directory and so another build directory, enabling only C.
+C_ONLY = {
+    "c_only/BUILD": 'cmake_project(name="proj", sources=["CMakeLists.txt", "*.c"])\n'
+    'cmake_target(name="c_only", project=":proj")\n',
+    "c_only/CMakeLists.txt": "cmake_minimum_required(VERSION 3.20)\nproject(c_only LANGUAGES C)\n"
+    "add_library(c_only STATIC c_only.c)\n",
+    "c_only/c_only.c": "int c_only(void) { return 1; }\n",
+}
+
+
+def test_cc_test_in_a_language_the_project_lacks_is_a_failed_test(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner,
+        BUILD=BUILD + 'cc_test(name="cxx_on_c", sources=["cxx_on_c.cpp"], dependencies=["//c_only"])\n',
+        **C_ONLY,
+        **{"cxx_on_c.cpp": "int main() { return 0; }\n"},
+    )
+    result = _test(rule_runner, Address("", target_name="cxx_on_c"))
+    assert result.exit_code == 1
+    assert (
+        "//:cxx_on_c: no consumer probe `__pants_probe_c_only_CXX` for CMake target `c_only`: its "
+        "project does not enable the language" in result.stderr_bytes.decode()
+    )
+
+
+def test_coverage_build_writes_notes(rule_runner: RuleRunner) -> None:
+    # The project's coverage flags reach the test's compiles through the consumer flags.
+    flags = ", ".join(
+        f'"-DCMAKE_{v}=--coverage"'
+        for v in ("C_FLAGS", "CXX_FLAGS", "EXE_LINKER_FLAGS", "SHARED_LINKER_FLAGS")
+    )
+    _write_project(
+        rule_runner,
+        BUILD=BUILD.replace('"private/*.h"])', f'"private/*.h"], coverage=True, cmake_args=[{flags}])'),
+    )
+    built = rule_runner.request(
+        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="single"))]
+    )
+    notes = rule_runner.request(DigestContents, [built.coverage_notes])
+    assert [fc.path for fc in notes] == ["build/__pants_tests/.single/obj/single.c.gcno"]
+
+
+def test_cc_test_links_a_cmake_and_another_library(rule_runner: RuleRunner) -> None:
+    # The other backend's library takes the CMake build directory as its consumers' working
+    # directory.
+    rule_runner = _rule_runner(*toy_library_rules())
+    _write_project(
+        rule_runner,
+        BUILD=BUILD
+        + 'toy_library(name="toy", sources=["toy/toy.c", "toy/toy.h"])\n'
+        + 'cc_test(name="mixed", sources=["mixed.c"], dependencies=[":demo", ":toy"])\n',
+        **{
+            "toy/toy.c": "int toy(void) { return 5; }\n",
+            "toy/toy.h": "int toy(void);\n",
+            "mixed.c": '#include "demo.h"\n#include "toy/toy.h"\n'
+            "int main(void) { return demo() + toy() == 47 ? 0 : 1; }\n",
+        },
+    )
+    result = _test(rule_runner, Address("", target_name="mixed"))
+    assert result.exit_code == 0, result.stderr_bytes.decode()
+
+
+def test_cc_test_of_two_projects_is_a_failed_test(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner,
+        BUILD=BUILD
+        + 'cc_test(name="two", sources=["single.c", "extra/single.h"], dependencies=[":demo", "//c_only"])\n',
+        **C_ONLY,
+    )
+    result = _test(rule_runner, Address("", target_name="two"))
+    assert result.exit_code == 1
+    assert (
+        "//:two: the libraries need different working directories: ['//:demo: build', "
+        "'c_only:c_only: c_only/build']" in result.stderr_bytes.decode()
+    )
+
+
+def test_cc_test_compiles_each_language_with_its_flags(rule_runner: RuleRunner) -> None:
+    # demo gives C++ consumers `-std=gnu++17` and a define that the C unit must not see.
+    _write_project(
+        rule_runner,
+        BUILD=BUILD
+        + 'cc_test(name="mixed", sources=["mixed/main.cpp", "mixed/util.c"], dependencies=[":demo"])\n',
+        **{
+            "CMakeLists.txt": CMAKELISTS + "target_compile_features(demo PUBLIC cxx_std_17)\n"
+            "target_compile_definitions(demo INTERFACE $<$<COMPILE_LANGUAGE:CXX>:DEMO_CXX=1>)\n",
+            "mixed/main.cpp": "#if __cplusplus < 201703L || !defined(DEMO_CXX)\n"
+            '#error "no C++ consumer flags"\n#endif\n'
+            'extern "C" int util(void);\nint main() { return util(); }\n',
+            "mixed/util.c": '#ifdef DEMO_CXX\n#error "C++ consumer flags"\n#endif\n'
+            '#include "demo.h"\nint util(void) { return demo() == 42 ? 0 : 1; }\n',
+        },
+    )
+    result = _test(rule_runner, Address("", target_name="mixed"))
     assert result.exit_code == 0, result.stderr_bytes.decode()

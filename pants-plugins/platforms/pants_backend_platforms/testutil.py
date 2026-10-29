@@ -1,6 +1,6 @@
-"""Two toy backends for the tests. `toy_artifact` writes a file naming the platform and compiler
-it was built for and with, then its dependencies' files and its `tool`'s, built for the host.
-`toy_bundle` concatenates its dependencies."""
+"""Two toy backends for the tests. `toy_artifact` writes a file naming the platform it was built
+for, then its dependencies' files and its `tool`'s, built for the host. `toy_bundle` concatenates
+its dependencies."""
 
 from __future__ import annotations
 
@@ -41,11 +41,6 @@ from pants_backend_platforms.util_rules.contract import (
     package_for_platforms,
 )
 from pants_backend_platforms.util_rules.platforms import KnownPlatforms, TargetPlatform
-from pants_backend_platforms.util_rules.toolchain import (
-    CcToolchain,
-    CcToolchainRequest,
-    resolve_cc_toolchain,
-)
 
 HOST_OS, HOST_ARCH = {
     Platform.linux_x86_64: ("linux", "x86_64"),
@@ -111,6 +106,9 @@ class ToyShadowFieldSet(PlatformBuildFieldSet):
     required_fields = (ToyTextField,)
 
 
+_ENV = FrozenDict({"PATH": os.defpath})
+
+
 @dataclass(frozen=True)
 class ToyWrite:
     output: str
@@ -141,7 +139,6 @@ async def toy_write(request: ToyWrite, bash: BashBinary) -> PlatformBuild:
 
 @rule
 async def build_toy(field_set: ToyFieldSet, platform: TargetPlatform, known: KnownPlatforms) -> PlatformBuild:
-    toolchain = await resolve_cc_toolchain(CcToolchainRequest(platform), **implicitly())
     targets = await resolve_targets(**implicitly(DependenciesRequest(field_set.dependencies)))
     deps = await build_platform_dependencies(
         PlatformDependenciesRequest(field_set.address, tuple(targets), platform), **implicitly()
@@ -162,8 +159,8 @@ async def build_toy(field_set: ToyFieldSet, platform: TargetPlatform, known: Kno
         reads.extend(tool.files)
     suffix = ".exe" if platform.os == "windows" else ""
     output = os.path.join(field_set.address.spec_path, f"{field_set.address.target_name}{suffix}.txt")
-    header = f"{field_set.text.value} for {platform.name} with {os.path.basename(toolchain.cc.path)}"
-    write = ToyWrite(output, header, tuple(reads), tuple(digests), toolchain.env, f"toy {field_set.address}")
+    header = f"{field_set.text.value} for {platform.name}"
+    write = ToyWrite(output, header, tuple(reads), tuple(digests), _ENV, f"toy {field_set.address}")
     return await toy_write(write, **implicitly())
 
 
@@ -179,7 +176,7 @@ async def build_toy_bundle(field_set: ToyBundleFieldSet, platform: TargetPlatfor
         f"bundle for {platform.name}",
         tuple(f for b in deps.builds.values() for f in b.files),
         tuple(b.digest for b in deps.builds.values()),
-        FrozenDict({"PATH": os.defpath}),
+        _ENV,
         f"toy {field_set.address}",
     )
     return await toy_write(write, **implicitly())
@@ -218,24 +215,15 @@ def rule_runner(*extra) -> RuleRunner:
             UnionRule(PlatformBuildFieldSet, ToyBundleFieldSet),
             QueryRule(BuiltPackage, [ToyFieldSet]),
             QueryRule(BuiltPackage, [ToyBundleFieldSet]),
-            QueryRule(CcToolchain, [CcToolchainRequest]),
             *extra,
         ],
         target_types=[*register.target_types(), ToyArtifact, ToyBundle],
     )
 
 
-def platforms_build(*, toolchains: bool = True) -> str:
-    """The host and Windows, with (`toolchains`) a `cc_toolchain` for each whose tools are all
-    `bash`, which answers `--version` everywhere."""
-    build = (
+def platforms_build() -> str:
+    """The host and Windows."""
+    return (
         f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
         f'platform(name="{OTHER}", os="windows", arch="x86_64")\n'
     )
-    if toolchains:
-        for target in (HOST, OTHER):
-            build += (
-                f'cc_toolchain(name="to-{target}", host="{HOST}", target="{target}", '
-                'cc="bash", cxx="bash", ar="bash")\n'
-            )
-    return build

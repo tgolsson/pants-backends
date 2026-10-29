@@ -16,7 +16,7 @@ from pants.engine.rules import QueryRule
 from pants.engine.target import HydratedSources, HydrateSourcesRequest
 from pants.testutil.python_rule_runner import PythonRuleRunner
 
-from pants_backend_cmake.generate import register
+from pants_backend_cc.generate import register
 from pants_backend_generate import register as generate_register
 from pants_backend_generate.goals.generate import Generate
 from pants_backend_generate.target_types import GenerateSourcesField

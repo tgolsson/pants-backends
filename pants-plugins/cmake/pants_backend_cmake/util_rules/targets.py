@@ -1,12 +1,11 @@
-"""From a `cmake_target`/`cmake_test` address to its configured project and discovered CMake
+"""From a `cmake_target` address to its configured project and discovered CMake
 target, and the inferred dependency on the project (so `--changed-dependents` follows it)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pants.engine.addresses import Address, AddressInput
-from pants.engine.internals.build_files import maybe_resolve_address, resolve_address
+from pants.engine.addresses import Address
 from pants.engine.internals.graph import resolve_target
 from pants.engine.rules import collect_rules, implicitly, rule
 from pants.engine.target import (
@@ -17,6 +16,7 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionRule
 
+from pants_backend_cc.util_rules.fields import parse_address
 from pants_backend_cmake.ninja.graph import CMakeTargetInfo
 from pants_backend_cmake.target_types import (
     CMakeProjectSourcesField,
@@ -29,16 +29,6 @@ from pants_backend_cmake.util_rules.configure import (
     configure_project,
 )
 from pants_backend_platforms.util_rules.platforms import TargetPlatform
-
-
-async def parse_address(value: str, relative_to: str, description_of_origin: str) -> Address:
-    """One address string of a BUILD field, resolved as Pants does (relative to the BUILD
-    file's directory)."""
-    address_input = AddressInput.parse(
-        value, relative_to=relative_to, description_of_origin=description_of_origin
-    )
-    maybe = await maybe_resolve_address(address_input)
-    return await resolve_address(maybe)
 
 
 async def _project_address(field: CMakeTargetProjectField, address: Address) -> Address:

@@ -30,49 +30,6 @@ class PlatformTarget(Target):
     help = "A platform to build for, referred to by its target name, which is unique."
 
 
-class CcToolchainHostField(StringField):
-    alias = "host"
-    required = True
-    help = "The platform this toolchain runs on, by name."
-
-
-class CcToolchainTargetField(StringField):
-    alias = "target"
-    required = True
-    help = "The platform this toolchain builds for, by name."
-
-
-class CcToolchainCcField(StringField):
-    alias = "cc"
-    required = True
-    help = "The C compiler: a name looked up on the system search path, or an absolute path."
-
-
-class CcToolchainCxxField(StringField):
-    alias = "cxx"
-    required = True
-    help = "The C++ compiler: a name looked up on the system search path, or an absolute path."
-
-
-class CcToolchainArField(StringField):
-    alias = "ar"
-    required = True
-    help = "The archiver: a name looked up on the system search path, or an absolute path."
-
-
-class CcToolchainTarget(Target):
-    alias = "cc_toolchain"
-    core_fields = (
-        *COMMON_TARGET_FIELDS,
-        CcToolchainHostField,
-        CcToolchainTargetField,
-        CcToolchainCcField,
-        CcToolchainCxxField,
-        CcToolchainArField,
-    )
-    help = "The C and C++ tools that build for `target` on `host`, native pairs included."
-
-
 class PlatformsField(StringSequenceField, AsyncFieldMixin):
     alias = "platforms"
     default = None
