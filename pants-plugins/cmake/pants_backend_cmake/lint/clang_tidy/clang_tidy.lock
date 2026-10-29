@@ -1,0 +1,82 @@
+{
+  "allow_builds": true,
+  "allow_prereleases": false,
+  "allow_wheels": true,
+  "build_isolation": true,
+  "constraints": [],
+  "elide_unused_requires_dist": false,
+  "excluded": [],
+  "locked_resolves": [
+    {
+      "locked_requirements": [
+        {
+          "artifacts": [
+            {
+              "algorithm": "sha256",
+              "hash": "a5f5e44649d2412bfe1563e6e7a4135102fbf2d98dbf30ce513b00a0a977c047",
+              "url": "https://files.pythonhosted.org/packages/f4/f0/4e1ca21e9fc853a4f21fbd115a83155b15dbf436d0b62c58e92441677fbb/clang_tidy-18.1.8-py2.py3-none-musllinux_1_2_x86_64.whl"
+            },
+            {
+              "algorithm": "sha256",
+              "hash": "341f3bebe13ef31d6d3fb9a9fde52795557d7d67d7449e8ed98a36dfe29b7421",
+              "url": "https://files.pythonhosted.org/packages/11/18/346ddfcd3d1864aceb777593f05f678697803beba1bcb8e01d931866a0b7/clang_tidy-18.1.8-py2.py3-none-macosx_10_9_x86_64.whl"
+            },
+            {
+              "algorithm": "sha256",
+              "hash": "cebd2aa934e07e95c6821f27daa26dcbffcd946bd224f1d2a105af4bc857c143",
+              "url": "https://files.pythonhosted.org/packages/70/95/142c6e30cffe65267be0f5c9a3640dc55ad4bf6d08cef68ed25d6c52cd17/clang_tidy-18.1.8-py2.py3-none-musllinux_1_2_i686.whl"
+            },
+            {
+              "algorithm": "sha256",
+              "hash": "c725a95c316d15df12f5bf7c1abfdf3cb9e4f3b9a9afb4cb6bb1e9df4e669493",
+              "url": "https://files.pythonhosted.org/packages/80/e5/b645278ff2fd0f91a3ca7755b275ab3e6c44b4fc30068f736c449f127edd/clang_tidy-18.1.8-py2.py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+            },
+            {
+              "algorithm": "sha256",
+              "hash": "d635df55e45c9141b16f4d33ef785d3ec6944db66a43ece865981447460affc3",
+              "url": "https://files.pythonhosted.org/packages/85/02/5917f013d7c7565d0c42f2acd49546732fb654e673828966f704b58f97f1/clang_tidy-18.1.8-py2.py3-none-macosx_11_0_arm64.whl"
+            },
+            {
+              "algorithm": "sha256",
+              "hash": "1f832286035f9df3be3b41ba29493ca9e67bf61a8636177da756d89b6313bbca",
+              "url": "https://files.pythonhosted.org/packages/ab/bb/2ea94f5588a563781f6163dd470ddbf22f573486ebb1633f9ea70bd554e4/clang_tidy-18.1.8-py2.py3-none-manylinux_2_17_i686.manylinux2014_i686.whl"
+            },
+            {
+              "algorithm": "sha256",
+              "hash": "226618642af66a734c0cca079dcf86ca94b2e6fc9ba1d7332f6b9e4426379198",
+              "url": "https://files.pythonhosted.org/packages/c7/6a/aacbf1f4c8e0808689a3ec280b5a4113161302d1d31579f215076852cbb5/clang_tidy-18.1.8.tar.gz"
+            }
+          ],
+          "project_name": "clang-tidy",
+          "requires_dists": [],
+          "requires_python": null,
+          "version": "18.1.8"
+        }
+      ],
+      "marker": null,
+      "platform_tag": null
+    }
+  ],
+  "only_builds": [],
+  "only_wheels": [],
+  "overridden": [],
+  "path_mappings": {},
+  "pex_version": "2.97.1",
+  "pip_version": "24.2",
+  "prefer_older_binary": false,
+  "requirements": [
+    "clang-tidy==18.1.8"
+  ],
+  "requires_python": [
+    "CPython<3.15,>=3.9"
+  ],
+  "resolver_version": "pip-2020-resolver",
+  "style": "universal",
+  "target_systems": [
+    "linux",
+    "mac"
+  ],
+  "transitive": true,
+  "use_pep517": null,
+  "use_system_time": false
+}

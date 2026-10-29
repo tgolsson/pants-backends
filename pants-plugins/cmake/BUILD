@@ -8,6 +8,8 @@ python_distribution_with_secret(
         ":package_data",
         "//pants-plugins/cmake/pants_backend_cmake:pants_backend_cmake",
         "//pants-plugins/cmake/pants_backend_cmake/generate:generate",
+        "//pants-plugins/cmake/pants_backend_cmake/lint:lint",
+        "//pants-plugins/cmake/pants_backend_cmake/lint/clang_tidy:clang_tidy",
     ],
     provides=python_artifact(
         name="pants_backend_cmake",

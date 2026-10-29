@@ -1,9 +1,10 @@
 """Replay the Ninja edges a CMake target needs as individual cached processes.
 
-One rule per edge: `build_edge` awaits the producers of the edge's declared inputs (other
-edges, or whole dependency targets at a boundary), then runs the edge's command with exactly
-its inputs: the workspace sources it declares, the headers its scan found, the files of
-`dependencies`, the empty build directory, and its producers' outputs. The engine schedules the
+One rule per edge: `edge_inputs` awaits the producers of the edge's declared inputs (other
+edges, or whole dependency targets at a boundary) and collects exactly what the edge reads: the
+workspace sources it declares, the headers its scan found, the files of `dependencies`, the
+empty build directory, and its producers' outputs. `build_edge` runs the edge's command on
+them; a linter can run its own command in the same sandbox. The engine schedules the
 dataflow and memoizes each edge once per run, so two targets that share a compile edge (a
 static and a shared library over the same object files) share one process.
 """
@@ -108,20 +109,15 @@ def _resolve_inputs(
     return list(edges), list(targets), list(sources)
 
 
-@rule(desc="Build Ninja edge", level=LogLevel.DEBUG)
-async def build_edge(request: EdgeRequest, bash: BashBinary) -> EdgeOutput:
+@dataclass(frozen=True)
+class EdgeInputs:
+    digest: Digest
+    """Everything the edge's command reads, relative to the build root."""
+
+
+@rule(desc="Collect Ninja edge inputs", level=LogLevel.DEBUG)
+async def edge_inputs(request: EdgeRequest) -> EdgeInputs:
     project, edge = request.project, request.edge
-    graph = project.graph
-    build_dir = project.build_dir
-    relative_root = project.relative_root
-
-    for output in edge.all_outputs:
-        if output.startswith(PLACEHOLDER) or output.startswith(".."):
-            raise UnsupportedGraphError(
-                f"{project.address}: edge for {edge.outputs} writes `{output}` outside the build "
-                "directory, which the replay cannot capture"
-            )
-
     boundary = boundary_outputs(project.targets, edge.target or "")
     producer_edges, dependency_targets, sources = _resolve_inputs(project, edge, boundary)
     produced, dependencies, scan = await concurrently(
@@ -152,14 +148,33 @@ async def build_edge(request: EdgeRequest, bash: BashBinary) -> EdgeOutput:
     if wanted_extra:
         digests.append(await digest_subset_to_digest(DigestSubset(project.extra, PathGlobs(wanted_extra))))
 
-    command = rebase(graph.command(edge), relative_root)
-    rspfile = graph.lookup(edge, "rspfile", shell=False)
+    rspfile = project.graph.lookup(edge, "rspfile", shell=False)
     if rspfile:
-        content = rebase(graph.lookup(edge, "rspfile_content"), relative_root)
+        content = rebase(project.graph.lookup(edge, "rspfile_content"), project.relative_root)
         digests.append(
-            await create_digest(CreateDigest([FileContent(f"{build_dir}/{rspfile}", content.encode())]))
+            await create_digest(
+                CreateDigest([FileContent(f"{project.build_dir}/{rspfile}", content.encode())])
+            )
         )
-    input_digest = await merge_digests(MergeDigests(digests))
+    return EdgeInputs(await merge_digests(MergeDigests(digests)))
+
+
+@rule(desc="Build Ninja edge", level=LogLevel.DEBUG)
+async def build_edge(request: EdgeRequest, bash: BashBinary) -> EdgeOutput:
+    project, edge = request.project, request.edge
+    graph = project.graph
+    build_dir = project.build_dir
+    relative_root = project.relative_root
+
+    for output in edge.all_outputs:
+        if output.startswith(PLACEHOLDER) or output.startswith(".."):
+            raise UnsupportedGraphError(
+                f"{project.address}: edge for {edge.outputs} writes `{output}` outside the build "
+                "directory, which the replay cannot capture"
+            )
+
+    inputs = await edge_inputs(request)
+    command = rebase(graph.command(edge), relative_root)
 
     output_dirs = sorted({os.path.dirname(o) for o in edge.all_outputs if os.path.dirname(o)})
     script = command
@@ -182,7 +197,7 @@ async def build_edge(request: EdgeRequest, bash: BashBinary) -> EdgeOutput:
             Process(
                 argv=(bash.path, "-c", script),
                 description=f"{description} ({project.address})",
-                input_digest=input_digest,
+                input_digest=inputs.digest,
                 immutable_input_digests=immutable_input_digests,
                 working_directory=build_dir,
                 env=env,

@@ -60,6 +60,27 @@ backend_packages = [
 ]
 ```
 
+## clang-tidy
+
+The optional sub-backend `pants_backend_cmake.lint.clang_tidy` adds `[clang-tidy]` to `pants
+lint`, from the `clang-tidy` PyPI wheel (a pex, hence `pants.backend.python`). A
+`cmake_project` with `clang_tidy_paths` is configured for the host and clang-tidy runs once per
+compile edge under them, in the sandbox that edge compiles in and with its command.
+
+- The sandbox holds only the headers gcc's dependency scan found, so an include that only clang
+  takes (behind `__clang__` or `__has_include`) is missing.
+- Configuration comes from `.clang-tidy` files in the directories above each translation unit; a
+  `--config-file` in `args` is not in the sandbox.
+- The default lockfile has no linux-aarch64 wheel.
+
+```toml
+backend_packages = [
+  "pants.backend.python",
+  "pants_backend_cmake",
+  "pants_backend_cmake.lint.clang_tidy",
+]
+```
+
 ## Platforms
 
 The compilers and `ar` come from the `cc_toolchain` ([pants-backend-platforms](../platforms))
@@ -76,6 +97,7 @@ cross build needs one for `CMAKE_SYSTEM_NAME`. See the field's help for what it 
 - `[ninja]`: the pinned Ninja download. Ninja is only needed by configure; the replay never
   runs it.
 - `[cmake-test-runner]`: `skip`.
+- `[clang-tidy]`: `skip`, `args`, `drop_compiler_args`, `install_from_resolve`.
 
 ## How it works
 

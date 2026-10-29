@@ -13,6 +13,8 @@
   producing either; `cmake_test.sources` is optional, and source roots become `-I` flags. A
   path both `sources` and a dependency provide is an error.
 - `pants_backend_cmake.generate`: `cpp_generate`, formatted with `[clang-format]`.
+- `pants_backend_cmake.lint.clang_tidy`: `[clang-tidy]` under `pants lint`, one process per
+  compile edge in the edge's sandbox; `clang_tidy_paths` on `cmake_project`.
 - Platforms through pants-backend-platforms: compilers from `cc_toolchain`,
   `cmake_toolchain_file`, and `platforms` on `cmake_target`. **Breaking:** `[cmake].c_compiler`
   and `[cmake].cxx_compiler` are removed.
