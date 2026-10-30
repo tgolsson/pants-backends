@@ -35,6 +35,10 @@ jobs:
         gha-cache-key: cache1-test-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
+    # The cc and cmake cross-build tests skip without MinGW-w64.
+    - name: Install MinGW-w64
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64
+
     - name: Test everything
       run: |
         ./get-pants.sh

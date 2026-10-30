@@ -10,7 +10,11 @@ pythonpath = [
    "%(buildroot)s/pants-plugins/bitwarden",
    "%(buildroot)s/pants-plugins/secrets",
    "%(buildroot)s/pants-plugins/odin",
+   "%(buildroot)s/pants-plugins/cc",
+   "%(buildroot)s/pants-plugins/cmake",
    "%(buildroot)s/pants-plugins/distroless",
+   "%(buildroot)s/pants-plugins/generate",
+   "%(buildroot)s/pants-plugins/platforms",
 ]
 
 backend_packages = [

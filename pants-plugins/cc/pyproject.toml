@@ -1,0 +1,45 @@
+[project]
+name = "pants_backend_cc"
+description = "C and C++ for Pants backends: cc_toolchain, cc_test, compile-step and library interfaces for providers, clang-tidy, gcovr coverage and cpp_generate."
+version = "0.1.0"
+authors = [
+    { name = "Tom Solberg", email = "me@sbg.dev" }
+]
+
+dependencies = ["pants_backend_platforms>=0.1.0"]
+readme = "README.md"
+license = {file = "LICENSE-MIT.txt"}
+keywords = ["pantsbuild", "pants", "backend", "c", "c++", "toolchain", "testing", "clang-tidy", "coverage"]
+
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python",
+  "Topic :: Software Development :: Build Tools",
+]
+
+[project.optional-dependencies]
+generate = ["pants_backend_generate>=0.1.0"]
+
+[project.urls]
+Repository = "https://github.com/tgolsson/pants-backends"
+Code = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/cc"
+Changelog = "https://github.com/tgolsson/pants-backends/tree/main/pants-plugins/cc/CHANGELOG.md"
+
+[tool.pdm.build]
+includes = [
+    "pants_backend_cc",
+]
+
+[build-system]
+requires = ["pdm-backend>2.0"]
+build-backend = "pdm.backend"
+
+[tool.isort]
+profile = "black"
+
+known_first_party = ["pants_backend_cc"]
+line_length = 100
+include_trailing_comma = true
+
+[tool.black]
+line-length = 100

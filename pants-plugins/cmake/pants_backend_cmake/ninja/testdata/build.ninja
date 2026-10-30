@@ -1,0 +1,135 @@
+# A hand-written stand-in for CMake's build.ninja, canonicalized, in its shape: an object
+# library shared by a static and a shared library, a test executable linking the static one, a
+# utility target with a custom command, and the aliases and built-ins.
+
+ninja_required_version = 1.5
+
+#############################################
+# Include rules file.
+
+include CMakeFiles/rules.ninja
+
+#############################################
+# Logical path to working directory; prefix for absolute paths.
+
+cmake_ninja_workdir = __PANTS_CMAKE_ROOT__/build/
+
+#############################################
+# Object build statements for OBJECT_LIBRARY target demo_objects
+
+build cmake_object_order_depends_target_demo_objects: phony || CMakeFiles/demo_objects.dir
+
+build CMakeFiles/demo_objects.dir/src/vec.cpp.o: CXX_COMPILER__demo_objects_unscanned_ __PANTS_CMAKE_ROOT__/src/vec.cpp || cmake_object_order_depends_target_demo_objects
+  DEP_FILE = CMakeFiles/demo_objects.dir/src/vec.cpp.o.d
+  INCLUDES = -I__PANTS_CMAKE_ROOT__/include
+
+build CMakeFiles/demo_objects.dir/src/str.cpp.o: CXX_COMPILER__demo_objects_unscanned_ __PANTS_CMAKE_ROOT__/src/str.cpp || cmake_object_order_depends_target_demo_objects
+  DEP_FILE = CMakeFiles/demo_objects.dir/src/str.cpp.o.d
+  INCLUDES = -I__PANTS_CMAKE_ROOT__/include
+
+#############################################
+# Object library demo_objects
+
+build demo_objects: phony CMakeFiles/demo_objects.dir/src/vec.cpp.o CMakeFiles/demo_objects.dir/src/str.cpp.o
+
+#############################################
+# Object build statements for STATIC_LIBRARY target demo
+
+build cmake_object_order_depends_target_demo: phony || cmake_object_order_depends_target_demo_objects
+
+build CMakeFiles/demo.dir/src/api.cpp.o: CXX_COMPILER__demo_unscanned_ __PANTS_CMAKE_ROOT__/src/api.cpp || cmake_object_order_depends_target_demo
+  DEP_FILE = CMakeFiles/demo.dir/src/api.cpp.o.d
+  INCLUDES = -I__PANTS_CMAKE_ROOT__/include
+
+#############################################
+# Link build statements for STATIC_LIBRARY target demo
+
+build libdemo.a: CXX_STATIC_LIBRARY_LINKER__demo_ CMakeFiles/demo_objects.dir/src/vec.cpp.o CMakeFiles/demo_objects.dir/src/str.cpp.o CMakeFiles/demo.dir/src/api.cpp.o || demo_objects
+  POST_BUILD = :
+  PRE_LINK = :
+  TARGET_FILE = libdemo.a
+
+#############################################
+# Object build statements for SHARED_LIBRARY target demo_shared
+
+build cmake_object_order_depends_target_demo_shared: phony || cmake_object_order_depends_target_demo_objects
+
+build CMakeFiles/demo_shared.dir/src/api.cpp.o: CXX_COMPILER__demo_shared_unscanned_ __PANTS_CMAKE_ROOT__/src/api.cpp || cmake_object_order_depends_target_demo_shared
+  DEP_FILE = CMakeFiles/demo_shared.dir/src/api.cpp.o.d
+  FLAGS = -fPIC
+  INCLUDES = -I__PANTS_CMAKE_ROOT__/include
+
+#############################################
+# Link build statements for SHARED_LIBRARY target demo_shared
+
+build libdemo_shared.so: CXX_SHARED_LIBRARY_LINKER__demo_shared_ CMakeFiles/demo_objects.dir/src/vec.cpp.o CMakeFiles/demo_objects.dir/src/str.cpp.o CMakeFiles/demo_shared.dir/src/api.cpp.o || demo_objects
+  POST_BUILD = :
+  PRE_LINK = :
+  SONAME = libdemo_shared.so
+  SONAME_FLAG = -Wl,-soname,
+  TARGET_FILE = libdemo_shared.so
+
+#############################################
+# Utility command for gen_tables
+
+build gen_tables: phony CMakeFiles/gen_tables
+
+#############################################
+# Object build statements for EXECUTABLE target test_vec
+
+build cmake_object_order_depends_target_test_vec: phony || cmake_object_order_depends_target_demo
+
+build CMakeFiles/test_vec.dir/tests/vec_a.cpp.o: CXX_COMPILER__test_vec_unscanned_ __PANTS_CMAKE_ROOT__/tests/vec_a.cpp || cmake_object_order_depends_target_test_vec
+  DEFINES = -DMINITEST_NO_COLOR
+  DEP_FILE = CMakeFiles/test_vec.dir/tests/vec_a.cpp.o.d
+  INCLUDES = -I__PANTS_CMAKE_ROOT__/tests/vendor -I__PANTS_CMAKE_ROOT__/include
+
+build CMakeFiles/test_vec.dir/tests/vendor/minitest.c.o: C_COMPILER__test_vec_unscanned_ __PANTS_CMAKE_ROOT__/tests/vendor/minitest.c || cmake_object_order_depends_target_test_vec
+  DEFINES = -DMINITEST_NO_COLOR
+  DEP_FILE = CMakeFiles/test_vec.dir/tests/vendor/minitest.c.o.d
+  INCLUDES = -I__PANTS_CMAKE_ROOT__/tests/vendor -I__PANTS_CMAKE_ROOT__/include
+
+#############################################
+# Link build statements for EXECUTABLE target test_vec
+
+build test_vec: CXX_EXECUTABLE_LINKER__test_vec_ CMakeFiles/test_vec.dir/tests/vec_a.cpp.o CMakeFiles/test_vec.dir/tests/vendor/minitest.c.o | libdemo.a || libdemo.a
+  LINK_LIBRARIES = libdemo.a
+  POST_BUILD = :
+  PRE_LINK = :
+  TARGET_FILE = test_vec
+
+#############################################
+# Utility command for rebuild_cache
+
+build CMakeFiles/rebuild_cache.util: CUSTOM_COMMAND
+  COMMAND = cd __PANTS_CMAKE_ROOT__/build && cmake --regenerate-during-build -S__PANTS_CMAKE_ROOT__ -B__PANTS_CMAKE_ROOT__/build
+  DESC = Running CMake to regenerate build system...
+  pool = console
+  restat = 1
+
+build rebuild_cache: phony CMakeFiles/rebuild_cache.util
+
+#############################################
+# Custom command for CMakeFiles/gen_tables
+
+build CMakeFiles/gen_tables | ${cmake_ninja_workdir}CMakeFiles/gen_tables: CUSTOM_COMMAND
+  COMMAND = cd __PANTS_CMAKE_ROOT__/build && cmake -E echo tables
+
+# =============================================================================
+# Target aliases.
+
+build demo: phony libdemo.a
+
+build demo_shared: phony libdemo_shared.so
+
+# =============================================================================
+# Folder targets.
+
+build all: phony demo_objects libdemo.a libdemo_shared.so test_vec
+
+# =============================================================================
+# Built-in targets
+
+build clean: CLEAN
+
+default all
