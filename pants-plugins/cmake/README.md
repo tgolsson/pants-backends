@@ -61,8 +61,7 @@ local execution only (the compilers are found on the machine).
 A static or shared `cmake_target` is a [pants-backend-cc](../cc) library, so a `cc_test` or
 `cc_binary` depending on it compiles and links in the project's build directory as CMake would
 build a consumer of it (see How it works); nothing PRIVATE leaks. `clang_tidy_paths` on
-`cmake_project` selects what `pants_backend_cc.lint.clang_tidy` lints, and `compile_cost_paths`
-and `compile_cost_exempt_paths` what `pants_backend_cc.lint.compile_cost` measures and gates.
+`cmake_project` selects what `pants_backend_cc.lint.clang_tidy` lints.
 A `cpp_generate` target (`pants_backend_cc.generate`) can be a dependency of a `cmake_project`
 or `cc_test`.
 
