@@ -51,7 +51,6 @@ from pants_backend_cmake.ninja.parser import NinjaGraph, parse_ninja
 from pants_backend_cmake.target_types import (
     CMakeArgsField,
     CMakeBuildDirField,
-    CMakeBuildTypeField,
     CMakeCoverageField,
     CMakeProjectDependenciesField,
     CMakeProjectPlaceholdersField,
@@ -76,6 +75,19 @@ from pants_backend_platforms.util_rules.platforms import TargetPlatform
 class ConfigureRequest:
     address: Address
     platform: TargetPlatform
+    build_type: str | None = None
+    """`CMAKE_BUILD_TYPE`; `None` is CMake's default."""
+
+
+def generated_by(address: Address, generator: Address) -> bool:
+    """Whether `generator` generated `address`, parameters included:
+    `maybe_convert_to_target_generator()` drops them, and a parametrized project's targets carry
+    them."""
+    return address.is_generated_target and (address.spec_path, address.target_name, address.parameters) == (
+        generator.spec_path,
+        generator.target_name,
+        generator.parameters,
+    )
 
 
 @dataclass(frozen=True)
@@ -109,6 +121,17 @@ class ConfiguredProject:
         return os.path.relpath(".", self.build_dir)
 
 
+def build_dir_path(address: Address, value: str) -> str:
+    """`build_dir`, relative to the build root. It must be a subdirectory of the project: the
+    canonicalized tree is rebased from it, and the configure writes only below it."""
+    relative = os.path.normpath(value) if value else ""
+    if not relative or os.path.isabs(relative) or relative == "." or relative.split(os.sep)[0] == "..":
+        raise ValueError(
+            f"{address}: `build_dir` must be a subdirectory of the project's directory, not `{value}`"
+        )
+    return os.path.join(address.spec_path, relative)
+
+
 def matches_any(relative_path: str, patterns: tuple[str, ...]) -> bool:
     for pattern in patterns:
         if fnmatch.fnmatchcase(relative_path, pattern):
@@ -132,63 +155,18 @@ def tool_mismatches(compiler_files: Iterable[str], expected: Mapping[str, str]) 
     ]
 
 
-@rule(desc="Configure CMake project", level=LogLevel.DEBUG)
-async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
-    toolchain = await resolve_cmake_toolchain(CMakeToolchainRequest(request.platform), **implicitly())
-    wrapped = await resolve_target(
-        WrappedTargetRequest(request.address, description_of_origin="cmake configure"), **implicitly()
-    )
-    target = wrapped.target
-    dependencies = await resolve_targets(
-        **implicitly(DependenciesRequest(target[CMakeProjectDependenciesField]))
-    )
-    sources, extra = await concurrently(
-        determine_source_files(SourceFilesRequest([target[CMakeProjectSourcesField]])),
-        determine_source_files(
-            SourceFilesRequest(
-                [t.get(SourcesField) for t in dependencies if t.has_field(SourcesField)],
-                for_sources_types=(FileSourceField, CCSourceField),
-                enable_codegen=True,
-            )
-        ),
-    )
-
-    project_dir = request.address.spec_path
-    prefix = f"{project_dir}/" if project_dir else ""
-
-    def relative(path: str) -> str:
-        return path[len(prefix) :] if path.startswith(prefix) else path
-
-    error = overlap_error(request.address, sources.files, extra.files)
-    if error:
-        raise ValueError(error)
-
-    patterns = tuple(target[CMakeProjectPlaceholdersField].value or ())
-    real_files = []
-    placeholders = []
-    for path in sources.files:
-        (placeholders if matches_any(relative(path), patterns) else real_files).append(path)
-    # A generated TU named in `add_library` must exist at configure.
-    placeholders.extend(p for p in extra.files if matches_any(relative(p), patterns))
-    if not real_files:
-        raise ValueError(
-            f"{request.address}: every source matches `configure_placeholders`; configure needs "
-            "at least a CMakeLists.txt"
-        )
-
-    build_dir = os.path.normpath(os.path.join(project_dir, target[CMakeBuildDirField].value))
-    probes_path = f"{build_dir}/{PROBES_DIR}/{PROBES_SCRIPT_NAME}"
-    real_digest, placeholder_digest, build_dir_digest, probes_digest = await concurrently(
-        digest_subset_to_digest(DigestSubset(sources.snapshot.digest, PathGlobs(real_files))),
-        create_digest(CreateDigest([FileContent(path, b"") for path in placeholders])),
-        create_digest(CreateDigest([Directory(build_dir)])),
-        create_digest(CreateDigest([FileContent(probes_path, PROBES_SCRIPT.encode())])),
-    )
-    input_digest = await merge_digests(
-        MergeDigests([real_digest, placeholder_digest, probes_digest, toolchain.toolchain_file_digest])
-    )
-
-    build_type = target[CMakeBuildTypeField].value
+def configure_process(
+    address: Address,
+    toolchain: CMakeToolchain,
+    project_dir: str,
+    build_dir: str,
+    probes_path: str,
+    input_digest: Digest,
+    build_type: str | None,
+    cmake_args: tuple[str, ...],
+    description: str | None = None,
+    **kwargs,
+) -> Process:
     argv = [
         toolchain.cmake_exe,
         "-S",
@@ -209,28 +187,85 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         f"-DCMAKE_PROJECT_INCLUDE={{chroot}}/{probes_path}",
         *([f"-DCMAKE_BUILD_TYPE={build_type}"] if build_type else []),
-        *(target[CMakeArgsField].value or ()),
+        *cmake_args,
     ]
-    result = await fallible_to_exec_result_or_raise(
-        **implicitly(
-            Process(
-                argv=argv,
-                description=f"Configure {request.address}",
-                input_digest=input_digest,
-                immutable_input_digests=toolchain.immutable_input_digests,
-                env=toolchain.env,
-                output_directories=(build_dir,),
-                level=LogLevel.DEBUG,
-            )
-        )
+    return Process(
+        argv=argv,
+        description=description or f"Configure {address}",
+        input_digest=input_digest,
+        immutable_input_digests=toolchain.immutable_input_digests,
+        env=toolchain.env,
+        output_directories=(build_dir,),
+        level=LogLevel.DEBUG,
+        **kwargs,
     )
 
+
+def split_placeholders(
+    address: Address,
+    source_files: tuple[str, ...],
+    extra_files: tuple[str, ...],
+    patterns: tuple[str, ...],
+) -> tuple[list[str], list[str]]:
+    """(real files, placeholders): matching `sources` and matching dependency files become
+    placeholders."""
+    prefix = f"{address.spec_path}/" if address.spec_path else ""
+
+    def relative(path: str) -> str:
+        return path[len(prefix) :] if path.startswith(prefix) else path
+
+    real_files = []
+    placeholders = []
+    for path in source_files:
+        (placeholders if matches_any(relative(path), patterns) else real_files).append(path)
+    # A generated TU named in `add_library` must exist at configure.
+    placeholders.extend(p for p in extra_files if matches_any(relative(p), patterns))
+    if not real_files:
+        raise ValueError(
+            f"{address}: every source matches `configure_placeholders`; configure needs "
+            "at least a CMakeLists.txt"
+        )
+    return real_files, placeholders
+
+
+async def configure_inputs(
+    sources_digest: Digest,
+    real_files: list[str],
+    placeholders: list[str],
+    build_dir: str,
+    toolchain: CMakeToolchain,
+) -> tuple[Digest, Digest, str]:
+    """(input digest, build dir digest, probes path)."""
+    probes_path = f"{build_dir}/{PROBES_DIR}/{PROBES_SCRIPT_NAME}"
+    real_digest, placeholder_digest, build_dir_digest, probes_digest = await concurrently(
+        digest_subset_to_digest(DigestSubset(sources_digest, PathGlobs(real_files))),
+        create_digest(CreateDigest([FileContent(path, b"") for path in placeholders])),
+        create_digest(CreateDigest([Directory(build_dir)])),
+        create_digest(CreateDigest([FileContent(probes_path, PROBES_SCRIPT.encode())])),
+    )
+    input_digest = await merge_digests(
+        MergeDigests([real_digest, placeholder_digest, probes_digest, toolchain.toolchain_file_digest])
+    )
+    return input_digest, build_dir_digest, probes_path
+
+
+@dataclass(frozen=True)
+class CanonicalTree:
+    tree: Digest
+    generated: Digest
+    generated_paths: tuple[str, ...]
+    graph: NinjaGraph
+
+
+async def canonical_tree(
+    address: Address, build_dir: str, output_digest: Digest, toolchain: CMakeToolchain
+) -> CanonicalTree:
     # Everything generated, except the cache, the compiler-id artefacts and the logs; the
     # cache is read once for the tool paths it records and then dropped.
     generated, rules_ninja, cache, compiler_files = await concurrently(
         digest_subset_to_digest(
             DigestSubset(
-                result.output_digest,
+                output_digest,
                 PathGlobs(
                     [
                         f"{build_dir}/**",
@@ -244,13 +279,11 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
             )
         ),
         digest_subset_to_digest(
-            DigestSubset(result.output_digest, PathGlobs([f"{build_dir}/CMakeFiles/rules.ninja"]))
+            DigestSubset(output_digest, PathGlobs([f"{build_dir}/CMakeFiles/rules.ninja"]))
         ),
+        digest_subset_to_digest(DigestSubset(output_digest, PathGlobs([f"{build_dir}/CMakeCache.txt"]))),
         digest_subset_to_digest(
-            DigestSubset(result.output_digest, PathGlobs([f"{build_dir}/CMakeCache.txt"]))
-        ),
-        digest_subset_to_digest(
-            DigestSubset(result.output_digest, PathGlobs([f"{build_dir}/CMakeFiles/*/CMake*Compiler.cmake"]))
+            DigestSubset(output_digest, PathGlobs([f"{build_dir}/CMakeFiles/*/CMake*Compiler.cmake"]))
         ),
     )
     mismatches = tool_mismatches(
@@ -263,19 +296,19 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
     )
     if mismatches:
         raise ValueError(
-            f"{request.address}: configure did not use the `cc_toolchain`'s tools: "
+            f"{address}: configure did not use the `cc_toolchain`'s tools: "
             f"{'; '.join(mismatches)}. A `cmake_toolchain_file` must not set the compilers or `ar`."
         )
     kept = await merge_digests(MergeDigests([generated, rules_ninja]))
     contents, cache_contents = await concurrently(get_digest_contents(kept), get_digest_contents(cache))
     if not cache_contents:
-        raise ValueError(f"{request.address}: configure produced no CMakeCache.txt")
+        raise ValueError(f"{address}: configure produced no CMakeCache.txt")
     tools = tool_paths(cache_contents[0].content.decode(errors="replace"))
 
     raw = {fc.path: fc.content for fc in contents}
     build_ninja_path = f"{build_dir}/build.ninja"
     if build_ninja_path not in raw:
-        raise ValueError(f"{request.address}: configure produced no {build_ninja_path}")
+        raise ValueError(f"{address}: configure produced no {build_ninja_path}")
     root = sandbox_root(raw[build_ninja_path].decode(), build_dir)
     canonical: dict[str, bytes] = {}
     for path, content in raw.items():
@@ -309,23 +342,71 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
         ),
     )
     generated_paths = tuple(sorted(path for path in canonical if path not in build_files))
-
     ninja_files = {
         path[len(build_dir) + 1 :]: content.decode()
         for path, content in canonical.items()
         if path.endswith(".ninja")
     }
-    graph = parse_ninja(ninja_files)
+    return CanonicalTree(tree, generated, generated_paths, parse_ninja(ninja_files))
+
+
+@rule(desc="Configure CMake project", level=LogLevel.DEBUG)
+async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
+    toolchain = await resolve_cmake_toolchain(CMakeToolchainRequest(request.platform), **implicitly())
+    wrapped = await resolve_target(
+        WrappedTargetRequest(request.address, description_of_origin="cmake configure"), **implicitly()
+    )
+    target = wrapped.target
+    resolved = await resolve_targets(**implicitly(DependenciesRequest(target[CMakeProjectDependenciesField])))
+    # A generator depends on what it generates; those are the project's own handles, not inputs.
+    dependencies = [t for t in resolved if not generated_by(t.address, request.address)]
+    sources, extra = await concurrently(
+        determine_source_files(SourceFilesRequest([target[CMakeProjectSourcesField]])),
+        determine_source_files(
+            SourceFilesRequest(
+                [t.get(SourcesField) for t in dependencies if t.has_field(SourcesField)],
+                for_sources_types=(FileSourceField, CCSourceField),
+                enable_codegen=True,
+            )
+        ),
+    )
+
+    project_dir = request.address.spec_path
+    error = overlap_error(request.address, sources.files, extra.files)
+    if error:
+        raise ValueError(error)
+
+    patterns = tuple(target[CMakeProjectPlaceholdersField].value or ())
+    real_files, placeholders = split_placeholders(request.address, sources.files, extra.files, patterns)
+    build_dir = build_dir_path(request.address, target[CMakeBuildDirField].value)
+    input_digest, build_dir_digest, probes_path = await configure_inputs(
+        sources.snapshot.digest, real_files, placeholders, build_dir, toolchain
+    )
+    result = await fallible_to_exec_result_or_raise(
+        **implicitly(
+            configure_process(
+                request.address,
+                toolchain,
+                project_dir,
+                build_dir,
+                probes_path,
+                input_digest,
+                request.build_type,
+                tuple(target[CMakeArgsField].value or ()),
+            )
+        )
+    )
+    canonical = await canonical_tree(request.address, build_dir, result.output_digest, toolchain)
     return ConfiguredProject(
         address=request.address,
         project_dir=project_dir,
         build_dir=build_dir,
         build_dir_digest=build_dir_digest,
-        tree=tree,
-        generated=generated,
-        generated_paths=generated_paths,
-        graph=graph,
-        targets=discover_targets(graph),
+        tree=canonical.tree,
+        generated=canonical.generated,
+        generated_paths=canonical.generated_paths,
+        graph=canonical.graph,
+        targets=discover_targets(canonical.graph),
         sources=sources.snapshot.digest,
         source_paths=sources.files,
         extra=extra.snapshot.digest,

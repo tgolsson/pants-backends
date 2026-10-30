@@ -33,18 +33,21 @@ class CcToolchainTargetField(StringField):
 class CcToolchainCcField(StringField):
     alias = "cc"
     required = True
+    value: str
     help = "The C compiler: a name looked up on the system search path, or an absolute path."
 
 
 class CcToolchainCxxField(StringField):
     alias = "cxx"
     required = True
+    value: str
     help = "The C++ compiler: a name looked up on the system search path, or an absolute path."
 
 
 class CcToolchainArField(StringField):
     alias = "ar"
     required = True
+    value: str
     help = "The archiver: a name looked up on the system search path, or an absolute path."
 
 

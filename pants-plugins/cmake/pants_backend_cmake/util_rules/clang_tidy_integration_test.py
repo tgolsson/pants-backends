@@ -79,7 +79,8 @@ CLEAN = {
 
 ENV = {"PATH", "PYENV_ROOT", "HOME"}
 DROP = "--clang-tidy-drop-compiler-args=['-fipa-pta']"
-PROJ = Address("", target_name="proj")
+# Goals that expand generators see `#_inputs`, not the project; it carries `clang_tidy_paths`.
+INPUTS = Address("", target_name="proj", generated_name="_inputs")
 
 
 @pytest.fixture
@@ -111,7 +112,7 @@ def rule_runner() -> PythonRuleRunner:
 def _lint(
     rule_runner: PythonRuleRunner,
     *options: str,
-    address: Address = PROJ,
+    address: Address = INPUTS,
     files: dict[str, str] = FILES,
     **overrides: str,
 ) -> LintResult:
@@ -175,7 +176,8 @@ def test_project_below_the_build_root(rule_runner: PythonRuleRunner) -> None:
         "add_library(sub STATIC src/r.cpp)\n",
         "sub/src/r.cpp": RECURSIVE.format(name="nested"),
     }
-    result = _lint(rule_runner, address=Address("sub", target_name="proj"), files=files)
+    inputs = Address("sub", target_name="proj", generated_name="_inputs")
+    result = _lint(rule_runner, address=inputs, files=files)
     assert result.exit_code == 1
     assert _reported(result, "sub/src/r.cpp:1:5: error: function 'nested'") == 1
 
@@ -183,13 +185,13 @@ def test_project_below_the_build_root(rule_runner: PythonRuleRunner) -> None:
 def test_without_paths_the_project_is_not_linted(rule_runner: PythonRuleRunner) -> None:
     build = FILES["BUILD"].replace(', clang_tidy_paths=["src"]', "")
     rule_runner.write_files({**FILES, "BUILD": build})
-    assert not ClangTidyFieldSet.is_applicable(rule_runner.get_target(PROJ))
+    assert not ClangTidyFieldSet.is_applicable(rule_runner.get_target(INPUTS))
 
 
 def test_paths_without_translation_units_fail(rule_runner: PythonRuleRunner) -> None:
     build = FILES["BUILD"].replace('clang_tidy_paths=["src"]', 'clang_tidy_paths=["scr"]')
     with pytest.raises(
-        ExecutionError, match=r"//:proj: no translation unit is under `clang_tidy_paths` \['scr'\]"
+        ExecutionError, match=r"//:proj#_inputs: no translation unit is under `clang_tidy_paths` \['scr'\]"
     ):
         _lint(rule_runner, DROP, BUILD=build)
 
@@ -207,6 +209,6 @@ def test_generated_translation_units_are_not_linted(rule_runner: PythonRuleRunne
 
     build_dir = FILES["BUILD"].replace('clang_tidy_paths=["src"]', 'clang_tidy_paths=["build"]')
     with pytest.raises(
-        ExecutionError, match=r"//:proj: no translation unit is under `clang_tidy_paths` \['build'\]"
+        ExecutionError, match=r"//:proj#_inputs: no translation unit is under `clang_tidy_paths` \['build'\]"
     ):
         _lint(rule_runner, DROP, BUILD=build_dir, **generated)

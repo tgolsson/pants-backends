@@ -17,6 +17,8 @@ from pants.engine.target import HydratedSources, HydrateSourcesRequest
 from pants.testutil.python_rule_runner import PythonRuleRunner
 
 from pants_backend_cc.generate import register
+from pants_backend_cc.generate.outputs import GeneratedOutputsFieldSet
+from pants_backend_cc.util_rules.outputs import DeclaredOutputs
 from pants_backend_generate import register as generate_register
 from pants_backend_generate.goals.generate import Generate
 from pants_backend_generate.target_types import GenerateSourcesField
@@ -45,6 +47,7 @@ def test_cpp_generate_is_clang_formatted() -> None:
             *generate_register.rules(),
             *register.rules(),
             QueryRule(HydratedSources, [HydrateSourcesRequest]),
+            QueryRule(DeclaredOutputs, [GeneratedOutputsFieldSet]),
         ],
         target_types=[
             *generate_register.target_types(),
@@ -80,3 +83,6 @@ def test_cpp_generate_is_clang_formatted() -> None:
     assert {fc.path: fc.content for fc in contents} == {
         "cpp/out/answer.cpp": b"int answer() { return 42; }\n"
     }
+    # Known before the generator runs, for configuring against.
+    declared = runner.request(DeclaredOutputs, [GeneratedOutputsFieldSet.create(target)])
+    assert declared.paths == ("cpp/out/answer.cpp",)

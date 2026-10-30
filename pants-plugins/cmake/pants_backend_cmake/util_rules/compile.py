@@ -19,8 +19,15 @@ from pants_backend_cc.util_rules.compile import (
     CompileSteps,
     CompileStepsFieldSet,
 )
+from pants_backend_cc.util_rules.fields import parse_address
 from pants_backend_cmake.ninja.parser import NinjaEdge
-from pants_backend_cmake.target_types import CMakeProjectSourcesField, CMakeProjectTarget
+from pants_backend_cmake.target_types import (
+    CMakeBuildTypeField,
+    CMakeProjectInputsDependenciesField,
+    CMakeProjectInputsTarget,
+    CMakeProjectTarget,
+    CMakeTargetProjectField,
+)
 from pants_backend_cmake.util_rules.canonicalize import rebase
 from pants_backend_cmake.util_rules.configure import (
     ConfiguredProject,
@@ -36,7 +43,13 @@ from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
 @dataclass(frozen=True)
 class CMakeCompileStepsFieldSet(CompileStepsFieldSet):
-    required_fields = (CMakeProjectSourcesField,)
+    """A project's compile steps, on its `#_inputs`: goals replace the project with the targets
+    it generates."""
+
+    required_fields = (CMakeProjectInputsDependenciesField, CMakeTargetProjectField)
+
+    project: CMakeTargetProjectField
+    build_type: CMakeBuildTypeField
 
 
 @dataclass(frozen=True)
@@ -71,7 +84,12 @@ def compile_step(project: ConfiguredProject, edge: NinjaEdge) -> CompileStep | N
 
 @rule(desc="List CMake compile steps", level=LogLevel.DEBUG)
 async def cmake_compile_steps(field_set: CMakeCompileStepsFieldSet, platform: TargetPlatform) -> CompileSteps:
-    project = await configure_project(ConfigureRequest(field_set.address, platform), **implicitly())
+    project_address = await parse_address(
+        field_set.project.value, field_set.address.spec_path, f"the `project` field of {field_set.address}"
+    )
+    project = await configure_project(
+        ConfigureRequest(project_address, platform, field_set.build_type.value), **implicitly()
+    )
     steps = (compile_step(project, edge) for edge in project.graph.edges)
     return CompileSteps(step for step in steps if step is not None)
 
@@ -89,4 +107,5 @@ def rules():
         UnionRule(CompileInputsRequest, CMakeCompileInputsRequest),
         # Inert unless `pants_backend_cc.lint.clang_tidy` is enabled.
         CMakeProjectTarget.register_plugin_field(ClangTidyPathsField),
+        CMakeProjectInputsTarget.register_plugin_field(ClangTidyPathsField),
     ]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pants_backend_platforms.target_types import PlatformTarget
-from pants_backend_platforms.util_rules import contract, platforms
+from pants_backend_platforms.util_rules import contract, lookup, platforms
 
 
 def target_types():
@@ -9,4 +9,4 @@ def target_types():
 
 
 def rules():
-    return [*platforms.rules(), *contract.rules()]
+    return [*lookup.rules(), *platforms.rules(), *contract.rules()]

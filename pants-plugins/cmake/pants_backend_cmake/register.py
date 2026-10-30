@@ -5,6 +5,7 @@ from pants_backend_cmake.subsystems import cmake, ninja
 from pants_backend_cmake.util_rules import (
     compile,
     configure,
+    generator,
     link,
     replay,
     scan,
@@ -24,6 +25,7 @@ def rules():
         *ninja.rules(),
         *toolchain.rules(),
         *configure.rules(),
+        *generator.rules(),
         *targets.rules(),
         *scan.rules(),
         *compile.rules(),

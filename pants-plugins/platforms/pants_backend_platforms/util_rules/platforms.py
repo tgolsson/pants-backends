@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pants.engine.platform import Platform
-from pants.engine.rules import collect_rules, rule
-from pants.engine.target import AllTargets
+from pants.engine.rules import collect_rules, implicitly, rule
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
@@ -15,6 +14,7 @@ from pants_backend_platforms.target_types import (
     PlatformsField,
     PlatformTarget,
 )
+from pants_backend_platforms.util_rules.lookup import TargetsOfAliasRequest, targets_of_alias
 
 _MACHINES = {
     Platform.linux_x86_64: ("linux", "x86_64"),
@@ -36,10 +36,13 @@ class KnownPlatforms:
     by_name: FrozenDict[str, TargetPlatform]
     host: TargetPlatform
 
+    def unknown(self, name: str, origin: str) -> str:
+        return f"{origin}: unknown platform `{name}`; known: {sorted(self.by_name)}"
+
     def get(self, name: str, origin: str) -> TargetPlatform:
         platform = self.by_name.get(name)
         if platform is None:
-            raise ValueError(f"{origin}: unknown platform `{name}`; known: {sorted(self.by_name)}")
+            raise ValueError(self.unknown(name, origin))
         return platform
 
     def listed(self, field: PlatformsField) -> tuple[TargetPlatform, ...]:
@@ -50,16 +53,13 @@ class KnownPlatforms:
 
 
 @rule(desc="Find the platforms", level=LogLevel.DEBUG)
-async def known_platforms(
-    all_targets: AllTargets, platform: Platform, subsystem: PlatformsSubsystem
-) -> KnownPlatforms:
+async def known_platforms(platform: Platform, subsystem: PlatformsSubsystem) -> KnownPlatforms:
     if platform not in _MACHINES:
         raise ValueError(f"pants_backend_platforms does not support Pants on {platform.value}.")
     os_, arch = _MACHINES[platform]
+    platforms = await targets_of_alias(TargetsOfAliasRequest(PlatformTarget.alias), **implicitly())
     by_name: dict[str, TargetPlatform] = {}
-    for tgt in all_targets:
-        if not isinstance(tgt, PlatformTarget):
-            continue
+    for tgt in platforms:
         name = tgt.address.target_name
         if name in by_name:
             raise ValueError(f"Two `platform` targets are named `{name}`.")

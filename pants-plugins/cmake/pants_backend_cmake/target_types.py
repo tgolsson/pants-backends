@@ -5,9 +5,11 @@ from pants.engine.target import (
     BoolField,
     Dependencies,
     MultipleSourcesField,
+    OverridesField,
     StringField,
     StringSequenceField,
     Target,
+    TargetGenerator,
 )
 from pants.util.strutil import softwrap
 
@@ -66,7 +68,9 @@ class CMakeProjectDependenciesField(Dependencies):
         `files`, `cc_sources` and codegen targets producing either, mounted next to the sources
         for the compile and link steps. Configure sees only their files matching
         `configure_placeholders`, as placeholders. A path `sources` also provides is an error:
-        drop it from one of them.
+        drop it from one of them. Generating the project's targets reads these entries as
+        written, without inferred dependencies, less those a `!` entry names: a `!` entry removes
+        only an entry naming the same address.
         """
     )
 
@@ -92,9 +96,10 @@ class CMakeBuildTypeField(StringField):
     alias = "build_type"
     help = softwrap(
         """
-        `CMAKE_BUILD_TYPE`. Unset means CMake's default. Use `parametrize` to build several
-        configurations; a `cmake_target` with the same `build_type` parametrization resolves
-        to the matching project.
+        `CMAKE_BUILD_TYPE` of the target's configure; unset means CMake's default. On a
+        `cmake_project` it applies to the targets it generates, and to a hand-written
+        `cmake_target` naming the project that sets none; `parametrize` it there to build several
+        configurations, and name one as `project=":proj@build_type=Release"`.
         """
     )
 
@@ -110,34 +115,14 @@ class CMakeCoverageField(BoolField):
     )
 
 
-class CMakeProjectTarget(Target):
-    alias = "cmake_project"
-    core_fields = (
-        *COMMON_TARGET_FIELDS,
-        CMakeProjectSourcesField,
-        CMakeProjectPlaceholdersField,
-        CMakeProjectDependenciesField,
-        CMakeArgsField,
-        CMakeBuildDirField,
-        CMakeBuildTypeField,
-        CMakeCoverageField,
-    )
-    help = softwrap(
-        """
-        A CMake project configured once with the Ninja generator. Its `cmake_target`s are built
-        by replaying the generated Ninja edges as individual cached processes.
-        """
-    )
-
-
 class CMakeTargetProjectField(StringField):
     alias = "project"
     required = True
     help = softwrap(
         """
-        The address of the `cmake_project` this target belongs to. Inferred as a dependency, so
-        a change to any project source marks this target as changed for
-        `--changed-dependents`.
+        The address of the `cmake_project` this target belongs to. Inferred as a dependency (a
+        target the project generates depends on its `#_inputs` instead), so a change to any
+        project source marks this target as changed for `--changed-dependents`.
         """
     )
 
@@ -169,5 +154,67 @@ class CMakeTargetTarget(Target):
     )
 
 
+class CMakeProjectInputsDependenciesField(Dependencies):
+    help = "The project's files and its `dependencies`."
+
+
+class CMakeProjectInputsTarget(Target):
+    alias = "cmake_project_inputs"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        CMakeTargetProjectField,
+        CMakeProjectInputsDependenciesField,
+        CMakeBuildTypeField,
+    )
+    help = softwrap(
+        """
+        A `cmake_project` generates one as `<project>#_inputs`; it is not written by hand. It owns
+        the project's files and dependencies, and every target the project generates depends on
+        it. It stands in for the project where goals replace a generator with what it generates,
+        so project-wide tools such as clang-tidy run on it, configured with its `build_type`.
+        """
+    )
+
+
+class CMakeProjectOverridesField(OverridesField):
+    help = softwrap(
+        """
+        Field values for single generated targets, keyed by CMake target name:
+        `overrides={"app": {"platforms": ["linux-x86_64", "windows-x86_64"]}}`. A name the
+        configure did not find is an error, or a warning when a platform the project targets was
+        not configured. `dependencies`, `project` and `cmake_name` cannot be overridden.
+        """
+    )
+
+
+class CMakeProjectTarget(TargetGenerator):
+    alias = "cmake_project"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        CMakeProjectSourcesField,
+        CMakeProjectPlaceholdersField,
+        CMakeProjectDependenciesField,
+        CMakeArgsField,
+        CMakeBuildDirField,
+        CMakeBuildTypeField,
+        CMakeCoverageField,
+        PlatformsField,
+        CMakeProjectOverridesField,
+    )
+    generated_target_cls = CMakeTargetTarget
+    copied_fields = COMMON_TARGET_FIELDS
+    moved_fields = (PlatformsField, CMakeBuildTypeField)
+    help = softwrap(
+        """
+        A CMake project configured with the Ninja generator. It generates a `cmake_target`
+        (`<project>#<name>`) for every library and executable a configure finds on the platforms
+        it targets, built by replaying the generated Ninja edges as individual cached processes.
+        `platforms` and `build_type` apply to the generated targets. A setup mistake, or a
+        platform whose configure fails, is logged and contributes no targets; `pants package` of
+        a hand-written `cmake_target` naming the project raises the error.
+        """
+    )
+
+
 def targets():
-    return [CMakeProjectTarget, CMakeTargetTarget]
+    return [CMakeProjectTarget, CMakeTargetTarget, CMakeProjectInputsTarget]

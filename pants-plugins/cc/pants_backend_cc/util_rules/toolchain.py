@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from pants.core.util_rules.system_binaries import (
     BashBinary,
+    BinaryNotFoundError,
     BinaryPath,
     BinaryPathRequest,
     BinaryPathTest,
@@ -14,7 +15,6 @@ from pants.core.util_rules.system_binaries import (
 from pants.engine.addresses import Address
 from pants.engine.process import Process, ProcessCacheScope, fallible_to_exec_result_or_raise
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
-from pants.engine.target import AllTargets
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
@@ -27,6 +27,7 @@ from pants_backend_cc.target_types import (
     CcToolchainTarget,
     CcToolchainTargetField,
 )
+from pants_backend_platforms.util_rules.lookup import TargetsOfAliasRequest, targets_of_alias
 from pants_backend_platforms.util_rules.platforms import KnownPlatforms, TargetPlatform
 
 _IMPLICIT_NATIVE = ("gcc", "g++", "ar")
@@ -83,21 +84,37 @@ def binary_request(spec: str, search_path: tuple[str, ...], *, version: bool) ->
     return BinaryPathRequest(binary_name=name, search_path=search_path, test=test)
 
 
-@rule(desc="Resolve the C toolchain", level=LogLevel.DEBUG)
-async def resolve_cc_toolchain(
+@dataclass(frozen=True)
+class FoundCcToolchain:
+    """The tools that build for a platform on this host, or why there are none."""
+
+    address: Address | None
+    tools: tuple[BinaryPath, BinaryPath, BinaryPath] | None
+    """`cc`, `cxx` and `ar`; `None` with `error`."""
+    search_path: tuple[str, ...]
+    error: str | None
+    unmatched: bool = False
+    """The error is only that no `cc_toolchain` is defined for this host and platform: the usual
+    reason a host cannot build for one, not a mistake."""
+
+
+@rule(desc="Find the C toolchain", level=LogLevel.DEBUG)
+async def find_cc_toolchain(
     request: CcToolchainRequest,
     known: KnownPlatforms,
-    all_targets: AllTargets,
-    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
-    bash: BashBinary,
     subsystem: CcToolchainsSubsystem,
-) -> CcToolchain:
-    toolchains = [t for t in all_targets if isinstance(t, CcToolchainTarget)]
+    system_binaries: SystemBinariesSubsystem.EnvironmentAware,
+) -> FoundCcToolchain:
+    """`resolve_cc_toolchain` without raising, so callers can skip a platform this host cannot
+    build for."""
+    search_path = tuple(system_binaries.system_binary_paths)
+    toolchains = await targets_of_alias(TargetsOfAliasRequest(CcToolchainTarget.alias), **implicitly())
     for tgt in toolchains:
         for field in (CcToolchainHostField, CcToolchainTargetField):
-            known.get(tgt[field].value, f"the `{field.alias}` field of {tgt.address}")
+            if tgt[field].value not in known.by_name:
+                error = known.unknown(tgt[field].value, f"the `{field.alias}` field of {tgt.address}")
+                return FoundCcToolchain(None, None, search_path, error)
 
-    address: Address | None = None
     matches = [
         t
         for t in toolchains
@@ -106,38 +123,59 @@ async def resolve_cc_toolchain(
     ]
     native = request.platform == known.host
     strict = " `[cc-toolchains].strict` requires one for native builds too." if native else ""
+    address: Address | None = None
     if len(matches) == 1:
         address = matches[0].address
-        specs = tuple(
-            matches[0][f].value for f in (CcToolchainCcField, CcToolchainCxxField, CcToolchainArField)
+        specs = (
+            matches[0][CcToolchainCcField].value,
+            matches[0][CcToolchainCxxField].value,
+            matches[0][CcToolchainArField].value,
         )
     elif native and not matches and not subsystem.strict:
         specs = _IMPLICIT_NATIVE
-    elif toolchains:
-        pairs = sorted(
-            f"{t[CcToolchainHostField].value} -> {t[CcToolchainTargetField].value}" for t in toolchains
-        )
-        found = sorted(str(t.address) for t in matches) or "none"
-        raise ValueError(
-            f"Expected one `cc_toolchain` with host={known.host.name!r} and "
-            f"target={request.platform.name!r}, found {found}. Defined: {pairs}.{strict}"
-        )
     else:
-        raise ValueError(
-            f"Building for {request.platform.name} on {known.host.name} needs a `cc_toolchain` "
-            f"with host={known.host.name!r} and target={request.platform.name!r}.{strict}"
-        )
+        if toolchains:
+            pairs = sorted(
+                f"{t[CcToolchainHostField].value} -> {t[CcToolchainTargetField].value}" for t in toolchains
+            )
+            found = sorted(str(t.address) for t in matches) or "none"
+            error = (
+                f"Expected one `cc_toolchain` with host={known.host.name!r} and "
+                f"target={request.platform.name!r}, found {found}. Defined: {pairs}.{strict}"
+            )
+        else:
+            error = (
+                f"Building for {request.platform.name} on {known.host.name} needs a `cc_toolchain` "
+                f"with host={known.host.name!r} and target={request.platform.name!r}.{strict}"
+            )
+        # Without a match, only a native build is a mistake: `strict` asked for its toolchain.
+        return FoundCcToolchain(None, None, search_path, error, unmatched=not matches and not native)
 
-    search_path = tuple(system_binaries.system_binary_paths)
-    requests = [
-        binary_request(spec, search_path, version=version)
-        for spec, version in zip(specs, (True, True, False))
-    ]
+    try:
+        requests = [
+            binary_request(spec, search_path, version=version)
+            for spec, version in zip(specs, (True, True, False))
+        ]
+    except ValueError as e:
+        return FoundCcToolchain(address, None, search_path, str(e))
     found_paths = await concurrently(find_binary(r, **implicitly()) for r in requests)
     rationale = f"build for {request.platform.name}" + (f" ({address})" if address else "")
-    cc, cxx, ar = (
-        paths.first_path_or_raise(r, rationale=rationale) for r, paths in zip(requests, found_paths)
-    )
+    tools = []
+    for r, paths in zip(requests, found_paths):
+        if paths.first_path is None:
+            error = str(BinaryNotFoundError.from_request(r, rationale=rationale))
+            return FoundCcToolchain(address, None, search_path, error)
+        tools.append(paths.first_path)
+    cc, cxx, ar = tools
+    return FoundCcToolchain(address, (cc, cxx, ar), search_path, None)
+
+
+@rule(desc="Resolve the C toolchain", level=LogLevel.DEBUG)
+async def resolve_cc_toolchain(request: CcToolchainRequest, bash: BashBinary) -> CcToolchain:
+    found = await find_cc_toolchain(request, **implicitly())
+    if found.tools is None:
+        raise ValueError(found.error)
+    address, search_path, (cc, cxx, ar) = found.address, found.search_path, found.tools
     binutils = await fallible_to_exec_result_or_raise(
         **implicitly(
             Process(

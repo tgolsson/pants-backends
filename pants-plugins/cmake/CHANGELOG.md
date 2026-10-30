@@ -13,3 +13,16 @@
   sandbox, and has `clang_tidy_paths` for `pants_backend_cc.lint.clang_tidy`.
 - Platforms through pants-backend-platforms: compilers from `cc_toolchain` (pants-backend-cc),
   `cmake_toolchain_file`, and `platforms` on `cmake_target`.
+- `cmake_project` is a target generator: a `cmake_target` per library and executable, from a
+  placeholder-only configure per platform the project targets and this host can build for,
+  with `overrides`. A setup mistake, or a platform that fails to configure, is logged and
+  generates none. The generated targets depend on the new `cmake_project_inputs` target
+  `<project>#_inputs`, which owns the project's files and dependencies and carries its compile
+  steps and `clang_tidy_paths`; they get no inferred dependency on the project. A CMake target
+  named `_inputs` is an error. **Breaking:**
+  - `build_type` and `platforms` on a project apply to its generated targets;
+  - a hand-written `cmake_target` configures with its own `build_type`, else with the one its
+    `project` gives the targets it generates; a parametrized project is named as
+    `:proj@build_type=X` (a `parametrize`d `cmake_target` never resolved to the matching
+    project);
+  - compile steps (clang-tidy) belong to `<project>#_inputs`, configured with its `build_type`.

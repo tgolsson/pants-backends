@@ -10,3 +10,8 @@
   compiles and links against libraries from any backend implementing `CcLibraryFieldSet`,
   optionally run under a wrapper (`CcTestWrapperRequest`). `BuiltTest.coverage_notes` holds
   the `.gcno` notes of a coverage build, for coverage tooling.
+- `DeclaredOutputsFieldSet` and `declared_outputs`: the paths a target will produce, known
+  without producing them; `pants_backend_cc.generate` provides them for every target with
+  generator `outputs`.
+- `find_cc_toolchain`: the toolchain for a platform, or why this host cannot build for it, without
+  raising.

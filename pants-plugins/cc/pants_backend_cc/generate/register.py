@@ -6,7 +6,7 @@ from __future__ import annotations
 from pants.backend.cc.target_types import CCSourceField
 
 try:
-    from pants_backend_cc.generate import clang_format
+    from pants_backend_cc.generate import clang_format, outputs
     from pants_backend_cc.generate.clang_format import ClangFormatOutputsRequest
     from pants_backend_generate.specialization import GenerateSpecialization
 except ModuleNotFoundError as e:
@@ -30,4 +30,4 @@ def target_types():
 
 
 def rules():
-    return [*cpp_generate.rules(), *clang_format.rules()]
+    return [*cpp_generate.rules(), *clang_format.rules(), *outputs.rules()]

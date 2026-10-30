@@ -7,6 +7,7 @@ from pants.core.goals.package import BuiltPackage
 from pants.engine.addresses import Address
 from pants.engine.fs import DigestContents
 from pants.engine.internals.scheduler import ExecutionError
+from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 
 from pants_backend_platforms.testutil import (
@@ -20,6 +21,7 @@ from pants_backend_platforms.testutil import (
     platforms_build,
     rule_runner,
 )
+from pants_backend_platforms.util_rules.lookup import TargetsOfAlias, TargetsOfAliasRequest
 
 BOTH = f'platforms=["{HOST}", "{OTHER}"]'
 
@@ -243,3 +245,18 @@ def test_no_platform_matches_the_host(runner: RuleRunner) -> None:
 def test_no_platforms_defined_means_an_implicit_host(runner: RuleRunner) -> None:
     _setup(runner, {"a/BUILD": 'toy_artifact(name="a", text="A")'})
     assert _package(runner, "a", "a") == {"a/a.txt": f"A for {HOST}\n"}
+
+
+def test_targets_of_alias() -> None:
+    runner = rule_runner(QueryRule(TargetsOfAlias, [TargetsOfAliasRequest]))
+    runner.write_files(
+        {
+            "p/BUILD": platforms_build(),
+            "q/r/BUILD": 'platform(name="r", os="linux", arch="x86_64")\ntoy_artifact(name="a", text="A")\n',
+        }
+    )
+    found = runner.request(TargetsOfAlias, [TargetsOfAliasRequest("platform")])
+    assert sorted(str(t.address) for t in found) == sorted([f"p:{HOST}", f"p:{OTHER}", "q/r:r"])
+    assert [
+        str(t.address) for t in runner.request(TargetsOfAlias, [TargetsOfAliasRequest("toy_artifact")])
+    ] == ["q/r:a"]
