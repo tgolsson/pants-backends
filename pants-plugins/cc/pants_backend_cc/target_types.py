@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pants.core.goals.package import OutputPathField
 from pants.core.goals.test import (
     RuntimePackageDependenciesField,
     TestExtraEnvVarsField,
@@ -102,8 +103,8 @@ class CcTestIncludeDirsField(StringSequenceField):
     default = ()
     help = softwrap(
         """
-        Include directories for the test's translation units, relative to this BUILD file. They
-        come before the source roots of the test's and its dependencies' files, which are added
+        Include directories for the executable's translation units, relative to this BUILD file.
+        They come before the source roots of its own and its dependencies' files, which are added
         too.
         """
     )
@@ -112,7 +113,7 @@ class CcTestIncludeDirsField(StringSequenceField):
 class CcTestDefinesField(StringSequenceField):
     alias = "defines"
     default = ()
-    help = "Preprocessor definitions for the test's translation units, as `NAME` or `NAME=VALUE`."
+    help = "Preprocessor definitions for the executable's translation units, as `NAME` or `NAME=VALUE`."
 
 
 class CcTestCompilerArgsField(StringSequenceField):
@@ -133,8 +134,8 @@ class CcTestLinkerArgsField(StringSequenceField):
         """
         Extra arguments for the link, after the objects and the libraries' link arguments (the
         libraries themselves, everything they link against, system libraries such as `-lm`).
-        The link runs the C++ compiler when the test has C++ translation units or a library
-        links C consumers with it, else the C compiler.
+        The link runs the C++ compiler when the executable has C++ translation units or a
+        library links C consumers with it, else the C compiler.
         """
     )
 
@@ -214,5 +215,47 @@ class CcTestsGeneratorTarget(TargetGenerator):
         """
         Generates one `cc_test` per directory of translation units under `sources`. The other
         fields apply to every generated test; `overrides` adjusts single ones.
+        """
+    )
+
+
+class CcBinarySourcesField(CcTestSourcesField):
+    help = softwrap(
+        f"""
+        The executable's translation units ({", ".join(f"`{s}`" for s in TRANSLATION_UNIT_SUFFIXES)})
+        and the headers they include; optional when `dependencies` provide them. Every
+        translation unit is compiled and linked into one executable.
+        """
+    )
+
+
+class CcBinaryDependenciesField(CcTestDependenciesField):
+    help = softwrap(
+        """
+        The libraries the executable links against, in the order written here (their flags and
+        link arguments follow that order; each library brings everything it links against
+        itself), plus `cc_sources` targets, or targets that generate them (`cpp_generate`),
+        whose translation units are compiled into the executable. Not a library's own
+        `cc_sources`: those would be compiled in twice.
+        """
+    )
+
+
+class CcBinaryTarget(Target):
+    alias = "cc_binary"
+    core_fields = (
+        *COMMON_TARGET_FIELDS,
+        CcBinarySourcesField,
+        CcBinaryDependenciesField,
+        CcTestIncludeDirsField,
+        CcTestDefinesField,
+        CcTestCompilerArgsField,
+        CcTestLinkerArgsField,
+        OutputPathField,
+    )
+    help = softwrap(
+        """
+        An executable Pants compiles from `sources` and links against the libraries in
+        `dependencies`, for the host; `pants package` writes it to `output_path`.
         """
     )

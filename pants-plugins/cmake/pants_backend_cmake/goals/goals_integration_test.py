@@ -1,7 +1,10 @@
 """`package` and `test` on a small C project with the real CMake and the host compiler: the
 libraries come from CMake, and `cc_test`s consume them through their link interface."""
 
+import os
+import re
 import shutil
+import subprocess
 from typing import Any
 
 import pytest
@@ -16,6 +19,7 @@ from pants.core.util_rules import env_vars, external_tool, source_files, system_
 from pants.engine.addresses import Address, Addresses
 from pants.engine.fs import DigestContents
 from pants.engine.internals.parametrize import Parametrize
+from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
 from pants.engine.target import (
     Dependencies,
@@ -27,6 +31,7 @@ from pants.source import source_root
 from pants.testutil.rule_runner import RuleRunner
 
 from pants_backend_cc import register as cc_register
+from pants_backend_cc.goals.package import CcBinaryFieldSet
 from pants_backend_cc.goals.test import CcTestFieldSet, CcTestRequest
 from pants_backend_cc.testutil import GenTarget, codegen_rules
 from pants_backend_cc.toy_library import ToyLibraryTarget, toy_library_rules
@@ -137,6 +142,7 @@ def _rule_runner(*extra_rules: object) -> RuleRunner:
             *codegen_rules(),
             *register.rules(),
             QueryRule(BuiltPackage, [CMakeTargetFieldSet]),
+            QueryRule(BuiltPackage, [CcBinaryFieldSet]),
             QueryRule(TestResult, [CcTestRequest.Batch]),
             QueryRule(Addresses, [DependenciesRequest]),
             QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
@@ -174,6 +180,11 @@ def _test(rule_runner: RuleRunner, address: Address) -> TestResult:
     target = rule_runner.get_target(address)
     batch: Any = CcTestRequest.Batch("", (CcTestFieldSet.create(target),), None)
     return rule_runner.request(TestResult, [batch])
+
+
+def _package_binary(rule_runner: RuleRunner, name: str) -> BuiltPackage:
+    target = rule_runner.get_target(Address("", target_name=name))
+    return rule_runner.request(BuiltPackage, [CcBinaryFieldSet.create(target)])
 
 
 def _generated(name: str) -> Address:
@@ -227,6 +238,21 @@ def test_single_test_with_own_flags(rule_runner: RuleRunner) -> None:
     # `include_dirs`, `defines`, `compiler_args` and `linker_args`; `-lm` comes from demo.
     single = _test(rule_runner, Address("", target_name="single"))
     assert single.exit_code == 0, single.stderr_bytes.decode()
+
+
+def test_package_cc_binary(rule_runner: RuleRunner) -> None:
+    # Built in the project's build directory against demo's link interface, then run from `dist/`.
+    _write_project(
+        rule_runner,
+        BUILD=BUILD + 'cc_binary(name="app", sources=["single.c", "extra/single.h"], dependencies=[":demo"], '
+        'include_dirs=["extra"], defines=["SINGLE_SCALE=2"])\n',
+    )
+    package = _package_binary(rule_runner, "app")
+    contents = rule_runner.request(DigestContents, [package.digest])
+    assert [(fc.path, fc.is_executable) for fc in contents] == [("app", True)]
+    rule_runner.write_digest(package.digest, path_prefix="dist")
+    result = subprocess.run([os.path.join(rule_runner.build_root, "dist", "app")], capture_output=True)
+    assert result.returncode == 0, result.stderr
 
 
 def test_project_dependency_is_inferred(rule_runner: RuleRunner) -> None:
@@ -373,7 +399,26 @@ def test_cc_test_needs_the_host_platform(rule_runner: RuleRunner) -> None:
     )
     result = _test(rule_runner, Address("", target_name="wintest"))
     assert result.exit_code == 1
-    assert f"tests build for the host, {HOST}, but `//:demo` does not list it" in result.stderr_bytes.decode()
+    assert (
+        f"executables build for the host, {HOST}, but `//:demo` does not list it"
+        in result.stderr_bytes.decode()
+    )
+
+
+def test_cc_binary_needs_the_host_platform(rule_runner: RuleRunner) -> None:
+    _write_project(
+        rule_runner,
+        BUILD=_with_platforms(BUILD, f'platforms=["{WINDOWS}"]', "demo")
+        + 'cc_binary(name="winapp", sources=["winapp.c"], dependencies=[":demo"])\n',
+        **{
+            "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
+            f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n',
+            "winapp.c": "int main(void) { return 0; }\n",
+        },
+    )
+    message = f"//:winapp: executables build for the host, {HOST}, but `//:demo` does not list it"
+    with pytest.raises(ExecutionError, match=re.escape(message)):
+        _package_binary(rule_runner, "winapp")
 
 
 def test_cc_test_builds_for_the_host_only(rule_runner: RuleRunner) -> None:

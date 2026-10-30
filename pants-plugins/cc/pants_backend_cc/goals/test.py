@@ -43,7 +43,11 @@ from pants_backend_cc.target_types import (
     CcTestSourcesField,
     CcTestTimeoutField,
 )
-from pants_backend_cc.util_rules.executable import TestBuildError, TestBuildRequest, build_test
+from pants_backend_cc.util_rules.executable import (
+    ExecutableBuildError,
+    TestBuildRequest,
+    build_test,
+)
 from pants_backend_cc.util_rules.library import CcLibraryError
 from pants_backend_cc.util_rules.scan import ScanError
 
@@ -133,7 +137,7 @@ async def run_cc_test(
     except (
         ProcessExecutionFailure,
         ScanError,
-        TestBuildError,
+        ExecutableBuildError,
         CcLibraryError,
         CcTestWrapperError,
     ) as error:

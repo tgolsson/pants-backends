@@ -1,5 +1,5 @@
-"""Compile and link a `cc_test` in one working directory against the libraries in its
-`dependencies`, which their backends build and describe (`library.py`). Every library's flags
+"""Compile and link a `cc_test` or `cc_binary` in one working directory against the libraries in
+its `dependencies`, which their backends build and describe (`library.py`). Every library's flags
 and link arguments are concatenated in declared order, unchanged, because only the library's
 backend knows which of its options may be merged or reordered.
 """
@@ -78,9 +78,10 @@ from pants_backend_platforms.util_rules.platforms import KnownPlatforms, TargetP
 _CXX_SUFFIXES = tuple(s for s in TRANSLATION_UNIT_SUFFIXES if s != ".c")
 _COVERAGE_FLAGS = frozenset({"--coverage", "-coverage", "-ftest-coverage"})
 OUTPUT_DIR = "__pants_tests"
+BINARY_OUTPUT_DIR = "__pants_binaries"
 
 
-class TestBuildError(Exception):
+class ExecutableBuildError(Exception):
     pass
 
 
@@ -100,7 +101,7 @@ class CompileUnitRequest:
     """The libraries' files at `universe.paths`, subset to those the scan finds."""
     generated: Digest
     owner: str
-    """The test address, for messages."""
+    """The executable's address, for messages."""
     source: str
     """The translation unit, relative to the sandbox root."""
     argv: tuple[str, ...]
@@ -108,7 +109,7 @@ class CompileUnitRequest:
     object: str
     """The object file, relative to the working directory."""
     files: Digest
-    """The test's own files, which the scan may find includes in."""
+    """The executable's own files, which the scan may find includes in."""
     file_paths: tuple[str, ...]
 
 
@@ -128,8 +129,8 @@ async def _under_cwd(cwd: str, digest: Digest) -> Digest:
     return await add_prefix(AddPrefix(digest, cwd)) if cwd else digest
 
 
-@rule(desc="Compile test translation unit", level=LogLevel.DEBUG)
-async def compile_test_unit(request: CompileUnitRequest) -> CompiledUnit:
+@rule(desc="Compile C/C++ translation unit", level=LogLevel.DEBUG)
+async def compile_unit(request: CompileUnitRequest) -> CompiledUnit:
     universe = request.universe
     cwd = universe.cwd
     headers = await scan_headers(
@@ -174,14 +175,21 @@ async def compile_test_unit(request: CompileUnitRequest) -> CompiledUnit:
 
 
 @dataclass(frozen=True)
+class ExecutableBuildRequest:
+    address: Address
+    output_dir: str
+    """Where the objects and the executable go, relative to the working directory."""
+
+
+@dataclass(frozen=True)
 class TestBuildRequest:
     address: Address
 
 
 @dataclass(frozen=True)
-class BuiltTest:
+class BuiltExecutable:
     cwd: str
-    """Where the test runs, relative to the sandbox root."""
+    """Where the executable runs, relative to the sandbox root."""
     executable: str
     """Relative to the sandbox root, under `cwd`."""
     runtime: Digest
@@ -190,6 +198,9 @@ class BuiltTest:
     """The files of the dependencies, generated ones included, staged for the run."""
     coverage_notes: Digest
     """The `.gcno` files of a coverage build, which gcov reads with the data a run writes."""
+
+
+BuiltTest = BuiltExecutable
 
 
 @dataclass(frozen=True)
@@ -209,7 +220,7 @@ async def _libraries_in_declared_order(target: Target, dependencies: tuple[Targe
     for tgt, field_sets in zip(dependencies, per_target.collection):
         if len(field_sets) > 1:
             kinds = sorted(type(fs).__name__ for fs in field_sets)
-            raise TestBuildError(f"{address}: {tgt.address} is a library several ways: {kinds}")
+            raise ExecutableBuildError(f"{address}: {tgt.address} is a library several ways: {kinds}")
         if field_sets:
             libraries[tgt.address] = _Library(tgt, field_sets[0])
     declared = [v for v in (target[CcTestDependenciesField].value or ()) if not v.startswith("!")]
@@ -225,12 +236,12 @@ async def _libraries_in_declared_order(target: Target, dependencies: tuple[Targe
 
 
 async def _ask_libraries(address: Address, requests: Sequence[Any]) -> list[Any]:
-    """One answer per library; a library that cannot serve the test fails the test. `requests`
-    is built eagerly, so each request binds the consumer it was made for."""
+    """One answer per library; a library that cannot serve the executable fails its build.
+    `requests` is built eagerly, so each request binds the consumer it was made for."""
     try:
         return list(await concurrently(requests))
     except CcLibraryError as error:
-        raise TestBuildError(f"{address}: {error}") from error
+        raise ExecutableBuildError(f"{address}: {error}") from error
 
 
 def _path_kinds(entries: Iterable[Any]) -> dict[str, set[tuple]]:
@@ -252,7 +263,7 @@ def _path_kinds(entries: Iterable[Any]) -> dict[str, set[tuple]]:
 
 
 async def _merge_from_libraries(address: Address, what: str, owned: list[tuple[str, Digest]]) -> Digest:
-    """Libraries' outputs must not overlap; when two put different things at one path, the test
+    """Libraries' outputs must not overlap; when two put different things at one path, the build
     fails naming them."""
     try:
         return await merge_digests(MergeDigests(d for _, d in owned))
@@ -266,32 +277,36 @@ async def _merge_from_libraries(address: Address, what: str, owned: list[tuple[s
                 kinds[path] |= path_kinds
         clashes = sorted(p for p, k in kinds.items() if len(k) > 1)
         if not clashes:
-            raise TestBuildError(f"{address}: the libraries' {what} cannot be merged: {error}") from error
-        raise TestBuildError(
+            raise ExecutableBuildError(
+                f"{address}: the libraries' {what} cannot be merged: {error}"
+            ) from error
+        raise ExecutableBuildError(
             f"{address}: the libraries {list(writers[clashes[0]])} put different {what} at `{clashes[0]}`; a "
             "library's outputs belong under paths unique to it"
         ) from error
 
 
-@rule(desc="Build C/C++ test")
-async def build_test(request: TestBuildRequest, platform: Platform, known: KnownPlatforms) -> BuiltTest:
+@rule(desc="Build C/C++ executable")
+async def build_executable(
+    request: ExecutableBuildRequest, platform: Platform, known: KnownPlatforms
+) -> BuiltExecutable:
     address = request.address
     host = known.host
     wrapped = await resolve_target(
-        WrappedTargetRequest(address, description_of_origin="cc_test"), **implicitly()
+        WrappedTargetRequest(address, description_of_origin="cc_test or cc_binary"), **implicitly()
     )
     target = wrapped.target
     dependencies = await resolve_targets(**implicitly(DependenciesRequest(target[CcTestDependenciesField])))
     libraries = await _libraries_in_declared_order(target, tuple(dependencies))
     if not libraries:
-        raise TestBuildError(
-            f"{address}: `dependencies` must name at least one library: the test is compiled as "
-            "a consumer of it"
+        raise ExecutableBuildError(
+            f"{address}: `dependencies` must name at least one library: the executable is compiled "
+            "as a consumer of it"
         )
     for library in libraries:
         if host not in known.listed(library.target.get(PlatformsField)):
-            raise TestBuildError(
-                f"{address}: tests build for the host, {host.name}, but "
+            raise ExecutableBuildError(
+                f"{address}: executables build for the host, {host.name}, but "
                 f"`{library.target.address}` does not list it in `platforms`"
             )
     sources, extra = await concurrently(
@@ -306,12 +321,14 @@ async def build_test(request: TestBuildRequest, platform: Platform, known: Known
     )
     error = overlap_error(address, sources.files, extra.files)
     if error:
-        raise TestBuildError(error)
+        raise ExecutableBuildError(error)
     files = await merge_digests(MergeDigests([sources.snapshot.digest, extra.snapshot.digest]))
     file_paths = tuple(sorted({*sources.files, *extra.files}))
     units = list(dict.fromkeys(p for p in (*sources.files, *extra.files) if is_translation_unit(p)))
     if not units:
-        raise TestBuildError(f"{address}: no translation unit to compile in `sources` or `dependencies`")
+        raise ExecutableBuildError(
+            f"{address}: no translation unit to compile in `sources` or `dependencies`"
+        )
     languages = sorted({language(u) for u in units})
     link_language = CXX if CXX in languages else C
 
@@ -332,16 +349,14 @@ async def build_test(request: TestBuildRequest, platform: Platform, known: Known
     required = {lib.target.address: c.path for lib, c in zip(libraries, cwds) if c.path is not None}
     if len(set(required.values())) > 1:
         found = sorted(f"{a}: {p or '.'}" for a, p in required.items())
-        raise TestBuildError(f"{address}: the libraries need different working directories: {found}")
+        raise ExecutableBuildError(f"{address}: the libraries need different working directories: {found}")
     cwd = next(iter(required.values()), "")
     relative_root = os.path.relpath(".", cwd or ".")
 
     def from_cwd(path: str) -> str:
         return os.path.normpath(os.path.join(relative_root, path))
 
-    # Without the address's parameters: a parametrization that does not change the build (one
-    # that only changes how the test runs, say) then shares every compile and link process.
-    output_dir = f"{OUTPUT_DIR}/{address.parametrize({}, replace=True).path_safe_spec}"
+    output_dir = request.output_dir
     linker = CcConsumer(link_language, cwd)
 
     async def compile_units() -> list[CompiledUnit]:
@@ -409,7 +424,7 @@ async def build_test(request: TestBuildRequest, platform: Platform, known: Known
         compilers = {C: toolchain.cc.path, CXX: toolchain.cxx.path}
         return list(
             await concurrently(
-                compile_test_unit(
+                compile_unit(
                     CompileUnitRequest(
                         universe=universe,
                         library_files=library_files,
@@ -435,7 +450,7 @@ async def build_test(request: TestBuildRequest, platform: Platform, known: Known
             )
         )
 
-    # The libraries build while the test compiles.
+    # The libraries build while the executable compiles.
     compiled, links = await concurrently(
         compile_units(),
         _ask_libraries(
@@ -509,13 +524,22 @@ async def build_test(request: TestBuildRequest, platform: Platform, known: Known
         merge_digests(MergeDigests([digest, library_runtime])),
         merge_digests(MergeDigests(c.digest for c in compiled)),
     )
-    return BuiltTest(
+    return BuiltExecutable(
         cwd=cwd,
         executable=_in_cwd(cwd, executable),
         runtime=runtime,
         data=extra.snapshot.digest,
         coverage_notes=await digest_subset_to_digest(DigestSubset(notes, PathGlobs(["**/*.gcno"]))),
     )
+
+
+@rule(desc="Build C/C++ test")
+async def build_test(request: TestBuildRequest) -> BuiltTest:
+    # Without the address's parameters: a parametrization that does not change the build (one
+    # that only changes how the test runs, say) then shares every compile and link process.
+    address = request.address
+    output_dir = f"{OUTPUT_DIR}/{address.parametrize({}, replace=True).path_safe_spec}"
+    return await build_executable(ExecutableBuildRequest(address, output_dir), **implicitly())
 
 
 def rules():

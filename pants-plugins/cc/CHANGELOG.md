@@ -10,6 +10,9 @@
   compiles and links against libraries from any backend implementing `CcLibraryFieldSet`,
   optionally run under a wrapper (`CcTestWrapperRequest`). `BuiltTest.coverage_notes` holds
   the `.gcno` notes of a coverage build, for coverage tooling.
+- `cc_binary`: an executable built like a `cc_test` against the same libraries, which
+  `pants package` writes to `output_path`. `cc_test` build errors are now worded for both
+  ("executables build for the host", "the executable is compiled as a consumer of it").
 - `DeclaredOutputsFieldSet` and `declared_outputs`: the paths a target will produce, known
   without producing them; `pants_backend_cc.generate` provides them for every target with
   generator `outputs`.

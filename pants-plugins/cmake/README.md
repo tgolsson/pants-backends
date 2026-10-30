@@ -57,9 +57,9 @@ local execution only (the compilers are found on the machine).
 
 ## C/C++ tools
 
-A static or shared `cmake_target` is a [pants-backend-cc](../cc) library, so a `cc_test`
-depending on it compiles and links in the project's build directory as CMake would build a
-consumer of it (see How it works); nothing PRIVATE leaks. `clang_tidy_paths` on
+A static or shared `cmake_target` is a [pants-backend-cc](../cc) library, so a `cc_test` or
+`cc_binary` depending on it compiles and links in the project's build directory as CMake would
+build a consumer of it (see How it works); nothing PRIVATE leaks. `clang_tidy_paths` on
 `cmake_project` selects what `pants_backend_cc.lint.clang_tidy` lints. A `cpp_generate` target
 (`pants_backend_cc.generate`) can be a dependency of a `cmake_project` or `cc_test`.
 
@@ -67,9 +67,9 @@ consumer of it (see How it works); nothing PRIVATE leaks. `clang_tidy_paths` on
 
 The compilers and `ar` come from the `cc_toolchain` ([pants-backend-cc](../cc)) for the host
 and the platform being built; without any, `gcc`, `g++` and `ar` for the host. A
-`cmake_target` builds for its `platforms`, and for the host when a `cc_test` links it. Enable
-`pants_backend_platforms` and `pants_backend_cc` to declare `platform` and `cc_toolchain`
-targets.
+`cmake_target` builds for its `platforms`, and for the host when a `cc_test` or `cc_binary`
+links it. Enable `pants_backend_platforms` and `pants_backend_cc` to declare `platform` and
+`cc_toolchain` targets.
 
 The backend adds `cmake_toolchain_file` to `cc_toolchain`, passed as `CMAKE_TOOLCHAIN_FILE`: a
 cross build needs one for `CMAKE_SYSTEM_NAME`. See the field's help for what it may contain.
@@ -117,9 +117,9 @@ cross build needs one for `CMAKE_SYSTEM_NAME`. See the field's help for what it 
 - Debug and coverage builds embed the compile sandbox path (`DW_AT_comp_dir`, `.gcda`
   paths); `-ffile-prefix-map`/`-fprofile-prefix-map` are not injected yet.
 - Parametrized projects package to the same `dist/<build_dir>/` path.
-- The `cmake_target`s one `cc_test` links must belong to one project. The probes are added in
-  the top-level directory's scope, so directory-scoped settings of a subdirectory do not
-  reach a consumer. The backend owns `CMAKE_PROJECT_INCLUDE`; a project that sets it itself
-  loses it.
+- The `cmake_target`s one `cc_test` or `cc_binary` links must belong to one project. The
+  probes are added in the top-level directory's scope, so directory-scoped settings of a
+  subdirectory do not reach a consumer. The backend owns `CMAKE_PROJECT_INCLUDE`; a project
+  that sets it itself loses it.
 - `cmake_args` are the same for every platform.
 - Pants on Windows is out of scope, and a macOS host is untested.

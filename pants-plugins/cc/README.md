@@ -71,6 +71,15 @@ fields. A test that fails to build is a failed test.
   `CcTestWrapperRequest` union; `goals/wrapper.py` documents the contract.
 - `[cc-test-runner].skip` skips the tests.
 
+## Binaries
+
+`cc_binary` builds an executable for the host the way `cc_test` builds a test, from the same
+fields less the ones for running it, and `pants package` writes it to `output_path`. A library's
+working directory and the declared link order apply as for tests. Only the executable is
+written, not the shared libraries it links against, and its run path (`$ORIGIN`-relative, or
+`@loader_path` on macOS) points at where they sit in the build sandbox, so from `dist/` it will
+not find them: link static libraries into a binary you package.
+
 ## clang-tidy
 
 The optional sub-backend `pants_backend_cc.lint.clang_tidy` adds `[clang-tidy]` to `pants lint`,
