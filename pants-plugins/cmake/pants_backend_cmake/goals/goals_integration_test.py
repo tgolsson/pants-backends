@@ -491,10 +491,10 @@ def test_coverage_build_writes_notes(rule_runner: RuleRunner) -> None:
     )
     _write_project(
         rule_runner,
-        BUILD=BUILD.replace('"private/*.h"])', f'"private/*.h"], coverage=True, cmake_args=[{flags}])'),
+        BUILD=BUILD.replace('"private/*.h"])', f'"private/*.h"], coverage_cmake_args=[{flags}])'),
     )
     built = rule_runner.request(
-        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="single"))]
+        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="single"), coverage=True)]
     )
     notes = rule_runner.request(DigestContents, [built.coverage_notes])
     assert [fc.path for fc in notes] == ["build/__pants_tests/.single/obj/single.c.gcno"]

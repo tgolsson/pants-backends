@@ -4,7 +4,7 @@ executable linking each library. So a consumer sees a library exactly as any CMa
 does: its PUBLIC and INTERFACE defines, include directories and options, the directory's global
 flags for the language, and the full transitive link line; its private requirements do not
 leak. Consumers compile and link in the project's build directory, where those flags and paths
-apply unchanged.
+apply unchanged. A coverage consumer gets all of it from the project's coverage build.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ import os
 import shlex
 from dataclasses import dataclass
 
-from pants.engine.fs import MergeDigests
-from pants.engine.intrinsics import merge_digests
+from pants.engine.fs import EMPTY_DIGEST, Digest, DigestSubset, MergeDigests, PathGlobs
+from pants.engine.intrinsics import digest_subset_to_digest, merge_digests
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.unions import UnionRule
 from pants.util.frozendict import FrozenDict
@@ -34,13 +34,21 @@ from pants_backend_cmake.ninja.graph import (
     CMakeTargetInfo,
     boundary_outputs,
     is_link_edge,
+    plan_target,
     target_edges,
 )
 from pants_backend_cmake.ninja.parser import NinjaEdge, NinjaGraph
 from pants_backend_cmake.target_types import CMakeTargetNameField, CMakeTargetProjectField
 from pants_backend_cmake.util_rules.canonicalize import rebase
+from pants_backend_cmake.util_rules.configure import ConfiguredProject
 from pants_backend_cmake.util_rules.probes import probe_name
-from pants_backend_cmake.util_rules.replay import BuildTargetRequest, build_target
+from pants_backend_cmake.util_rules.replay import (
+    BuildTargetRequest,
+    EdgeRequest,
+    build_edge,
+    build_target,
+    edge_inputs,
+)
 from pants_backend_cmake.util_rules.scan import (
     SCAN_OVERRIDES,
     HeaderSetRequest,
@@ -155,8 +163,12 @@ class CMakeLibraryFieldSet(CcLibraryFieldSet):
     required_fields = (CMakeTargetProjectField, CMakeTargetNameField)
 
 
-async def _library(field_set: CMakeLibraryFieldSet, platform: TargetPlatform) -> ResolvedCMakeTarget:
-    resolved = await resolve_cmake_target(CMakeTargetRequest(field_set.address, platform), **implicitly())
+async def _library(
+    field_set: CMakeLibraryFieldSet, platform: TargetPlatform, consumer: CcConsumer
+) -> ResolvedCMakeTarget:
+    resolved = await resolve_cmake_target(
+        CMakeTargetRequest(field_set.address, platform, consumer.coverage), **implicitly()
+    )
     if resolved.info.kind not in _LIBRARY_KINDS:
         raise CcLibraryError(
             f"cannot link against CMake target `{resolved.name}` of {field_set.address} "
@@ -169,7 +181,7 @@ async def _library(field_set: CMakeLibraryFieldSet, platform: TargetPlatform) ->
 async def cmake_library_cwd(
     field_set: CMakeLibraryFieldSet, platform: TargetPlatform, consumer: CcConsumer
 ) -> CcLibraryCwd:
-    resolved = await _library(field_set, platform)
+    resolved = await _library(field_set, platform, consumer)
     return CcLibraryCwd(resolved.project.build_dir)
 
 
@@ -177,7 +189,7 @@ async def cmake_library_cwd(
 async def cmake_compile_interface(
     field_set: CMakeLibraryFieldSet, platform: TargetPlatform, consumer: CcConsumer
 ) -> CcCompileInterface:
-    resolved = await _library(field_set, platform)
+    resolved = await _library(field_set, platform, consumer)
     project = resolved.project
     flags = consumer_compile_flags(
         project.graph, project.targets, project.relative_root, resolved.name, consumer.language
@@ -195,11 +207,30 @@ async def cmake_compile_interface(
     )
 
 
+async def _coverage(project: ConfiguredProject, libraries: dict[str, None]) -> Digest:
+    """The `.gcno` notes of the compile edges behind `libraries`, which the link line names
+    with everything they link, and the inputs of those compiles, which hold the sources gcov
+    reads."""
+    edges = dict.fromkeys(
+        edge
+        for name in libraries
+        for edge in plan_target(project.graph, name, project.targets).edges
+        if is_compile_edge(edge)
+    )
+    built, inputs = await concurrently(
+        concurrently(build_edge(EdgeRequest(project, e), **implicitly()) for e in edges),
+        concurrently(edge_inputs(EdgeRequest(project, e), **implicitly()) for e in edges),
+    )
+    objects = await merge_digests(MergeDigests(b.digest for b in built))
+    notes = await digest_subset_to_digest(DigestSubset(objects, PathGlobs(["**/*.gcno"])))
+    return await merge_digests(MergeDigests([notes, *(i.digest for i in inputs)]))
+
+
 @rule(desc="Read the link interface of a CMake library", level=LogLevel.DEBUG)
 async def cmake_link_interface(
     field_set: CMakeLibraryFieldSet, platform: TargetPlatform, consumer: CcConsumer
 ) -> CcLinkInterface:
-    resolved = await _library(field_set, platform)
+    resolved = await _library(field_set, platform, consumer)
     project = resolved.project
     graph, targets = project.graph, project.targets
     link = consumer_link(graph, targets, project.relative_root, resolved.name, consumer.language)
@@ -214,6 +245,9 @@ async def cmake_link_interface(
         merge_digests(MergeDigests(b.digest for b in built)),
         merge_digests(MergeDigests(b.runtime for b in built)),
     )
+    coverage = EMPTY_DIGEST
+    if project.coverage:
+        coverage = await _coverage(project, names)
     shared = (t for t in args if t in boundary and targets[boundary[t]].kind == "SHARED_LIBRARY")
     return CcLinkInterface(
         driver=link.driver,
@@ -222,6 +256,7 @@ async def cmake_link_interface(
         libraries=libraries,
         runtime=runtime,
         runtime_dirs=tuple(dict.fromkeys(os.path.dirname(t) for t in shared)),
+        coverage=coverage,
     )
 
 

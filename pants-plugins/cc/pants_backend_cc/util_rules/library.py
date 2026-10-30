@@ -12,7 +12,7 @@ from abc import ABCMeta
 from dataclasses import dataclass
 
 from pants.engine.environment import EnvironmentName
-from pants.engine.fs import Digest
+from pants.engine.fs import EMPTY_DIGEST, Digest
 from pants.engine.rules import collect_rules, rule
 from pants.engine.target import FieldSet
 from pants.engine.unions import union
@@ -32,6 +32,9 @@ class CcConsumer:
     cwd: str | None
     """Where the consumer compiles and links, relative to the sandbox root ("" is the root);
     every path an interface gives is relative to it. `None` while `library_cwd` decides it."""
+    coverage: bool = False
+    """The consumer runs for a coverage report: a library that can be instrumented serves that
+    build, and its link interface's `coverage`; one that cannot serves its usual build."""
 
 
 @union(in_scope_types=[EnvironmentName, TargetPlatform, CcConsumer])
@@ -85,6 +88,10 @@ class CcLinkInterface:
     runtime_dirs: tuple[str, ...]
     """Directories holding shared libraries the executable loads, for its run path, relative to
     the consumer's `cwd`."""
+    coverage: Digest = EMPTY_DIGEST
+    """For a coverage consumer of an instrumented library: the `.gcno` notes of every object
+    the link brings and the files their compiles read, where those compiles had them, relative
+    to the sandbox root."""
 
 
 @rule(polymorphic=True)

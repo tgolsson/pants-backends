@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pants.engine.target import (
     COMMON_TARGET_FIELDS,
-    BoolField,
     Dependencies,
     MultipleSourcesField,
     OverridesField,
@@ -104,13 +103,16 @@ class CMakeBuildTypeField(StringField):
     )
 
 
-class CMakeCoverageField(BoolField):
-    alias = "coverage"
-    default = False
+class CMakeCoverageArgsField(StringSequenceField):
+    alias = "coverage_cmake_args"
+    default = ()
     help = softwrap(
         """
-        The compile commands write gcov `.gcno` files next to their objects (pass the
-        instrumentation flags through `cmake_args`); the replay captures them as outputs.
+        Arguments added to `cmake_args` for the build a coverage consumer links, such as a
+        `cc_test` under `pants test --use-coverage`: they should make the compiles write gcov
+        notes and the links bring the gcov runtime (`--coverage`). That build is a configure of
+        its own, whose replay captures each compile's `.gcno`. Unset, coverage consumers get the
+        usual build and the project's code is not in the report.
         """
     )
 
@@ -197,7 +199,7 @@ class CMakeProjectTarget(TargetGenerator):
         CMakeArgsField,
         CMakeBuildDirField,
         CMakeBuildTypeField,
-        CMakeCoverageField,
+        CMakeCoverageArgsField,
         PlatformsField,
         CMakeProjectOverridesField,
     )

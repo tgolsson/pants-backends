@@ -19,7 +19,8 @@ local execution only (the compilers are found on the machine).
   `cpp_generate`); their files are mounted for the compile and link steps, and configure sees
   only those matching `configure_placeholders`. A path both `sources` and a dependency
   provide is an error (drop it with `"!gen/registry.cpp"`). `cmake_args` and `build_dir`
-  (default `build`) are passed to CMake.
+  (default `build`) are passed to CMake. `coverage_cmake_args` are added to `cmake_args` for
+  the build coverage consumers link (see C/C++ tools).
 
   The project is a target generator: it generates a `cmake_target` `<project>#<name>` for every
   library and executable CMake defines. They are found by a configure that sees `sources` as
@@ -64,6 +65,13 @@ build a consumer of it (see How it works); nothing PRIVATE leaks. `clang_tidy_pa
 and `compile_cost_exempt_paths` what `pants_backend_cc.lint.compile_cost` measures and gates.
 A `cpp_generate` target (`pants_backend_cc.generate`) can be a dependency of a `cmake_project`
 or `cc_test`.
+
+For `pants test --use-coverage` with `pants_backend_cc.coverage`, a `cc_test` links the
+project's coverage build: a configure of its own with `coverage_cmake_args` added, which should
+make the compiles write gcov notes and the links bring the gcov runtime (`--coverage`, or the
+project's own switch). Its replay keeps each compile's `.gcno`, and the test gets the notes and
+inputs of every compile behind the libraries on its link line. A project without
+`coverage_cmake_args` serves its usual build, and other consumers never see the coverage build.
 
 ## Platforms
 
@@ -117,7 +125,8 @@ cross build needs one for `CMAKE_SYSTEM_NAME`. See the field's help for what it 
 - Two dependencies providing one path with different contents fail with the engine's
   digest-merge error, which does not name the targets.
 - Debug and coverage builds embed the compile sandbox path (`DW_AT_comp_dir`, `.gcda`
-  paths); `-ffile-prefix-map`/`-fprofile-prefix-map` are not injected yet.
+  paths); `-ffile-prefix-map` is not injected. `pants_backend_cc.coverage` maps the `.gcda`
+  paths itself.
 - Parametrized projects package to the same `dist/<build_dir>/` path.
 - The `cmake_target`s one `cc_test` or `cc_binary` links must belong to one project. The
   probes are added in the top-level directory's scope, so directory-scoped settings of a

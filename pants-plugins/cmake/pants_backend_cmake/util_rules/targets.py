@@ -24,6 +24,7 @@ from pants_backend_cc.util_rules.fields import parse_address
 from pants_backend_cmake.ninja.graph import CMakeTargetInfo
 from pants_backend_cmake.target_types import (
     CMakeBuildTypeField,
+    CMakeCoverageArgsField,
     CMakeProjectSourcesField,
     CMakeTargetNameField,
     CMakeTargetProjectField,
@@ -66,6 +67,8 @@ async def infer_cmake_project_dependency(request: InferCMakeProjectDependency) -
 class CMakeTargetRequest:
     address: Address
     platform: TargetPlatform
+    coverage: bool = False
+    """The project's build for coverage consumers, when it has `coverage_cmake_args`."""
 
 
 @dataclass(frozen=True)
@@ -111,8 +114,9 @@ async def resolve_cmake_target(request: CMakeTargetRequest) -> ResolvedCMakeTarg
         raise ValueError(f"{request.address}: `project` must name a `cmake_project`, not {project_address}")
     # `get`: other backends' targets reach this rule without a `build_type` field.
     build_type = target.get(CMakeBuildTypeField).value or await _project_build_type(project_address)
+    coverage = request.coverage and bool(project_wrapped.target[CMakeCoverageArgsField].value)
     configured = await configure_project(
-        ConfigureRequest(project_address, request.platform, build_type), **implicitly()
+        ConfigureRequest(project_address, request.platform, build_type, coverage), **implicitly()
     )
     name = target[CMakeTargetNameField].value or request.address.target_name
     info = configured.targets.get(name)

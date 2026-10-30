@@ -179,11 +179,15 @@ class ExecutableBuildRequest:
     address: Address
     output_dir: str
     """Where the objects and the executable go, relative to the working directory."""
+    coverage: bool = False
+    """Build against the libraries' instrumented builds (`CcConsumer.coverage`) and link the
+    gcov runtime."""
 
 
 @dataclass(frozen=True)
 class TestBuildRequest:
     address: Address
+    coverage: bool = False
 
 
 @dataclass(frozen=True)
@@ -198,6 +202,9 @@ class BuiltExecutable:
     """The files of the dependencies, generated ones included, staged for the run."""
     coverage_notes: Digest
     """The `.gcno` files of a coverage build, which gcov reads with the data a run writes."""
+    coverage: Digest
+    """For a coverage build, what gcov reads besides the data a run writes: the libraries'
+    `CcLinkInterface.coverage`, `coverage_notes` and the executable's own files."""
 
 
 BuiltTest = BuiltExecutable
@@ -333,7 +340,7 @@ async def build_executable(
     link_language = CXX if CXX in languages else C
 
     # Asked once with the link language; the answer holds for every language.
-    asking = CcConsumer(link_language, None)
+    asking = CcConsumer(link_language, None, request.coverage)
     toolchain, cwds = await concurrently(
         resolve_cc_toolchain(CcToolchainRequest(host), **implicitly()),
         _ask_libraries(
@@ -357,7 +364,7 @@ async def build_executable(
         return os.path.normpath(os.path.join(relative_root, path))
 
     output_dir = request.output_dir
-    linker = CcConsumer(link_language, cwd)
+    linker = CcConsumer(link_language, cwd, request.coverage)
 
     async def compile_units() -> list[CompiledUnit]:
         # Optional roots: a file outside every root needs no include directory.
@@ -380,7 +387,7 @@ async def build_executable(
             *(f"-D{d}" for d in target[CcTestDefinesField].value or ()),
             *(target[CcTestCompilerArgsField].value or ()),
         ]
-        consumers = [CcConsumer(lang, cwd) for lang in languages]
+        consumers = [CcConsumer(lang, cwd, request.coverage) for lang in languages]
         per_language = await concurrently(
             _ask_libraries(
                 address,
@@ -481,6 +488,7 @@ async def build_executable(
         *(from_cwd(c.object) for c in compiled),
         *concatenated(*(link.args for link in links)),
         *rpaths,
+        *(["--coverage"] if request.coverage else []),
         *(target[CcTestLinkerArgsField].value or ()),
         "-o",
         executable,
@@ -520,16 +528,28 @@ async def build_executable(
         )
     )
     digest = await _under_cwd(cwd, result.output_digest)
-    runtime, notes = await concurrently(
+    runtime, objects = await concurrently(
         merge_digests(MergeDigests([digest, library_runtime])),
         merge_digests(MergeDigests(c.digest for c in compiled)),
     )
+    notes = await digest_subset_to_digest(DigestSubset(objects, PathGlobs(["**/*.gcno"])))
+    coverage = EMPTY_DIGEST
+    if request.coverage:
+        coverage = await _merge_from_libraries(
+            address,
+            "coverage files",
+            [
+                *((str(lib.target.address), link.coverage) for lib, link in zip(libraries, links)),
+                (str(address), await merge_digests(MergeDigests([notes, files]))),
+            ],
+        )
     return BuiltExecutable(
         cwd=cwd,
         executable=_in_cwd(cwd, executable),
         runtime=runtime,
         data=extra.snapshot.digest,
-        coverage_notes=await digest_subset_to_digest(DigestSubset(notes, PathGlobs(["**/*.gcno"]))),
+        coverage_notes=notes,
+        coverage=coverage,
     )
 
 
@@ -539,7 +559,9 @@ async def build_test(request: TestBuildRequest) -> BuiltTest:
     # that only changes how the test runs, say) then shares every compile and link process.
     address = request.address
     output_dir = f"{OUTPUT_DIR}/{address.parametrize({}, replace=True).path_safe_spec}"
-    return await build_executable(ExecutableBuildRequest(address, output_dir), **implicitly())
+    return await build_executable(
+        ExecutableBuildRequest(address, output_dir, request.coverage), **implicitly()
+    )
 
 
 def rules():

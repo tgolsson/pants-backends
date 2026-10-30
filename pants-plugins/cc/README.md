@@ -66,7 +66,7 @@ fields. A test that fails to build is a failed test.
 - Test executables are built under their address without parameters, so parametrizing how a
   test runs shares its build.
 - A compile whose flags ask for coverage (`--coverage`) keeps its `.gcno` notes, in
-  `BuiltTest.coverage_notes`.
+  `BuiltTest.coverage_notes`; see Coverage.
 - Another backend can run tests under a wrapper (an emulator, a tracer) through the
   `CcTestWrapperRequest` union; `goals/wrapper.py` documents the contract.
 - `[cc-test-runner].skip` skips the tests.
@@ -79,6 +79,50 @@ working directory and the declared link order apply as for tests. Only the execu
 written, not the shared libraries it links against, and its run path (`$ORIGIN`-relative, or
 `@loader_path` on macOS) points at where they sit in the build sandbox, so from `dist/` it will
 not find them: link static libraries into a binary you package.
+
+## Coverage
+
+The optional sub-backend `pants_backend_cc.coverage` makes `pants test --use-coverage` report
+`cc_test` coverage with [gcovr](https://gcovr.com), from its PyPI package (a pex, hence
+`pants.backend.python`). Without it, `--use-coverage` changes nothing for `cc_test`.
+
+```toml
+backend_packages = [
+  "pants.backend.python",
+  "pants_backend_platforms",
+  "pants_backend_cc",
+  "pants_backend_cc.coverage",
+  "pants_backend_cmake",
+]
+```
+
+- A test builds as a coverage consumer (`CcConsumer.coverage`): each library serves the build its
+  backend instruments, such as a `cmake_project` with `coverage_cmake_args`, and the files gcov
+  reads (`CcLinkInterface.coverage`). A library without one serves its usual build and is not
+  in the report. The test links with `--coverage`; its own sources are instrumented only when
+  its compile flags ask for it.
+- gcc names a `.gcda` file after its object's absolute path at compile time, inside a sandbox
+  that is gone when the test runs. The test runs with `GCOV_PREFIX` in a directory it outputs,
+  and each `.gcda` it writes is moved next to the `.gcno` whose path is the longest suffix of
+  its own. A cached test result keeps them, so it still counts.
+- gcov and gcov-tool are the ones next to the host toolchain's gcc with the same suffix
+  (`gcc-13`, `gcov-13`, `gcov-tool-13`), else those on the search path; their major version must
+  be the compiler's. They are checked before any test builds.
+- gcov-tool sums the tests' `.gcda` files, two at a time, and one gcovr run reads the totals into a
+  JSON tracefile; a last run writes the reports under `dist/coverage/cc/`. Tests whose notes or
+  compile inputs differ at a path (two configures sharing a build directory) get a tracefile each,
+  added up in that last run.
+- `[gcovr].report`: `console` (the default), `html`, `json`, `json-summary`, `cobertura`, `lcov`,
+  `markdown`. `filter` and `exclude` are gcovr's regular expressions over paths relative to the
+  build root; `fail_under_line` fails the goal below that line coverage, as does any other
+  `--fail-under-*` threshold in `args`; `args` go to every gcovr run.
+- `pants test --debug` runs a test without coverage.
+- gcovr finds the directory each compile ran in by trying the sandbox root and the `.gcda`'s
+  parent directories until the sources resolve, so a compile must run in one of those and name
+  its source relative to it, not by its absolute sandbox path. gcov's JSON format (gcc 14 and
+  newer) names sources from the compile's recorded working directory, a sandbox path, so gcovr
+  is given a gcov that drops `--json-format` (and `--conditions`, which only that format
+  reports) and reads the text format.
 
 ## clang-tidy
 

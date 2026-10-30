@@ -1,5 +1,7 @@
 """`pants test` for `cc_test`: runs what `util_rules/executable.py` builds. A test that fails
-to build, or whose wrapper cannot be set up, is a failed test rather than a crashed goal."""
+to build, or whose wrapper cannot be set up, is a failed test rather than a crashed goal. Under
+`--use-coverage`, with `pants_backend_cc.coverage` enabled, the test builds against instrumented
+libraries and its result carries the `.gcda` files it wrote (`coverage/data.py`)."""
 
 from __future__ import annotations
 
@@ -9,6 +11,7 @@ from typing import Any
 
 from pants.core.goals.test import (
     BuildPackageDependenciesRequest,
+    CoverageDataCollection,
     TestDebugRequest,
     TestExtraEnv,
     TestFieldSet,
@@ -35,6 +38,13 @@ from pants.option.option_types import SkipOption
 from pants.option.subsystem import Subsystem
 from pants.util.logging import LogLevel
 
+from pants_backend_cc.coverage import gcov
+from pants_backend_cc.coverage.data import (
+    GCDA_DIR,
+    CcCoverageDataCollection,
+    coverage_data,
+    gcov_prefix,
+)
 from pants_backend_cc.goals.wrapper import CcTestWrapperError, cc_test_wrapper
 from pants_backend_cc.target_types import (
     CcTestArgsField,
@@ -44,6 +54,7 @@ from pants_backend_cc.target_types import (
     CcTestTimeoutField,
 )
 from pants_backend_cc.util_rules.executable import (
+    BuiltTest,
     ExecutableBuildError,
     TestBuildRequest,
     build_test,
@@ -82,9 +93,10 @@ async def _test_process(
     test_subsystem: TestSubsystem,
     test_extra_env: TestExtraEnv,
     union_membership: UnionMembership,
-) -> Process:
+    coverage: bool,
+) -> tuple[Process, BuiltTest]:
     built, packages, field_env = await concurrently(
-        build_test(TestBuildRequest(field_set.address), **implicitly()),
+        build_test(TestBuildRequest(field_set.address, coverage), **implicitly()),
         build_runtime_package_dependencies(
             BuildPackageDependenciesRequest(field_set.runtime_package_dependencies)
         ),
@@ -98,17 +110,20 @@ async def _test_process(
         MergeDigests([built.runtime, built.data, *(p.digest for p in packages)])
     )
     executable = os.path.relpath(built.executable, built.cwd or ".")
-    return Process(
+    coverage_env = {"GCOV_PREFIX": gcov_prefix(built.cwd)} if coverage else {}
+    process = Process(
         argv=(*wrapper.argv_prefix, f"./{executable}", *(field_set.args.value or ())),
         description=f"Run {field_set.address}",
         input_digest=input_digest,
         immutable_input_digests=wrapper.immutable_input_digests,
         working_directory=built.cwd or None,
-        env={**test_extra_env.env, **field_env, **wrapper.env},
+        env={**test_extra_env.env, **field_env, **wrapper.env, **coverage_env},
+        output_directories=(GCDA_DIR,) if coverage else (),
         timeout_seconds=field_set.timeout.calculate_from_global_options(test_subsystem),
         cache_scope=ProcessCacheScope.PER_SESSION if test_subsystem.force else ProcessCacheScope.SUCCESSFUL,
         level=LogLevel.DEBUG,
     )
+    return process, built
 
 
 def _build_failure(field_set: CcTestFieldSet, error: Exception, test_subsystem: TestSubsystem) -> TestResult:
@@ -132,8 +147,17 @@ async def run_cc_test(
     union_membership: UnionMembership,
 ) -> TestResult:
     field_set = batch.single_element
+    # Without the backend that reports it, coverage data would have no `CoverageDataCollection`.
+    coverage = test_subsystem.use_coverage and union_membership.is_member(
+        CoverageDataCollection, CcCoverageDataCollection
+    )
+    if coverage:
+        # Raises: a host without gcov would otherwise fail only once every test has run.
+        await gcov.find_gcov_tools(**implicitly())
     try:
-        process = await _test_process(field_set, test_subsystem, test_extra_env, union_membership)
+        process, built = await _test_process(
+            field_set, test_subsystem, test_extra_env, union_membership, coverage
+        )
     except (
         ProcessExecutionFailure,
         ScanError,
@@ -148,8 +172,14 @@ async def run_cc_test(
         results.append(result)
         if result.exit_code == 0:
             break
+    data = None
+    if coverage:
+        data = await coverage_data(field_set.address, built.coverage, results[-1].output_digest)
     return TestResult.from_fallible_process_result(
-        tuple(results), address=field_set.address, output_setting=test_subsystem.output
+        tuple(results),
+        address=field_set.address,
+        output_setting=test_subsystem.output,
+        coverage_data=data,
     )
 
 
@@ -160,9 +190,11 @@ async def debug_cc_test(
     test_extra_env: TestExtraEnv,
     union_membership: UnionMembership,
 ) -> TestDebugRequest:
-    process = await _test_process(batch.single_element, test_subsystem, test_extra_env, union_membership)
+    process, _ = await _test_process(
+        batch.single_element, test_subsystem, test_extra_env, union_membership, coverage=False
+    )
     return TestDebugRequest(InteractiveProcess.from_process(process, forward_signals_to_process=False))
 
 
 def rules():
-    return [*collect_rules(), *CcTestRequest.rules()]
+    return [*collect_rules(), *CcTestRequest.rules(), *gcov.rules()]

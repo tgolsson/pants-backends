@@ -27,3 +27,7 @@
     `:proj@build_type=X` (a `parametrize`d `cmake_target` never resolved to the matching
     project);
   - compile steps (clang-tidy) belong to `<project>#_inputs`, configured with its `build_type`.
+- `coverage_cmake_args` on `cmake_project` replaces the bool `coverage`. **Breaking:** a project
+  no longer captures `.gcno` in its usual build; a coverage consumer (`pants_backend_cc.coverage`)
+  gets a configure of its own with these arguments added to `cmake_args`, whose replay captures
+  them, and the link interface gives it the notes and compile inputs behind its libraries.

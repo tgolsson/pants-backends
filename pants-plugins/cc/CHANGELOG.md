@@ -21,3 +21,8 @@
   an optional frontend budget that `compile_cost_exempt_paths` are not held to.
 - `find_cc_toolchain`: the toolchain for a platform, or why this host cannot build for it, without
   raising.
+- `pants_backend_cc.coverage`: `pants test --use-coverage` builds `cc_test`s against their
+  libraries' instrumented builds (`CcConsumer.coverage`, `CcLinkInterface.coverage`), keeps the
+  `.gcda` files each run writes, sums them with the compiler's gcov-tool and reports them with
+  gcovr (`[gcovr]`, default lockfile) under `dist/coverage/cc/`. `TestBuildRequest` and `ExecutableBuildRequest` take
+  `coverage`, and `BuiltTest.coverage` holds what gcov reads.

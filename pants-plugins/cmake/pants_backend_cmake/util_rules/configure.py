@@ -51,7 +51,7 @@ from pants_backend_cmake.ninja.parser import NinjaGraph, parse_ninja
 from pants_backend_cmake.target_types import (
     CMakeArgsField,
     CMakeBuildDirField,
-    CMakeCoverageField,
+    CMakeCoverageArgsField,
     CMakeProjectDependenciesField,
     CMakeProjectPlaceholdersField,
     CMakeProjectSourcesField,
@@ -77,6 +77,8 @@ class ConfigureRequest:
     platform: TargetPlatform
     build_type: str | None = None
     """`CMAKE_BUILD_TYPE`; `None` is CMake's default."""
+    coverage: bool = False
+    """The build for coverage consumers, with `coverage_cmake_args`."""
 
 
 def generated_by(address: Address, generator: Address) -> bool:
@@ -114,6 +116,7 @@ class ConfiguredProject:
     extra_paths: tuple[str, ...]
     toolchain: CMakeToolchain
     coverage: bool
+    """Configured with `coverage_cmake_args`: compiles write `.gcno` notes."""
 
     @property
     def relative_root(self) -> str:
@@ -392,7 +395,11 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
                 probes_path,
                 input_digest,
                 request.build_type,
-                tuple(target[CMakeArgsField].value or ()),
+                (
+                    *(target[CMakeArgsField].value or ()),
+                    *(target[CMakeCoverageArgsField].value if request.coverage else ()),
+                ),
+                description=f"Configure {request.address} for coverage" if request.coverage else None,
             )
         )
     )
@@ -412,7 +419,7 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
         extra=extra.snapshot.digest,
         extra_paths=extra.files,
         toolchain=toolchain,
-        coverage=bool(target[CMakeCoverageField].value),
+        coverage=request.coverage,
     )
 
 

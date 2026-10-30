@@ -1,6 +1,7 @@
 """`toy_library`, a library backend without a build system for the tests: it archives (or links
 into a shared library) the C files of its `sources` under `toybuild/<directory>`, and lets
-consumers work in any directory unless its `cwd` says otherwise."""
+consumers work in any directory unless its `cwd` says otherwise. A coverage consumer gets it
+compiled with `--coverage`."""
 
 from __future__ import annotations
 
@@ -11,9 +12,17 @@ from dataclasses import dataclass
 from pants.core.util_rules.source_files import SourceFilesRequest, determine_source_files
 from pants.core.util_rules.system_binaries import BashBinary
 from pants.engine.addresses import Address
-from pants.engine.fs import EMPTY_DIGEST, CreateDigest, Digest, FileContent, MergeDigests
+from pants.engine.fs import (
+    EMPTY_DIGEST,
+    CreateDigest,
+    Digest,
+    DigestSubset,
+    FileContent,
+    MergeDigests,
+    PathGlobs,
+)
 from pants.engine.internals.graph import resolve_target
-from pants.engine.intrinsics import create_digest, merge_digests
+from pants.engine.intrinsics import create_digest, digest_subset_to_digest, merge_digests
 from pants.engine.process import Process, fallible_to_exec_result_or_raise
 from pants.engine.rules import concurrently, implicitly, rule
 from pants.engine.target import (
@@ -110,6 +119,7 @@ class ToyLibraryFieldSet(CcLibraryFieldSet):
 class ToyArchiveRequest:
     address: Address
     platform: TargetPlatform
+    coverage: bool = False
 
 
 @dataclass(frozen=True)
@@ -118,6 +128,8 @@ class ToyArchive:
     """The library, relative to the sandbox root."""
     digest: Digest
     runtime: Digest
+    coverage: Digest
+    """For a coverage build, the `.gcno` notes and the sources."""
 
 
 @rule
@@ -139,12 +151,14 @@ async def toy_archive(request: ToyArchiveRequest, bash: BashBinary) -> ToyArchiv
     objects = [f"{name}_{os.path.basename(u)}.o" for u in units]
     library = f"lib{name}.so" if shared else f"lib{name}.a"
     pic = ("-fPIC",) if shared else ()
+    instrument = ("--coverage",) if request.coverage else ()
     commands = [
-        shlex.join((toolchain.cc.path, *pic, "-c", os.path.relpath(u, build_dir), "-o", o))
+        shlex.join((toolchain.cc.path, *pic, *instrument, "-c", os.path.relpath(u, build_dir), "-o", o))
         for u, o in zip(units, objects)
     ]
+    notes = [f"{build_dir}/{o[: -len('.o')]}.gcno" for o in objects] if request.coverage else []
     if shared:
-        commands.append(shlex.join((toolchain.cc.path, "-shared", "-o", library, *objects)))
+        commands.append(shlex.join((toolchain.cc.path, "-shared", *instrument, "-o", library, *objects)))
     else:
         commands.append(shlex.join((toolchain.ar.path, "rcs", library, *objects)))
     result = await fallible_to_exec_result_or_raise(
@@ -158,17 +172,30 @@ async def toy_archive(request: ToyArchiveRequest, bash: BashBinary) -> ToyArchiv
                 description=f"Build {request.address}",
                 input_digest=files.snapshot.digest,
                 env=toolchain.env,
-                output_files=(f"{build_dir}/{library}",),
+                output_files=(f"{build_dir}/{library}", *notes),
             )
         )
     )
+    built = await digest_subset_to_digest(
+        DigestSubset(result.output_digest, PathGlobs([f"{build_dir}/{library}"]))
+    )
+    coverage = EMPTY_DIGEST
+    if notes:
+        coverage = await merge_digests(
+            MergeDigests(
+                [
+                    await digest_subset_to_digest(DigestSubset(result.output_digest, PathGlobs(notes))),
+                    files.snapshot.digest,
+                ]
+            )
+        )
     runtime = EMPTY_DIGEST
     if shared:
         data = await create_digest(
             CreateDigest([FileContent(f"{build_dir}/lib{name}.data", f"{name}\n".encode())])
         )
-        runtime = await merge_digests(MergeDigests([result.output_digest, data]))
-    return ToyArchive(f"{build_dir}/{library}", result.output_digest, runtime)
+        runtime = await merge_digests(MergeDigests([built, data]))
+    return ToyArchive(f"{build_dir}/{library}", built, runtime, coverage)
 
 
 def _serves(field_set: ToyLibraryFieldSet, consumer: CcConsumer) -> None:
@@ -218,11 +245,12 @@ async def toy_link_interface(
         *(Address(field_set.address.spec_path, target_name=n) for n in field_set.link_with.value or ()),
     ]
     archives = await concurrently(
-        toy_archive(ToyArchiveRequest(a, platform), **implicitly()) for a in addresses
+        toy_archive(ToyArchiveRequest(a, platform, consumer.coverage), **implicitly()) for a in addresses
     )
-    libraries, runtime = await concurrently(
+    libraries, runtime, coverage = await concurrently(
         merge_digests(MergeDigests(a.digest for a in archives)),
         merge_digests(MergeDigests(a.runtime for a in archives)),
+        merge_digests(MergeDigests(a.coverage for a in archives)),
     )
     shared = [a.path for a in archives if a.path.endswith(".so")]
     return CcLinkInterface(
@@ -232,6 +260,7 @@ async def toy_link_interface(
         libraries=libraries,
         runtime=runtime,
         runtime_dirs=tuple(dict.fromkeys(_from(consumer.cwd, os.path.dirname(p)) for p in shared)),
+        coverage=coverage,
     )
 
 
