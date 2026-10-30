@@ -40,7 +40,7 @@ from pants_backend_cmake import register
 from pants_backend_cmake.goals.package import CMakeTargetFieldSet
 from pants_backend_cmake.util_rules.toolchain import CMakeToolchainFileField
 from pants_backend_platforms import register as platforms_register
-from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
+from pants_backend_platforms.testutil import HOST, OTHER, platforms_build
 
 CMAKELISTS = """\
 cmake_minimum_required(VERSION 3.20)
@@ -324,10 +324,10 @@ def test_sources_from_cc_sources_dependencies(rule_runner: RuleRunner) -> None:
 MINGW_CC = next(
     (cc for cc in ("x86_64-w64-mingw32-gcc-win32", "x86_64-w64-mingw32-gcc") if shutil.which(cc)), None
 )
-WINDOWS = "windows-x86_64"
-PLATFORMS_BUILD = f"""\
-platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")
-platform(name="{WINDOWS}", os="windows", arch="x86_64")
+WINDOWS = OTHER
+PLATFORMS_BUILD = (
+    platforms_build()
+    + f"""\
 cc_toolchain(name="native", host="{HOST}", target="{HOST}", cc="gcc", cxx="g++", ar="ar")
 cc_toolchain(
     name="mingw",
@@ -339,6 +339,7 @@ cc_toolchain(
     cmake_toolchain_file="windows.cmake",
 )
 """
+)
 
 
 def _with_platforms(build: str, platforms: str, *names: str) -> str:
@@ -392,8 +393,7 @@ def test_cc_test_needs_the_host_platform(rule_runner: RuleRunner) -> None:
         BUILD=_with_platforms(BUILD, f'platforms=["{WINDOWS}"]', "demo")
         + 'cc_test(name="wintest", sources=["wintest.c"], dependencies=[":demo"])\n',
         **{
-            "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
-            f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n',
+            "platforms/BUILD": platforms_build(),
             "wintest.c": "int main(void) { return 0; }\n",
         },
     )
@@ -411,8 +411,7 @@ def test_cc_binary_needs_the_host_platform(rule_runner: RuleRunner) -> None:
         BUILD=_with_platforms(BUILD, f'platforms=["{WINDOWS}"]', "demo")
         + 'cc_binary(name="winapp", sources=["winapp.c"], dependencies=[":demo"])\n',
         **{
-            "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
-            f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n',
+            "platforms/BUILD": platforms_build(),
             "winapp.c": "int main(void) { return 0; }\n",
         },
     )
@@ -428,9 +427,8 @@ def test_cc_test_builds_for_the_host_only(rule_runner: RuleRunner) -> None:
         BUILD=_with_platforms(BUILD, f'platforms=["{HOST}", "{WINDOWS}"]', "demo")
         + 'cc_test(name="hosttest", sources=["hosttest.c"], dependencies=[":demo"])\n',
         **{
-            "platforms/BUILD": f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n'
-            f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n'
-            f'cc_toolchain(name="native", host="{HOST}", target="{HOST}", cc="gcc", cxx="g++", ar="ar")\n',
+            "platforms/BUILD": platforms_build()
+            + f'cc_toolchain(name="native", host="{HOST}", target="{HOST}", cc="gcc", cxx="g++", ar="ar")\n',
             "hosttest.c": '#include "demo.h"\nint main(void) { return demo() == DEMO_ANSWER ? 0 : 1; }\n',
         },
     )

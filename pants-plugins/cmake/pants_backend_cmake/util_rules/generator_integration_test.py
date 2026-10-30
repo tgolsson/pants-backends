@@ -46,11 +46,11 @@ from pants_backend_cmake.util_rules.configure import ConfiguredProject, Configur
 from pants_backend_cmake.util_rules.targets import CMakeTargetRequest, ResolvedCMakeTarget
 from pants_backend_platforms import register as platforms_register
 from pants_backend_platforms.target_types import PlatformsField
-from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
+from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS, OTHER, platforms_build
 from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
 HOST_PLATFORM = TargetPlatform(HOST, HOST_OS, HOST_ARCH)
-WINDOWS = "windows-x86_64"
+WINDOWS = OTHER
 
 CMAKELISTS = """\
 cmake_minimum_required(VERSION 3.20)
@@ -171,9 +171,7 @@ def test_handles(rule_runner: RuleRunner) -> None:
 
 
 def test_overrides_and_moved_fields(rule_runner: RuleRunner) -> None:
-    platforms = f'platform(name="{HOST}", os="{HOST_OS}", arch="{HOST_ARCH}")\n' + (
-        f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n'
-    )
+    platforms = platforms_build()
     _write(
         rule_runner,
         BUILD='cmake_project(name="proj", sources=["CMakeLists.txt", "*.c"], build_type="Release", '
@@ -308,7 +306,8 @@ def test_with_cc_and_python_inference() -> None:
     )
     assert {"//:proj#demo", "//:proj#app"} <= set(_listed(rule_runner))
     handle = rule_runner.get_target(_handle("app"))
-    rule_runner.request(Addresses, [DependenciesRequest(handle[Dependencies])])
+    deps = rule_runner.request(Addresses, [DependenciesRequest(handle[Dependencies])])
+    assert list(deps) == [_handle("_inputs")]
 
 
 def test_target_named_like_the_inputs(rule_runner: RuleRunner) -> None:
@@ -362,7 +361,7 @@ def test_a_platform_without_a_toolchain_is_skipped_quietly(rule_runner: RuleRunn
         rule_runner,
         BUILD='cmake_project(name="proj", sources=["CMakeLists.txt", "*.c"], '
         f'overrides={{"app": {{"platforms": ["{HOST}", "{WINDOWS}"]}}, "nope": {{"tags": ["x"]}}}})\n',
-        **{"platforms/BUILD": _platforms(f'platform(name="{WINDOWS}", os="windows", arch="x86_64")\n')},
+        **{"platforms/BUILD": platforms_build()},
     )
     with caplog.at_level(logging.DEBUG):
         listed = _listed(rule_runner)

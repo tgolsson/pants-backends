@@ -136,6 +136,8 @@ sandbox and with its command.
   that only clang takes (behind `__clang__` or `__has_include`) is missing.
 - Configuration comes from `.clang-tidy` files in the directories above each translation unit; a
   `--config-file` in `args` is not in the sandbox.
+- Only errors fail the lint; `WarningsAsErrors` in `.clang-tidy` makes warnings fail it too.
+  Warnings are reported either way.
 - The default lockfile has no linux-aarch64 wheel.
 
 ```toml
@@ -144,39 +146,6 @@ backend_packages = [
   "pants_backend_platforms",
   "pants_backend_cc",
   "pants_backend_cc.lint.clang_tidy",
-  "pants_backend_cmake",
-]
-```
-
-## Compile cost
-
-The optional sub-backend `pants_backend_cc.lint.compile_cost` adds `[compile-cost]` to
-`pants lint`: a target with `compile_cost_paths` (a field the providing backend registers) has
-its compile steps listed for the host, and each step whose source is under those directories
-runs once more, in its sandbox and with its command plus gcc's `-ftime-report`. The user CPU
-time of its phases goes into a table, slowest frontend first: frontend is `parsing` plus
-`lang. deferred`, backend the other phases, total gcc's `TOTAL`. The frontend's system time is
-a column of its own and is not gated: it grows with the load on the machine far more than user
-time does.
-
-- `[compile-cost].frontend_budget` (seconds) fails the lint when a translation unit's frontend
-  exceeds it, unless it is under `compile_cost_exempt_paths`; unset, the lint only reports. The
-  lint's output names each translation unit over budget. One over budget is measured a second
-  time and the lower frontend counts: the first ran alongside the other compiles, the second
-  runs one translation unit at a time, though alongside whatever else the goal runs.
-- Each `compile_cost_exempt_paths` entry must be under `compile_cost_paths` and hold a measured
-  translation unit, so a typo is an error rather than an exemption of nothing.
-- The measurements are never cached, so each run compiles every step again.
-- The table is the lint's report, `dist/lint/compile-cost/compile-cost.md` when one target is
-  measured, else `compile-cost.md` in a directory under `dist/lint/compile-cost/` named after
-  the partition's address (path-safe).
-- Only gcc prints the phases; a step another compiler runs is an error.
-
-```toml
-backend_packages = [
-  "pants_backend_platforms",
-  "pants_backend_cc",
-  "pants_backend_cc.lint.compile_cost",
   "pants_backend_cmake",
 ]
 ```
