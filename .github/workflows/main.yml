@@ -18,15 +18,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
-        gha-cache-key: cache1-test-py3.11-pants2.31.0
+        gha-cache-key: cache1-test-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Test everything
@@ -41,16 +43,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-package-py3.11-pants2.31.0
+        gha-cache-key: cache1-package-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Package all targets
@@ -76,10 +80,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Set up Xcode version
       if: runner.os == 'macOS'
@@ -89,7 +95,7 @@ jobs:
       uses: pantsbuild/actions/init-pants@main
       with:
         # cache0 makes it easy to bust the cache if needed
-        gha-cache-key: cache1-package-py3.11-pants2.31.0
+        gha-cache-key: cache1-package-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Package all targets
@@ -118,15 +124,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
-        gha-cache-key: cache1-docker-runner-py3.11-pants2.31.0
+        gha-cache-key: cache1-docker-runner-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     # `[oci].runner = "docker"` on a machine with Docker and no podman.
@@ -155,15 +163,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
-        gha-cache-key: cache1-podman-remote-py3.11-pants2.31.0
+        gha-cache-key: cache1-podman-remote-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
     - name: Run images through a podman connection
@@ -188,10 +198,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Run linters on all targets
       run: |
@@ -203,10 +215,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: |
+          3.11
+          3.14
 
     - name: Validate that tailor files are up to date
       run: |

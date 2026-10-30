@@ -4,7 +4,7 @@
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-k8s?label=pants-backend-k8s)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-kustomize?label=pants-backend-kustomize)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-distroless?label=pants-backend-distroless)
-![Pants](https://img.shields.io/badge/Pants-2.31.0-%2355acee)
+![Pants](https://img.shields.io/badge/Pants-2.32.1-%2355acee)
 
 # Tom's Pants backends
 

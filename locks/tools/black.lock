@@ -4,9 +4,9 @@
 //
 // --- BEGIN PANTS LOCKFILE METADATA: DO NOT EDIT OR REMOVE ---
 // {
-//   "version": 5,
+//   "version": 8,
 //   "valid_for_interpreter_constraints": [
-//     "CPython<3.12,>=3.11"
+//     "CPython==3.14.*"
 //   ],
 //   "generated_with_requirements": [
 //     "black<24,>=22.6.0"
@@ -17,7 +17,12 @@
 //   "no_binary": [],
 //   "excludes": [],
 //   "overrides": [],
-//   "sources": []
+//   "sources": [],
+//   "lock_style": "universal",
+//   "complete_platforms": [],
+//   "uploaded_prior_to": null,
+//   "lockfile_format": "pex",
+//   "resolve": "black"
 // }
 // --- END PANTS LOCKFILE METADATA ---
 
@@ -38,21 +43,6 @@
               "algorithm": "sha256",
               "hash": "78baad24af0f033958cad29731e27363183e140962595def56423e626f4bee3e",
               "url": "https://files.pythonhosted.org/packages/7b/14/4da7b12a9abc43a601c215cb5a3d176734578da109f0dbf0a832ed78be09/black-23.12.1-py3-none-any.whl"
-            },
-            {
-              "algorithm": "sha256",
-              "hash": "602cfb1196dc692424c70b6507593a2b29aac0547c1be9a1d1365f0d964c353b",
-              "url": "https://files.pythonhosted.org/packages/72/e2/d981a3ff05ba9abe3cfa33e70c986facb0614fd57c4f802ef435f4dd1697/black-23.12.1-cp311-cp311-macosx_11_0_arm64.whl"
-            },
-            {
-              "algorithm": "sha256",
-              "hash": "9c4352800f14be5b4864016882cdba10755bd50805c95f728011bcb47a4afd59",
-              "url": "https://files.pythonhosted.org/packages/eb/59/1f5c8eb7bba8a8b1bb5c87f097d16410c93a48a6655be3773db5d2783deb/black-23.12.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
-            },
-            {
-              "algorithm": "sha256",
-              "hash": "8d4df77958a622f9b5a4c96edb4b8c0034f8434032ab11077ec6c56ae9f384ba",
-              "url": "https://files.pythonhosted.org/packages/ed/2c/d9b1a77101e6e5f294f6553d76c39322122bfea2a438aeea4eb6d4b22749/black-23.12.1-cp311-cp311-macosx_10_9_x86_64.whl"
             },
             {
               "algorithm": "sha256",
@@ -159,19 +149,19 @@
           "artifacts": [
             {
               "algorithm": "sha256",
-              "hash": "f6ad7f447f24f8a3b82cce5976387428bff894a0eca6c3488f4a17f153c130c4",
-              "url": "https://files.pythonhosted.org/packages/45/b8/fd1af06b079af236f5423f7c1821264419cc8f6b4803f79353acbb8bfa53/platformdirs-4.13.3-py3-none-any.whl"
+              "hash": "1dadfc59a8a5d7565b3d9270ae8fa71c065595352c4277b41c11ee6c222c4b91",
+              "url": "https://files.pythonhosted.org/packages/69/2b/887969ef4bb53e0cb271dc7c3f4a73d50c5d58bb88aeaae311e3340cd57e/platformdirs-4.14.0-py3-none-any.whl"
             },
             {
               "algorithm": "sha256",
-              "hash": "5e567f664eb087ab8521c0179cd8d1bd60857d271136567a39719e28e2d383ce",
-              "url": "https://files.pythonhosted.org/packages/da/91/4a03cfdb03314cfca262921797fff04ff4054bd86a160aed76eddf8aa12b/platformdirs-4.13.3.tar.gz"
+              "hash": "83f009c1e8c5fc36869b5171755b291887bd2cade7965233cdfabd23d754720b",
+              "url": "https://files.pythonhosted.org/packages/40/28/1c058a9143d2304b3078f8dadcbb9dc27f7d3581b5d05157c84869c4cc0d/platformdirs-4.14.0.tar.gz"
             }
           ],
           "project_name": "platformdirs",
           "requires_dists": [],
           "requires_python": ">=3.11",
-          "version": "4.13.3"
+          "version": "4.14.0"
         }
       ],
       "marker": null,
@@ -182,14 +172,14 @@
   "only_wheels": [],
   "overridden": [],
   "path_mappings": {},
-  "pex_version": "2.66.0",
+  "pex_version": "2.95.1",
   "pip_version": "24.2",
   "prefer_older_binary": false,
   "requirements": [
     "black<24,>=22.6.0"
   ],
   "requires_python": [
-    "CPython<3.12,>=3.11"
+    "CPython==3.14.*"
   ],
   "resolver_version": "pip-2020-resolver",
   "style": "universal",
