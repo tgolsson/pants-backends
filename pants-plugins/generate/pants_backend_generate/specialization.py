@@ -65,42 +65,40 @@ class GenerateSpecialization:
         if self.alias in _ALIASES:
             raise ValueError(f"A `GenerateSpecialization` with alias {self.alias!r} already exists.")
         _ALIASES.add(self.alias)
-        camel = "".join(part.capitalize() for part in self.alias.split("_"))
-        sources_field_type = type(
-            f"{camel}SourcesField",
-            (GenerateSourcesField,),
-            {"output_type": self.output, "formatter_type": self.formatter},
-        )
-        target_type = type(
-            f"{camel}Target",
-            (Target,),
-            {
-                "alias": self.alias,
-                "core_fields": (
-                    *COMMON_TARGET_FIELDS,
-                    sources_field_type,
-                    *GENERATE_FIELDS,
-                    EnvironmentField,
-                ),
-                "help": self.help,
-            },
-        )
-        request_type = type(
-            f"{camel}Request",
-            (GenerateSourcesRequest,),
-            {"input": sources_field_type, "output": self.output},
-        )
+
+        # As Pants' `wrap_source_rule_and_target` does: one class of each per specialization.
+        class SourcesField(GenerateSourcesField):
+            output_type = self.output
+            formatter_type = self.formatter
+
+        class Request(GenerateSourcesRequest):
+            input = SourcesField
+            output = self.output
+
+        class SpecializedTarget(Target):
+            alias = self.alias
+            core_fields = (*COMMON_TARGET_FIELDS, SourcesField, *GENERATE_FIELDS, EnvironmentField)
+            help = self.help
+
         # `FieldSet.fields` uses `get_type_hints`: the annotation must be the class, not a name.
         field_set_type = make_dataclass(
-            f"{camel}FieldSet",
-            [("sources", sources_field_type)],
+            "FieldSet",
+            [("sources", SourcesField)],
             bases=(GenerateFieldSet,),
             frozen=True,
-            namespace={"required_fields": (sources_field_type, GenerateOutputsField)},
+            namespace={"required_fields": (SourcesField, GenerateOutputsField)},
         )
-        object.__setattr__(self, "sources_field_type", sources_field_type)
-        object.__setattr__(self, "target_type", target_type)
-        object.__setattr__(self, "request_type", request_type)
+        camel = "".join(part.capitalize() for part in self.alias.split("_"))
+        for cls, suffix in (
+            (SourcesField, "SourcesField"),
+            (Request, "Request"),
+            (SpecializedTarget, "Target"),
+            (field_set_type, "FieldSet"),
+        ):
+            cls.__name__ = cls.__qualname__ = f"{camel}{suffix}"
+        object.__setattr__(self, "sources_field_type", SourcesField)
+        object.__setattr__(self, "target_type", SpecializedTarget)
+        object.__setattr__(self, "request_type", Request)
         object.__setattr__(self, "field_set_type", field_set_type)
 
     def target_types(self) -> tuple[type[Target], ...]:
