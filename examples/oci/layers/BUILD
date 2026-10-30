@@ -1,6 +1,6 @@
 python_sources(
     resolve="example-1",
-    interpreter_constraints=[">=3.11,<3.12"],
+    interpreter_constraints=["==3.13.*"],
 )
 
 
@@ -10,7 +10,7 @@ pex_binary(
     include_sources=False,
     resolve="example-1",
     layout="packed",
-    interpreter_constraints=[">=3.11,<3.12"],
+    interpreter_constraints=["==3.13.*"],
 )
 
 oci_layer(
@@ -24,7 +24,7 @@ pex_binary(
     include_requirements=False,
     resolve="example-1",
     layout="packed",
-    interpreter_constraints=[">=3.11,<3.12"],
+    interpreter_constraints=["==3.13.*"],
 )
 
 oci_layer(
@@ -34,7 +34,7 @@ oci_layer(
 
 oci_image_build(
     name="img",
-    base=["//examples/oci:python3-d12#latest"],
+    base=["//examples/oci:python3-d13#latest"],
     layers=[":app-deps", ":app-srcs"],
     entrypoint="python3",
     args=["/examples.oci.layers/binary-srcs.pex"],

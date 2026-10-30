@@ -14,10 +14,10 @@
             "openssl"
           ],
           "name": "ca-certificates",
-          "sha256": "5308b9bd88eebe2a48be3168cb3d87677aaec5da9c63ad0cf561a29b8219115c",
-          "size": 153456,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20230311_all.deb",
-          "version": "20230311"
+          "sha256": "0d5f444f594e48c1e16a41d8fc628a09b24c658916a1274025c2330f2a802bed",
+          "size": 155260,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/c/ca-certificates/ca-certificates_20230311+deb12u1_all.deb",
+          "version": "20230311+deb12u1"
         },
         {
           "architecture": "all",
@@ -26,7 +26,7 @@
           "name": "debconf",
           "sha256": "74ab14194a3762b2fc717917dcfda42929ab98e3c59295a063344dc551cd7cc8",
           "size": 121212,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/d/debconf/debconf_1.5.82_all.deb",
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/d/debconf/debconf_1.5.82_all.deb",
           "version": "1.5.82"
         },
         {
@@ -39,20 +39,20 @@
             "libjq1"
           ],
           "name": "jq",
-          "sha256": "d1833fdd7a1340b59c71c223178940044fc41a8c8e28861bc03ab258d791d303",
-          "size": 64932,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/jq_1.6-2.1_amd64.deb",
-          "version": "1.6-2.1"
+          "sha256": "f2303584378ac85f6d3a9ae8e46412196061681e81610d3b020abe4b5d389eb0",
+          "size": 63984,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/j/jq/jq_1.6-2.1+deb12u2_amd64.deb",
+          "version": "1.6-2.1+deb12u2"
         },
         {
           "architecture": "amd64",
           "closure": [],
           "depends": [],
           "name": "libc-bin",
-          "sha256": "f42b2b73c9b800dfeeab44abc721ba527243e8a3a2b598a5f443d2e3174ca5a5",
-          "size": 607736,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/g/glibc/libc-bin_2.36-9+deb12u8_amd64.deb",
-          "version": "2.36-9+deb12u8"
+          "sha256": "e667401af91fad95f15b3ebd25d1abd8373fd18b00dc32219678413170544e84",
+          "size": 609144,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/g/glibc/libc-bin_2.36-9+deb12u14_amd64.deb",
+          "version": "2.36-9+deb12u14"
         },
         {
           "architecture": "amd64",
@@ -63,10 +63,10 @@
             "libonig5"
           ],
           "name": "libjq1",
-          "sha256": "7dc22726010e660d294682018b0013badda93b6791049cff9edb303ddffbb35d",
-          "size": 134944,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/libjq1_1.6-2.1_amd64.deb",
-          "version": "1.6-2.1"
+          "sha256": "f501b6349a3c2462af59e7a598ebd71e7889de46c9ddf852eb12ebeba7df21a2",
+          "size": 135656,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/j/jq/libjq1_1.6-2.1+deb12u2_amd64.deb",
+          "version": "1.6-2.1+deb12u2"
         },
         {
           "architecture": "amd64",
@@ -75,7 +75,7 @@
           "name": "libonig5",
           "sha256": "59ecfce6d88c7c4b09496ce182b3b8303e8e8477664e009b16ae83a09cd12be7",
           "size": 187828,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_amd64.deb",
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_amd64.deb",
           "version": "6.9.8-1"
         },
         {
@@ -83,10 +83,10 @@
           "closure": [],
           "depends": [],
           "name": "libssl3",
-          "sha256": "808ed2385960ee7b3365d583680e2f7a700c410b0ab4f81cc63b8bd166f61bae",
-          "size": 2023772,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/libssl3_3.0.14-1~deb12u1_amd64.deb",
-          "version": "3.0.14-1~deb12u1"
+          "sha256": "89be24b41bff568ee6e7caf5680a3d808e80315ed92e407056ce0fa7a5bda025",
+          "size": 2036016,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/o/openssl/libssl3_3.0.20-1~deb12u2_amd64.deb",
+          "version": "3.0.20-1~deb12u2"
         },
         {
           "architecture": "amd64",
@@ -97,10 +97,10 @@
             "libssl3"
           ],
           "name": "openssl",
-          "sha256": "6ddf252c45bca1e1b815d2e32a63e2b976b6bc9c86031c819b363907dd5045f4",
-          "size": 1422564,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/openssl_3.0.14-1~deb12u1_amd64.deb",
-          "version": "3.0.14-1~deb12u1"
+          "sha256": "4d218561dc838de081de97f54584c4a29e77e26c7ed9fe3440d776d8e6071bf9",
+          "size": 1438712,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/o/openssl/openssl_3.0.20-1~deb12u2_amd64.deb",
+          "version": "3.0.20-1~deb12u2"
         }
       ],
       "roots": [
@@ -123,10 +123,10 @@
             "openssl"
           ],
           "name": "ca-certificates",
-          "sha256": "5308b9bd88eebe2a48be3168cb3d87677aaec5da9c63ad0cf561a29b8219115c",
-          "size": 153456,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20230311_all.deb",
-          "version": "20230311"
+          "sha256": "0d5f444f594e48c1e16a41d8fc628a09b24c658916a1274025c2330f2a802bed",
+          "size": 155260,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/c/ca-certificates/ca-certificates_20230311+deb12u1_all.deb",
+          "version": "20230311+deb12u1"
         },
         {
           "architecture": "all",
@@ -135,7 +135,7 @@
           "name": "debconf",
           "sha256": "74ab14194a3762b2fc717917dcfda42929ab98e3c59295a063344dc551cd7cc8",
           "size": 121212,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/d/debconf/debconf_1.5.82_all.deb",
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/d/debconf/debconf_1.5.82_all.deb",
           "version": "1.5.82"
         },
         {
@@ -148,20 +148,20 @@
             "libjq1"
           ],
           "name": "jq",
-          "sha256": "be06a56265a898f3047de90cb28ca589f0cf201b89b286530585f1bad92fc9e9",
-          "size": 64484,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/jq_1.6-2.1_arm64.deb",
-          "version": "1.6-2.1"
+          "sha256": "c232e9407e0f47006dd6077804c1274fd2e4f8be02efc78822db748ed65bea99",
+          "size": 63560,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/j/jq/jq_1.6-2.1+deb12u2_arm64.deb",
+          "version": "1.6-2.1+deb12u2"
         },
         {
           "architecture": "arm64",
           "closure": [],
           "depends": [],
           "name": "libc-bin",
-          "sha256": "fd56a286a19fc9ab82582ea720a0e59a2a4e50931b6dbd4193248457e09c3a9f",
-          "size": 531072,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/g/glibc/libc-bin_2.36-9+deb12u8_arm64.deb",
-          "version": "2.36-9+deb12u8"
+          "sha256": "65166ea54c05213c4f48d889138179f1b7345edd05031a9af276aa5fb4a45c05",
+          "size": 534528,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/g/glibc/libc-bin_2.36-9+deb12u14_arm64.deb",
+          "version": "2.36-9+deb12u14"
         },
         {
           "architecture": "arm64",
@@ -172,10 +172,10 @@
             "libonig5"
           ],
           "name": "libjq1",
-          "sha256": "f8f59e7479e5cabfc41cc7dacdb9e65396323ed014ffd7123f887fa72b156d7a",
-          "size": 120720,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/j/jq/libjq1_1.6-2.1_arm64.deb",
-          "version": "1.6-2.1"
+          "sha256": "2f5b9f70fd6d954123c3c8d0a1b306fe3703dc88c6362ccbe28713e55e7a730b",
+          "size": 121540,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/j/jq/libjq1_1.6-2.1+deb12u2_arm64.deb",
+          "version": "1.6-2.1+deb12u2"
         },
         {
           "architecture": "arm64",
@@ -184,7 +184,7 @@
           "name": "libonig5",
           "sha256": "4693ac0f4fc8f2b8b4a7854463a8061a5b0fe7a7c2eb46b9cc21bc4c3adaf1ee",
           "size": 179104,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_arm64.deb",
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/libo/libonig/libonig5_6.9.8-1_arm64.deb",
           "version": "6.9.8-1"
         },
         {
@@ -192,10 +192,10 @@
           "closure": [],
           "depends": [],
           "name": "libssl3",
-          "sha256": "276df6a2e098a4e86742a2fd2003f9681b7fb1035ff453d2ab5a1d5f95ea4fa6",
-          "size": 1810664,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/libssl3_3.0.14-1~deb12u1_arm64.deb",
-          "version": "3.0.14-1~deb12u1"
+          "sha256": "a256e03cc3abd7243ac5c6ee91a9deb56478221ef0d3c2b0748551e13140c0bf",
+          "size": 1823624,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/o/openssl/libssl3_3.0.20-1~deb12u2_arm64.deb",
+          "version": "3.0.20-1~deb12u2"
         },
         {
           "architecture": "arm64",
@@ -206,10 +206,10 @@
             "libssl3"
           ],
           "name": "openssl",
-          "sha256": "a5110bbfa002cc9b55bf05b449a0cccb36efc174021e0b46d36de399e42af632",
-          "size": 1389148,
-          "url": "https://snapshot.debian.org/archive/debian/20241001T000000Z/pool/main/o/openssl/openssl_3.0.14-1~deb12u1_arm64.deb",
-          "version": "3.0.14-1~deb12u1"
+          "sha256": "e7ba824de1e659c12e81f885bc0757a50c4d7a9f71de02687ad63d5a9e936e00",
+          "size": 1405164,
+          "url": "https://snapshot.debian.org/archive/debian/20261027T000000Z/pool/main/o/openssl/openssl_3.0.20-1~deb12u2_arm64.deb",
+          "version": "3.0.20-1~deb12u2"
         }
       ],
       "roots": [
@@ -233,7 +233,7 @@
       "libc-bin"
     ],
     "sources": [
-      "https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main"
+      "https://snapshot.debian.org/archive/debian/20261027T000000Z bookworm main"
     ]
   },
   "version": 2

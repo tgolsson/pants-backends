@@ -28,15 +28,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v7
-        with:
-          python-version: 3.11
-
       - name: Initialize Pants
         uses: pantsbuild/actions/init-pants@main
         with:
-          gha-cache-key: cache0-docs-py3.11
+          gha-cache-key: cache1-docs-py3.14-pants2.32.1
           named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
       - name: Build docs

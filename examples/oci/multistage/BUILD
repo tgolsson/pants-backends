@@ -1,6 +1,6 @@
 python_sources(
     resolve="example-1",
-    interpreter_constraints=[">=3.11,<3.12"],
+    interpreter_constraints=["==3.13.*"],
 )
 
 python_requirements(
@@ -18,13 +18,13 @@ pex_binary(
     include_sources=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.11,<3.12"],
+    interpreter_constraints=["==3.13.*"],
 )
 
 # The distroless base has no shell, so the build steps' commands are lists, run without one.
 oci_build_layer(
     name="app-deps",
-    base=["//examples/oci:python3-d12#latest"],
+    base=["//examples/oci:python3-d13#latest"],
     packages=[":binary-deps"],
     commands=[
         "python",
@@ -36,7 +36,7 @@ oci_build_layer(
     ],
     env=[
         "PEX_TOOLS=1",
-        "PY=python3.11",
+        "PY=python3.13",
     ],
     outputs=["bin/app"],
 )
@@ -48,12 +48,12 @@ pex_binary(
     include_requirements=False,
     include_tools=True,
     resolve="example-1",
-    interpreter_constraints=[">=3.11,<3.12"],
+    interpreter_constraints=["==3.13.*"],
 )
 
 oci_build_layer(
     name="app-srcs",
-    base=["//examples/oci:python3-d12#latest"],
+    base=["//examples/oci:python3-d13#latest"],
     packages=[":binary-srcs"],
     commands=[
         "python",
@@ -65,14 +65,14 @@ oci_build_layer(
     ],
     env=[
         "PEX_TOOLS=1",
-        "PY=python3.11",
+        "PY=python3.13",
     ],
     outputs=["bin/app"],
 )
 
 oci_image_build(
     name="img",
-    base=["//examples/oci:python3-d12#latest"],
+    base=["//examples/oci:python3-d13#latest"],
     packages=[":app-deps", ":app-srcs"],
     entrypoint="/bin/app/pex",
     args=[],

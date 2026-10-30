@@ -2,7 +2,7 @@ oci_pull_images(
     name="debian",
     repository="docker.io/library/debian",
     variants={
-        "bookworm-20241016-slim": "d83056144b2dd301730d2739635c8cbdeaaae20d6887146434184f8c060f03ce",
+        "bookworm-20261027-slim": "a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e",
     },
     architecture="amd64",
     os="linux",
@@ -14,7 +14,7 @@ oci_pull_images(
 deb_packages(
     name="bookworm",
     resolve="bookworm",
-    sources=["https://snapshot.debian.org/archive/debian/20241001T000000Z bookworm main"],
+    sources=["https://snapshot.debian.org/archive/debian/20261027T000000Z bookworm main"],
     architectures=["amd64", "arm64"],
     packages=["jq", "ca-certificates", "libc-bin"],
     # Already in the bookworm-slim base image.
@@ -31,7 +31,7 @@ oci_deb_layer(
 
 oci_image_build(
     name="image",
-    base=[":debian#bookworm-20241016-slim"],
+    base=[":debian#bookworm-20261027-slim"],
     layers=[":jq"],
     repository="pants-backend-oci/examples/debian",
     tag="latest",
@@ -72,7 +72,7 @@ oci_locale_layer(
 
 oci_image_build(
     name="nonroot",
-    base=[":debian#bookworm-20241016-slim"],
+    base=[":debian#bookworm-20261027-slim"],
     layers=[":jq", ":passwd", ":group", ":cacerts"],
     repository="pants-backend-oci/examples/debian-nonroot",
     tag="latest",

@@ -11,10 +11,10 @@
             "openssl"
           ],
           "name": "ca-certificates",
-          "sha256": "641de77d8f142cfd62a1a6f964ba67b20754d3337c480efb529d086075a06c9a",
-          "size": 159378,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20240203_all.deb",
-          "version": "20240203"
+          "sha256": "6bac2a01979e210d9eac1d4d56747ec709ea60654744d66705dc3c36e7629e50",
+          "size": 139430,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/c/ca-certificates/ca-certificates_20260601~24.04.1_all.deb",
+          "version": "20260601~24.04.1"
         },
         {
           "architecture": "amd64",
@@ -26,20 +26,20 @@
             "libjq1"
           ],
           "name": "jq",
-          "sha256": "36276dcac711c742776377001886f5a72293391446b5d5e7646541336f2234aa",
-          "size": 65538,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/jq_1.7.1-3build1_amd64.deb",
-          "version": "1.7.1-3build1"
+          "sha256": "f59183392f84fe67b407b494d8ba6185e9b0e4a106ffcb369490bd20a83fd40e",
+          "size": 65694,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/j/jq/jq_1.7.1-3ubuntu0.24.04.2_amd64.deb",
+          "version": "1.7.1-3ubuntu0.24.04.2"
         },
         {
           "architecture": "amd64",
           "closure": [],
           "depends": [],
           "name": "libc-bin",
-          "sha256": "80501c003119754ae060ecebcfedf5ab8746bb9f8bd664e6e5766106916ed8b8",
-          "size": 722214,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.3_amd64.deb",
-          "version": "2.39-0ubuntu8.3"
+          "sha256": "066398a06ef1a218d4109461d4c636eafe83322ad19b179de9ef7af42b3fec58",
+          "size": 682164,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.9_amd64.deb",
+          "version": "2.39-0ubuntu8.9"
         },
         {
           "architecture": "amd64",
@@ -50,10 +50,10 @@
             "libonig5"
           ],
           "name": "libjq1",
-          "sha256": "aaecde9f29e7485de2e6bb12f1d322b6da7bee5a63914c40b599bce517ef3938",
-          "size": 140506,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/libjq1_1.7.1-3build1_amd64.deb",
-          "version": "1.7.1-3build1"
+          "sha256": "078fbf38b2e7c3f24cc5dc894d1bb03b617894b887a6e13d5943e13818e724f3",
+          "size": 141902,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/j/jq/libjq1_1.7.1-3ubuntu0.24.04.2_amd64.deb",
+          "version": "1.7.1-3ubuntu0.24.04.2"
         },
         {
           "architecture": "amd64",
@@ -62,7 +62,7 @@
           "name": "libonig5",
           "sha256": "605f42287d2bcb6c84f5a02377c7cd777090c5e857259a4030a571989f19dde2",
           "size": 172336,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_amd64.deb",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_amd64.deb",
           "version": "6.9.9-1build1"
         },
         {
@@ -70,10 +70,10 @@
           "closure": [],
           "depends": [],
           "name": "openssl",
-          "sha256": "96243ee49f17de820bf0322fa672923c627a3013fbc6fa9eb3f570fdcdc14853",
-          "size": 1002532,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.4_amd64.deb",
-          "version": "3.0.13-0ubuntu3.4"
+          "sha256": "1f2401db59a0beffde6cc47bea3664965ab8fa206b7a5ac8f1cc649cfeeb056b",
+          "size": 1002938,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.15_amd64.deb",
+          "version": "3.0.13-0ubuntu3.15"
         }
       ],
       "roots": [
@@ -93,10 +93,10 @@
             "openssl"
           ],
           "name": "ca-certificates",
-          "sha256": "641de77d8f142cfd62a1a6f964ba67b20754d3337c480efb529d086075a06c9a",
-          "size": 159378,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/c/ca-certificates/ca-certificates_20240203_all.deb",
-          "version": "20240203"
+          "sha256": "6bac2a01979e210d9eac1d4d56747ec709ea60654744d66705dc3c36e7629e50",
+          "size": 139430,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/c/ca-certificates/ca-certificates_20260601~24.04.1_all.deb",
+          "version": "20260601~24.04.1"
         },
         {
           "architecture": "arm64",
@@ -108,20 +108,20 @@
             "libjq1"
           ],
           "name": "jq",
-          "sha256": "5d41870b5e22674b0919078c101894cbc1b29a9dfb4d0b234d41b9effc9f8ce0",
-          "size": 64630,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/jq_1.7.1-3build1_arm64.deb",
-          "version": "1.7.1-3build1"
+          "sha256": "d26709d728bf14016eac6ec5e56f88027b1751dffe1471e8cda3f6f8a0c8c1dc",
+          "size": 64640,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/j/jq/jq_1.7.1-3ubuntu0.24.04.2_arm64.deb",
+          "version": "1.7.1-3ubuntu0.24.04.2"
         },
         {
           "architecture": "arm64",
           "closure": [],
           "depends": [],
           "name": "libc-bin",
-          "sha256": "fe13dac87e1943b9b90c26d69cc7d47555baa9b65e48d449301af8f980e23070",
-          "size": 631232,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.3_arm64.deb",
-          "version": "2.39-0ubuntu8.3"
+          "sha256": "5a96fe62c7803a4b886b29afbb67b5e41952de918abd217d2b8fdfbc44c3b72d",
+          "size": 591286,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/g/glibc/libc-bin_2.39-0ubuntu8.9_arm64.deb",
+          "version": "2.39-0ubuntu8.9"
         },
         {
           "architecture": "arm64",
@@ -132,10 +132,10 @@
             "libonig5"
           ],
           "name": "libjq1",
-          "sha256": "95d05fa2db72a77721f571e7f89a4a3144927a844e87395c67de1cf54217b248",
-          "size": 132646,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/j/jq/libjq1_1.7.1-3build1_arm64.deb",
-          "version": "1.7.1-3build1"
+          "sha256": "0dbdaf70784536d6dd15f2521101399e89b3b697926862e171b2beaffc6ac22e",
+          "size": 134982,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/j/jq/libjq1_1.7.1-3ubuntu0.24.04.2_arm64.deb",
+          "version": "1.7.1-3ubuntu0.24.04.2"
         },
         {
           "architecture": "arm64",
@@ -144,7 +144,7 @@
           "name": "libonig5",
           "sha256": "12044a8919f3aae339652bfcd8b424245d6606a6124ae3ce08682485c12b124f",
           "size": 171690,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_arm64.deb",
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/libo/libonig/libonig5_6.9.9-1build1_arm64.deb",
           "version": "6.9.9-1build1"
         },
         {
@@ -152,10 +152,10 @@
           "closure": [],
           "depends": [],
           "name": "openssl",
-          "sha256": "200b00590d44f47d76466b35cffdae123bb2875c0750a033e358bb6277e219dc",
-          "size": 984642,
-          "url": "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.4_arm64.deb",
-          "version": "3.0.13-0ubuntu3.4"
+          "sha256": "818b4ab7092eb3365358ce41896ad08206b30cdb67445d7ec0503262893a0d95",
+          "size": 984680,
+          "url": "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.15_arm64.deb",
+          "version": "3.0.13-0ubuntu3.15"
         }
       ],
       "roots": [
@@ -181,9 +181,9 @@
       "libc-bin"
     ],
     "sources": [
-      "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble main",
-      "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-updates main",
-      "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-security main"
+      "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble main",
+      "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble-updates main",
+      "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble-security main"
     ]
   },
   "version": 2

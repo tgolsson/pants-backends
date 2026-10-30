@@ -1,5 +1,5 @@
 """Golden checks for the `oci_cacerts_layer` examples, built from the real locked `ca-certificates`
-debs: bookworm's xz-compressed 20230311 and noble's zstd-compressed package.
+debs: bookworm's xz-compressed 20230311+deb12u1 and noble's zstd-compressed 20260601~24.04.1.
 
 The expected counts and digests follow from `examples/oci/debian/bookworm.lock.json` and
 `examples/oci/ubuntu/noble.lock.json`, and from how `helper_layer_builder` orders and joins the
@@ -22,14 +22,14 @@ COPYRIGHT = "usr/share/doc/ca-certificates/copyright"
     [
         pytest.param(
             "examples.oci.debian/cacerts.tar",
-            140,
-            "678d423fad6fb240a7d000f757d65fd96c757466ebd64e7031a78a64de26297a",
+            142,
+            "a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d",
             id="bookworm",
         ),
         pytest.param(
             "examples.oci.ubuntu/cacerts.tar",
-            146,
-            "6d84ab71cb726c0641b0af84303c316e3fa50db941dc8507d09045eb2fa5d238",
+            121,
+            "9481fcd95f41b221f02f14d896535fe500bec539bc563c4cdca1acee483a8bdd",
             id="noble",
         ),
     ],

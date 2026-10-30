@@ -2,7 +2,7 @@ oci_pull_images(
     name="python",
     repository="docker.io/library/python",
     variants={
-        "3.11.10-slim": "459ee2a00675825a5cf39a34d0c4a3f7cb994c76b647c88c1605ed9aca05b97e",
+        "3.14.10-slim": "ec6a14df5b63e3fbb3498e3240f7f640c230f9dca67683d23265db3866697f2d",
     },
     architecture="amd64",
     os="linux",
@@ -17,7 +17,7 @@ oci_layer(
 
 oci_image_build(
     name="image",
-    base=[":python#3.11.10-slim"],
+    base=[":python#3.14.10-slim"],
     repository="xx",
     tag="latest",
     entrypoint="examples/oci/file/start.sh",

@@ -2,7 +2,7 @@ oci_pull_images(
     name="ubuntu",
     repository="docker.io/library/ubuntu",
     variants={
-        "noble-20241009": "08a4455a1f5a50a3dd22309df017cec827f352258596174f1cbbb7da990d1368",
+        "noble-20260917": "f610ab94648195aa356059f5b41d6085c9d4d903c072430cdd1af7bdb646106b",
     },
     architecture="amd64",
     os="linux",
@@ -16,9 +16,9 @@ deb_packages(
     name="noble",
     resolve="noble",
     sources=[
-        "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble main",
-        "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-updates main",
-        "https://snapshot.ubuntu.com/ubuntu/20241001T000000Z noble-security main",
+        "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble main",
+        "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble-updates main",
+        "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble-security main",
     ],
     architectures=["amd64", "arm64"],
     packages=["jq", "ca-certificates", "libc-bin"],
@@ -36,7 +36,7 @@ oci_deb_layer(
 
 oci_image_build(
     name="image",
-    base=[":ubuntu#noble-20241009"],
+    base=[":ubuntu#noble-20260917"],
     layers=[":jq"],
     repository="pants-backend-oci/examples/ubuntu",
     tag="latest",
@@ -77,7 +77,7 @@ oci_locale_layer(
 
 oci_image_build(
     name="nonroot",
-    base=[":ubuntu#noble-20241009"],
+    base=[":ubuntu#noble-20260917"],
     layers=[":jq", ":passwd", ":group", ":cacerts"],
     repository="pants-backend-oci/examples/ubuntu-nonroot",
     tag="latest",

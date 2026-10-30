@@ -30,21 +30,24 @@ below use `X` for the new Pants version.
 4. Set `[GLOBAL].pants_version = "X"` in `pants.toml`.
 5. If Pants now runs on a different Python, move everything that runs plugin code to it (`==3.N.*`):
    `[python].interpreter_constraints`, `[python.resolves_to_interpreter_constraints]` for `pants-plugins`, `pytest` and
-   `black`, and `[black]`/`[isort]` `interpreter_constraints`. `example-1` and `twine` don't run plugin code and stay.
-   Interpreters come from the `python_build_standalone` provider backend, so no local install is needed; if it doesn't
-   know the new version yet, set `[python-build-standalone-python-provider].known_python_versions`.
+   `black`, `twine`, and `[black]`/`[isort]` `interpreter_constraints`. `example-1` follows the Python of the
+   examples' `gcr.io/distroless/python3-debian13` base (3.13), not Pants'. Interpreters come from the `python_build_standalone` provider
+   backend, locally and in CI, so nothing installs Python; if the provider doesn't know the new version yet, set
+   `[python-build-standalone-python-provider].known_python_versions`.
 6. Check the tool pins in `TOOLS` in the root `BUILD` against the new Pants defaults (`default_requirements` in
    upstream's `pytest.py`, `ipython.py`, `isort/subsystem.py`, `black/subsystem.py`, `twine.py`), and raise any that
    don't support the new interpreter.
 7. Regenerate lockfiles with `pants generate-lockfiles --resolve=pants-plugins --resolve=pytest ...`, naming
    `pants-plugins` (which pins `pantsbuild.pants` via `pants_requirements` in `pants-plugins/BUILD`) and every resolve
    whose interpreter constraints or requirements changed. A bare `pants generate-lockfiles` also upgrades `example-1`
-   and `twine`, which changes the example image digests for no reason.
+   and `twine`, which changes the example image digests for no reason. With `[python].separate_lockfile_metadata_file`,
+   each lockfile's metadata (interpreter constraints, input requirements) is in a sibling `<lockfile>.metadata`;
+   commit both.
 8. Fix API breakage and deprecation warnings (`pants list ::` prints them). Rules use call-by-name; CI sets
    `PANTS_DISABLE_GETS=1`, so a stray `Get` fails the build. This applies to odin too: it is unreleased but still built
    and tested. `pants_at_least()` in `examples/macros.py` exists for version-gated BUILD code, but nothing uses it today.
-9. In `.github/workflows/main.yml`, update every `gha-cache-key` (`cache1-<job>-py<python>-pantsX`, one per job) and
-   the `setup-python` versions, if the interpreter moved.
+9. Update every `gha-cache-key` in `.github/workflows/main.yml` and `docs.yml` (`cache1-<job>-py<python>-pantsX`, one
+   per job).
 10. Update the Pants badge in the root `README.md`.
 11. Refresh pinned binary tools: update `default_version` and `default_known_versions` (SHA-256 and byte size) in each
     plugin's `subsystem.py`, update the table and refresh date in `docs/src/binary-tools.md`, and note new defaults in
