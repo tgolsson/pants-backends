@@ -41,6 +41,12 @@ for f in $ld "$2"; do if [ -f "$f" ]; then cksum "$f"; fi; done
 """
 
 
+def _path(tools: tuple[BinaryPath, ...], search_path: tuple[str, ...]) -> str:
+    """The tools' own directories first, so a driver finds its assembler and linker rather than
+    the host's."""
+    return os.pathsep.join(dict.fromkeys((*(os.path.dirname(t.path) for t in tools), *search_path)))
+
+
 @dataclass(frozen=True)
 class CcToolchainRequest:
     platform: TargetPlatform
@@ -59,12 +65,9 @@ class CcToolchain:
 
     @property
     def env(self) -> FrozenDict[str, str]:
-        """The tools' own directories come first, so a driver finds its assembler and linker
-        rather than the host's."""
-        tool_dirs = [os.path.dirname(t.path) for t in (self.cc, self.cxx, self.ar)]
         return FrozenDict(
             {
-                "PATH": os.pathsep.join(dict.fromkeys((*tool_dirs, *self.search_path))),
+                "PATH": _path((self.cc, self.cxx, self.ar), self.search_path),
                 "__PANTS_CC_TOOLCHAIN": ",".join(
                     (self.cc.fingerprint, self.cxx.fingerprint, self.binutils_fingerprint)
                 ),
@@ -180,7 +183,8 @@ async def resolve_cc_toolchain(request: CcToolchainRequest, bash: BashBinary) ->
         **implicitly(
             Process(
                 argv=(bash.path, "-c", _BINUTILS_FINGERPRINT, "fingerprint", cc.path, ar.path),
-                env={"PATH": os.pathsep.join(search_path)},
+                # The PATH the compiles get, so `ld` resolves to the one they run.
+                env={"PATH": _path((cc, cxx, ar), search_path)},
                 description=f"Fingerprint the binutils of {cc.path}",
                 level=LogLevel.DEBUG,
                 cache_scope=ProcessCacheScope.PER_SESSION,

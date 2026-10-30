@@ -159,6 +159,8 @@ def test_config_edit_changes_the_result(rule_runner: PythonRuleRunner) -> None:
     relaxed = CONFIG.replace("WarningsAsErrors: '*'", "WarningsAsErrors: ''")
     result = _lint(rule_runner, DROP, **{".clang-tidy": relaxed})
     assert result.exit_code == 0, result.stdout + result.stderr
+    # The warnings are still reported.
+    assert _reported(result, "src/api.h:1:5: warning: function 'api'") == 1, result.stdout
 
 
 def test_unknown_compiler_argument_fails(rule_runner: PythonRuleRunner) -> None:

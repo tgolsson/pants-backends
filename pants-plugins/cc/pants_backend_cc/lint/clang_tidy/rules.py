@@ -140,15 +140,16 @@ async def clang_tidy_lint(
         for step, input_digest in zip(steps, input_digests)
     )
 
-    failed = [(s, r) for s, r in zip(steps, results) if r.exit_code != 0]
+    failed = [r for r in results if r.exit_code != 0]
     simplifier = Simplifier()
     diagnostics: dict[str, None] = {}
     stderr = ""
-    for step, result in failed:
+    # Warnings are reported too: clang-tidy exits 0 on them unless `WarningsAsErrors` says not to.
+    for step, result in zip(steps, results):
         found = _diagnostics(_root_relative(simplifier.simplify(result.stdout), step.cwd))
         diagnostics.update(dict.fromkeys(found))
         # Without a diagnostic on stdout, stderr is all that says why the compile failed.
-        if not found:
+        if result.exit_code != 0 and not found:
             stderr += simplifier.simplify(result.stderr)
     stderr += f"clang-tidy: {len(failed)} of {len(results)} compiles failed\n"
     return LintResult(

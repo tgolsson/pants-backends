@@ -59,6 +59,7 @@ from pants_backend_cmake.target_types import (
 from pants_backend_cmake.util_rules.canonicalize import (
     canonicalize,
     canonicalize_build_ninja,
+    rebase,
     sandbox_root,
     tool_paths,
 )
@@ -104,8 +105,8 @@ class ConfiguredProject:
     tree: Digest
     """The canonicalized generated files, under `build_dir`."""
     generated: Digest
-    """The subset of `tree` the build reads: configure-time outputs such as `configure_file`
-    results, without the Ninja files and the compile database."""
+    """The configure-time outputs the build reads, such as `configure_file` results: `tree`
+    without the Ninja files and the compile database, rebased to `relative_root`."""
     generated_paths: tuple[str, ...]
     graph: NinjaGraph
     targets: FrozenDict[str, CMakeTargetInfo]
@@ -313,18 +314,22 @@ async def canonical_tree(
     if build_ninja_path not in raw:
         raise ValueError(f"{address}: configure produced no {build_ninja_path}")
     root = sandbox_root(raw[build_ninja_path].decode(), build_dir)
+    relative_root = os.path.relpath(".", build_dir)
     canonical: dict[str, bytes] = {}
+    # What the build reads: a generated file's paths rebased as its commands' are.
+    rebased: dict[str, bytes] = {}
     for path, content in raw.items():
         try:
             text = content.decode()
         except UnicodeDecodeError:
-            canonical[path] = content
+            canonical[path] = rebased[path] = content
             continue
         if path == build_ninja_path:
             text = canonicalize_build_ninja(text, root, tools)
         else:
             text = canonicalize(text, root, tools)
         canonical[path] = text.encode()
+        rebased[path] = rebase(text, relative_root).encode()
     build_files = {
         build_ninja_path,
         f"{build_dir}/CMakeFiles/rules.ninja",
@@ -338,7 +343,7 @@ async def canonical_tree(
             CreateDigest(
                 [
                     FileContent(path, content)
-                    for path, content in sorted(canonical.items())
+                    for path, content in sorted(rebased.items())
                     if path not in build_files
                 ]
             )

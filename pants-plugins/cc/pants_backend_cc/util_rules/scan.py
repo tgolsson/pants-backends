@@ -5,6 +5,7 @@ input until the compile fails with a confusing message."""
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 
@@ -50,6 +51,9 @@ def scan_argv(tokens: Sequence[str]) -> list[str]:
     return [*without_outputs(tokens), "-M", "-MG"]
 
 
+_DEPFILE_TOKEN = re.compile(r"(?:\\.|[^\s\\])+")
+
+
 def depfile_entries(text: str, cwd: str) -> list[tuple[str, str]]:
     """`(as written, sandbox-root-relative)` for every dependency in Make-style output, which the
     compiler writes relative to its working directory; absolute paths dropped. A header `-MG`
@@ -57,7 +61,9 @@ def depfile_entries(text: str, cwd: str) -> list[tuple[str, str]]:
     body = text.replace("\\\r\n", " ").replace("\\\n", " ")
     _, _, rest = body.partition(":")
     entries = []
-    for token in rest.split():
+    for token in _DEPFILE_TOKEN.findall(rest):
+        # gcc escapes a space or `#` with a backslash and `$` as `$$`.
+        token = re.sub(r"\\([ #])", r"\1", token).replace("$$", "$")
         if os.path.isabs(token):
             continue
         entries.append((token, os.path.normpath(os.path.join(cwd, token))))

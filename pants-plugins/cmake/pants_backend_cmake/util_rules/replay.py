@@ -188,7 +188,8 @@ async def build_edge(request: EdgeRequest, bash: BashBinary) -> EdgeOutput:
     env = dict(project.toolchain.env)
     immutable_input_digests = {}
     if "cmake" in shlex.split(command):
-        env["PATH"] = f"{{chroot}}/{project.toolchain.cmake_bin_dir}{os.pathsep}{env['PATH']}"
+        cmake_dir = f"{{chroot}}/{project.toolchain.cmake_bin_dir}"
+        env["PATH"] = os.pathsep.join(p for p in (cmake_dir, env.get("PATH")) if p)
         immutable_input_digests = dict(project.toolchain.immutable_input_digests)
 
     description = rebase(graph.lookup(edge, "description"), relative_root) or f"Build {edge.outputs[0]}"

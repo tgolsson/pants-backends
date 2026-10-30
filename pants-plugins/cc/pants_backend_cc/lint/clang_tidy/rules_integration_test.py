@@ -91,6 +91,15 @@ def test_violations_fail(rule_runner: PythonRuleRunner) -> None:
     assert result.stderr == "clang-tidy: 2 of 2 compiles failed\n"
 
 
+def test_warnings_pass_and_are_reported(rule_runner: PythonRuleRunner) -> None:
+    result = _lint(
+        rule_runner, **{".clang-tidy": FILES[".clang-tidy"].replace("WarningsAsErrors: '*'\n", "")}
+    )
+    assert result.exit_code == 0, result.stdout + result.stderr
+    assert _reported(result, "src/a.cpp:3:5: warning: function 'fact'") == 1, result.stdout
+    assert result.stderr == "clang-tidy: 0 of 2 compiles failed\n"
+
+
 def test_clean_passes(rule_runner: PythonRuleRunner) -> None:
     clean = {
         "src/h.h": "inline int h(int n) { return n; }\n",

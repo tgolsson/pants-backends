@@ -61,7 +61,9 @@ def test_configure_small_project(rule_runner: RuleRunner) -> None:
             "BUILD": 'cmake_project(name="proj", sources=["CMakeLists.txt", "VERSION", "*.in", "*.c", "include/*.h"])\n',  # noqa: E501
             "CMakeLists.txt": CMAKELISTS,
             "VERSION": "1.2.3\n",
-            "config.h.in": '#define DEMO_VERSION "@DEMO_VERSION@"\n',
+            "config.h.in": (
+                '#define DEMO_VERSION "@DEMO_VERSION@"\n#define DEMO_DATA "@CMAKE_SOURCE_DIR@/data"\n'
+            ),
             "lib.c": "int demo(void) { return 42; }\n",
             "include/demo.h": "int demo(void);\n",
             "main.c": '#include "demo.h"\n#include "config.h"\nint main(void) { return demo() == 42 ? 0 : 1; }\n',  # noqa: E501
@@ -97,8 +99,15 @@ def test_configure_small_project(rule_runner: RuleRunner) -> None:
         "build/config.h",
     }
     # Configure-time inputs were real files, not placeholders.
-    assert by_path["build/config.h"] == '#define DEMO_VERSION "1.2.3"\n'
+    assert by_path["build/config.h"] == (
+        f'#define DEMO_VERSION "1.2.3"\n#define DEMO_DATA "{PLACEHOLDER}/data"\n'
+    )
     assert configured.generated_paths == ("build/config.h",)
+    # The build reads it with the placeholder rebased, as its commands are.
+    generated = rule_runner.request(DigestContents, [configured.generated])
+    assert [fc.content.decode() for fc in generated] == [
+        '#define DEMO_VERSION "1.2.3"\n#define DEMO_DATA "../data"\n'
+    ]
     for path, text in by_path.items():
         assert "pants-sandbox" not in text, path
         assert "/tmp/" not in text, path

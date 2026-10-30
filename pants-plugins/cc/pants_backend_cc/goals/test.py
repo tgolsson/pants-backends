@@ -154,6 +154,8 @@ async def run_cc_test(
     if coverage:
         # Raises: a host without gcov would otherwise fail only once every test has run.
         await gcov.find_gcov_tools(**implicitly())
+    # A toolchain that cannot be found is not caught: every test would fail alike, so the goal
+    # fails once, with the tool and the search path.
     try:
         process, built = await _test_process(
             field_set, test_subsystem, test_extra_env, union_membership, coverage

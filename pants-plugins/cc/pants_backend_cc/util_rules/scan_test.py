@@ -26,3 +26,8 @@ def test_parse_depfile():
     text = "obj/a.o: ../src/a.cpp ../src/a.hpp \\\n  /usr/include/stdio.h \\\n  ../src/b.h\n"
     assert parse_depfile(text, "build") == ["src/a.cpp", "src/a.hpp", "src/b.h"]
     assert parse_depfile(text, "sub/build") == ["sub/src/a.cpp", "sub/src/a.hpp", "sub/src/b.h"]
+
+
+def test_parse_depfile_unescapes_spaces():
+    text = "a.o: my\\ src/a.c my\\ src/c\\#.h my\\ src/d$$.h \\\n  b.h\n"
+    assert parse_depfile(text, "") == ["my src/a.c", "my src/c#.h", "my src/d$.h", "b.h"]
