@@ -33,4 +33,11 @@ def isolated_pants_args():
         runtime = podman_runner.store_runtime(podman_runner.runtime_dir(os.geteuid()), store.resolve())
         shutil.rmtree(runtime, ignore_errors=True)
     # The store's files belong to the user's subordinate ids, and sandboxes hold read-only inputs.
-    subprocess.run(["podman", "unshare", "rm", "-rf", str(root)], check=True)
+    if shutil.which("podman"):
+        subprocess.run(["podman", "unshare", "rm", "-rf", str(root)], check=True)
+    else:
+        # Without podman (the Docker runner) there is no store, only read-only sandbox directories.
+        for path in root.rglob("*"):
+            if path.is_dir() and not path.is_symlink():
+                path.chmod(0o700)
+        shutil.rmtree(root)
