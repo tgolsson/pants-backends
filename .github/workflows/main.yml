@@ -18,6 +18,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    # science (run by pex to build the oci-builder and apt-resolver scies) looks up the pinned
+    # python-build-standalone release through GitHub's API, and hosted runners hit the anonymous
+    # rate limit (a-scie/lift#127). It reads `~/.netrc`, which, unlike an env var, stays out of
+    # Pants' process cache keys.
+    - name: Authenticate GitHub API requests
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        printf 'machine api.github.com\nlogin x-access-token\npassword %s\n' "$GITHUB_TOKEN" > ~/.netrc
+
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
@@ -36,6 +47,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    # science (run by pex to build the oci-builder and apt-resolver scies) looks up the pinned
+    # python-build-standalone release through GitHub's API, and hosted runners hit the anonymous
+    # rate limit (a-scie/lift#127). It reads `~/.netrc`, which, unlike an env var, stays out of
+    # Pants' process cache keys.
+    - name: Authenticate GitHub API requests
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        printf 'machine api.github.com\nlogin x-access-token\npassword %s\n' "$GITHUB_TOKEN" > ~/.netrc
+
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
@@ -70,6 +92,17 @@ jobs:
       if: runner.os == 'macOS'
       run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
 
+    # science (run by pex to build the oci-builder and apt-resolver scies) looks up the pinned
+    # python-build-standalone release through GitHub's API, and hosted runners hit the anonymous
+    # rate limit (a-scie/lift#127). It reads `~/.netrc`, which, unlike an env var, stays out of
+    # Pants' process cache keys.
+    - name: Authenticate GitHub API requests
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        printf 'machine api.github.com\nlogin x-access-token\npassword %s\n' "$GITHUB_TOKEN" > ~/.netrc
+
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
@@ -103,6 +136,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    # science (run by pex to build the oci-builder and apt-resolver scies) looks up the pinned
+    # python-build-standalone release through GitHub's API, and hosted runners hit the anonymous
+    # rate limit (a-scie/lift#127). It reads `~/.netrc`, which, unlike an env var, stays out of
+    # Pants' process cache keys.
+    - name: Authenticate GitHub API requests
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        printf 'machine api.github.com\nlogin x-access-token\npassword %s\n' "$GITHUB_TOKEN" > ~/.netrc
+
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
@@ -135,6 +179,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    # science (run by pex to build the oci-builder and apt-resolver scies) looks up the pinned
+    # python-build-standalone release through GitHub's API, and hosted runners hit the anonymous
+    # rate limit (a-scie/lift#127). It reads `~/.netrc`, which, unlike an env var, stays out of
+    # Pants' process cache keys.
+    - name: Authenticate GitHub API requests
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        printf 'machine api.github.com\nlogin x-access-token\npassword %s\n' "$GITHUB_TOKEN" > ~/.netrc
+
     - name: Initialize Pants
       uses: pantsbuild/actions/init-pants@main
       with:
