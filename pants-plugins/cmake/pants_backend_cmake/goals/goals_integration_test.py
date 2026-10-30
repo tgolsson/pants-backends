@@ -9,16 +9,13 @@ from typing import Any
 
 import pytest
 from pants.backend.cc.target_types import CCSourcesGeneratorTarget
-from pants.core import target_types as core_target_types
 from pants.core.goals import package as core_package
 from pants.core.goals import test as core_test
 from pants.core.goals.package import BuiltPackage
 from pants.core.goals.test import TestResult
 from pants.core.target_types import FilesGeneratorTarget, RelocatedFiles
-from pants.core.util_rules import env_vars, external_tool, source_files, system_binaries
 from pants.engine.addresses import Address, Addresses
 from pants.engine.fs import DigestContents
-from pants.engine.internals.parametrize import Parametrize
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
 from pants.engine.target import (
@@ -27,19 +24,16 @@ from pants.engine.target import (
     HydratedSources,
     HydrateSourcesRequest,
 )
-from pants.source import source_root
 from pants.testutil.rule_runner import RuleRunner
 
-from pants_backend_cc import register as cc_register
 from pants_backend_cc.goals.package import CcBinaryFieldSet
 from pants_backend_cc.goals.test import CcTestFieldSet, CcTestRequest
 from pants_backend_cc.testutil import GenTarget, codegen_rules
 from pants_backend_cc.toy_library import ToyLibraryTarget, toy_library_rules
 from pants_backend_cc.util_rules import executable
-from pants_backend_cmake import register
 from pants_backend_cmake.goals.package import CMakeTargetFieldSet
+from pants_backend_cmake.testutil import cmake_rule_runner
 from pants_backend_cmake.util_rules.toolchain import CMakeToolchainFileField
-from pants_backend_platforms import register as platforms_register
 from pants_backend_platforms.testutil import HOST, OTHER, platforms_build
 
 CMAKELISTS = """\
@@ -128,36 +122,23 @@ FILES = {
 
 
 def _rule_runner(*extra_rules: object) -> RuleRunner:
-    return RuleRunner(
-        rules=[
-            *extra_rules,
-            *external_tool.rules(),
-            *source_files.rules(),
-            *system_binaries.rules(),
-            *core_target_types.rules(),
-            *core_package.rules(),
-            *core_test.rules(),
-            *env_vars.rules(),
-            *source_root.rules(),
-            *codegen_rules(),
-            *register.rules(),
-            QueryRule(BuiltPackage, [CMakeTargetFieldSet]),
-            QueryRule(BuiltPackage, [CcBinaryFieldSet]),
-            QueryRule(TestResult, [CcTestRequest.Batch]),
-            QueryRule(Addresses, [DependenciesRequest]),
-            QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
-        ],
-        target_types=[
-            *register.target_types(),
-            *platforms_register.target_types(),
-            *cc_register.target_types(),
+    return cmake_rule_runner(
+        *extra_rules,
+        *core_package.rules(),
+        *core_test.rules(),
+        *codegen_rules(),
+        QueryRule(BuiltPackage, [CMakeTargetFieldSet]),
+        QueryRule(BuiltPackage, [CcBinaryFieldSet]),
+        QueryRule(TestResult, [CcTestRequest.Batch]),
+        QueryRule(Addresses, [DependenciesRequest]),
+        QueryRule(executable.BuiltExecutable, [executable.ExecutableBuildRequest]),
+        target_types=(
             CCSourcesGeneratorTarget,
             FilesGeneratorTarget,
             RelocatedFiles,
             GenTarget,
             ToyLibraryTarget,
-        ],
-        objects={"parametrize": Parametrize},
+        ),
     )
 
 
@@ -221,18 +202,6 @@ def test_run_tests(rule_runner: RuleRunner) -> None:
     assert "hello world" in with_data.stdout_bytes.decode()
 
 
-def test_missing_header_names_the_test_and_the_include(rule_runner: RuleRunner) -> None:
-    _write_project(
-        rule_runner, BUILD=BUILD.replace('sources=["single.c", "extra/single.h"]', 'sources=["single.c"]')
-    )
-    result = _test(rule_runner, Address("", target_name="single"))
-    assert result.exit_code == 1
-    message = result.stderr_bytes.decode()
-    assert message.startswith(
-        "//:single: single.c includes files that none of its inputs provide: ['single.h']"
-    )
-
-
 def test_single_test_with_own_flags(rule_runner: RuleRunner) -> None:
     _write_project(rule_runner)
     # `include_dirs`, `defines`, `compiler_args` and `linker_args`; `-lm` comes from demo.
@@ -260,26 +229,6 @@ def test_project_dependency_is_inferred(rule_runner: RuleRunner) -> None:
     target = rule_runner.get_target(Address("", target_name="demo"))
     addresses = rule_runner.request(Addresses, [DependenciesRequest(target[Dependencies])])
     assert Address("", target_name="proj") in addresses
-
-
-def test_parametrizations_share_the_build(rule_runner: RuleRunner) -> None:
-    # Parametrizations that differ only in how the test runs build the same executable at the
-    # same path, so every compile and link process is shared.
-    _write_project(
-        rule_runner,
-        BUILD=BUILD.replace(
-            'name="single",', 'name="single",\n    **parametrize("a"),\n    **parametrize("b", args=["x"]),'
-        ),
-    )
-    a, b = (
-        rule_runner.request(
-            executable.BuiltTest,
-            [executable.TestBuildRequest(Address("", target_name="single", parameters={"parametrize": p}))],
-        )
-        for p in ("a", "b")
-    )
-    assert a.executable == b.executable == "build/__pants_tests/.single/bin/single"
-    assert a.runtime == b.runtime
 
 
 def test_package_compiles_generated_source(rule_runner: RuleRunner) -> None:
@@ -492,7 +441,8 @@ def test_coverage_build_writes_notes(rule_runner: RuleRunner) -> None:
         BUILD=BUILD.replace('"private/*.h"])', f'"private/*.h"], coverage_cmake_args=[{flags}])'),
     )
     built = rule_runner.request(
-        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="single"), coverage=True)]
+        executable.BuiltExecutable,
+        [executable.test_build_request(Address("", target_name="single"), coverage=True)],
     )
     notes = rule_runner.request(DigestContents, [built.coverage_notes])
     assert [fc.path for fc in notes] == ["build/__pants_tests/.single/obj/single.c.gcno"]

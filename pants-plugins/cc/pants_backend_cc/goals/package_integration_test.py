@@ -4,7 +4,6 @@ Pants."""
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 
 import pytest
@@ -136,19 +135,6 @@ def test_library_with_a_working_directory(rule_runner: RuleRunner) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_cxx_translation_unit(rule_runner: RuleRunner) -> None:
-    _write_project(
-        rule_runner,
-        BUILD=BUILD + 'cc_binary(name="cxx", sources=["cxx/main.cpp"], dependencies=[":demo"])\n',
-        **{
-            "cxx/main.cpp": '#include <string>\nextern "C" {\n#include "demo.h"\n}\n'
-            'int main() { return std::string("forty-two").size() + 33 == (unsigned)demo() ? 0 : 1; }\n'
-        },
-    )
-    result = _run(rule_runner, _package(rule_runner, Address("", target_name="cxx")))
-    assert result.returncode == 0, result.stderr
-
-
 def test_compiles_sources_of_dependencies(rule_runner: RuleRunner) -> None:
     # The binary's translation units may all come from `dependencies`.
     _write_project(
@@ -162,51 +148,10 @@ def test_compiles_sources_of_dependencies(rule_runner: RuleRunner) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_libraries_link_in_declared_not_sorted_order(rule_runner: RuleRunner) -> None:
-    # `zuser` needs `aprov`, so only the declared order links.
-    _write_project(
-        rule_runner,
-        BUILD=BUILD
-        + 'toy_library(name="zuser", sources=["order/zuser.c"])\n'
-        + 'toy_library(name="aprov", sources=["order/aprov.c"])\n'
-        + 'cc_binary(name="order", sources=["order/main.c"], dependencies=[":zuser", ":aprov"])\n',
-        **{
-            "order/zuser.c": "int aprov(void);\nint zuser(void) { return aprov() + 2; }\n",
-            "order/aprov.c": "int aprov(void) { return 40; }\n",
-            "order/main.c": "int zuser(void);\nint main(void) { return zuser() == 42 ? 0 : 1; }\n",
-        },
-    )
-    result = _run(rule_runner, _package(rule_runner, Address("", target_name="order")))
-    assert result.returncode == 0, result.stderr
-
-
-@pytest.mark.parametrize(
-    "build, files, message",
-    [
-        (
-            'cc_binary(name="broken", sources=["alone.c"])\n',
-            {"alone.c": "int main(void) { return 0; }\n"},
-            "//:broken: `dependencies` must name at least one library",
-        ),
-        (
-            'cc_binary(name="broken", dependencies=[":demo"])\n',
-            {},
-            "//:broken: no translation unit to compile in `sources` or `dependencies`",
-        ),
-        (
-            'toy_library(name="c_only", sources=["demo.c"], languages=["c"])\n'
-            'cc_binary(name="broken", sources=["cxx/main.cpp"], dependencies=[":c_only"])\n',
-            {"cxx/main.cpp": "int main() { return 0; }\n"},
-            "//:broken: //:c_only has no cxx consumers: its `languages` are ['c']",
-        ),
-        (
-            'cc_binary(name="broken", sources=["missing.c"], dependencies=[":demo"])\n',
-            {"missing.c": '#include "nowhere.h"\nint main(void) { return 0; }\n'},
-            "//:broken: missing.c includes files that none of its inputs provide: ['nowhere.h']",
-        ),
-    ],
-)
-def test_build_errors(rule_runner: RuleRunner, build: str, files: dict[str, str], message: str) -> None:
-    _write_project(rule_runner, BUILD=BUILD + build, **files)
-    with pytest.raises(ExecutionError, match=re.escape(message)):
+def test_build_errors_fail_the_package(rule_runner: RuleRunner) -> None:
+    # The executable builder is `cc_test`'s, whose tests cover its errors; `package` raises them.
+    _write_project(rule_runner, BUILD=BUILD + 'cc_binary(name="broken", dependencies=[":demo"])\n')
+    with pytest.raises(
+        ExecutionError, match="//:broken: no translation unit to compile in `sources` or `dependencies`"
+    ):
         _package(rule_runner, Address("", target_name="broken"))

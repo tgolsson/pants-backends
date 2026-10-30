@@ -151,7 +151,7 @@ def _rule_runner(*extra_rules: object) -> RuleRunner:
             *toy_library_rules(),
             *register.rules(),
             QueryRule(TestResult, [CcTestRequest.Batch]),
-            QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
+            QueryRule(executable.BuiltExecutable, [executable.ExecutableBuildRequest]),
         ],
         target_types=[
             *register.target_types(),
@@ -315,8 +315,8 @@ def test_parametrizations_share_the_build(rule_runner: RuleRunner) -> None:
     )
     a, b = (
         rule_runner.request(
-            executable.BuiltTest,
-            [executable.TestBuildRequest(Address("", target_name="single", parameters={"parametrize": p}))],
+            executable.BuiltExecutable,
+            [executable.test_build_request(Address("", target_name="single", parameters={"parametrize": p}))],
         )
         for p in ("a", "b")
     )
@@ -446,7 +446,7 @@ def test_coverage_notes(rule_runner: RuleRunner) -> None:
         ),
     )
     built = rule_runner.request(
-        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="single"))]
+        executable.BuiltExecutable, [executable.test_build_request(Address("", target_name="single"))]
     )
     notes = rule_runner.request(DigestContents, [built.coverage_notes])
     assert [fc.path for fc in notes] == ["__pants_tests/.single/obj/single.c.gcno"]
@@ -543,7 +543,7 @@ def test_libraries_requiring_a_nested_working_directory(rule_runner: RuleRunner)
     result = _test(rule_runner, Address("", target_name="nested"))
     assert result.exit_code == 0, result.stderr_bytes.decode()
     built = rule_runner.request(
-        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="nested"))]
+        executable.BuiltExecutable, [executable.test_build_request(Address("", target_name="nested"))]
     )
     assert built.cwd == "a/b/c"
 
@@ -562,7 +562,7 @@ def test_a_required_and_an_unset_working_directory(rule_runner: RuleRunner) -> N
     result = _test(rule_runner, Address("", target_name="nested"))
     assert result.exit_code == 0, result.stderr_bytes.decode()
     built = rule_runner.request(
-        executable.BuiltTest, [executable.TestBuildRequest(Address("", target_name="nested"))]
+        executable.BuiltExecutable, [executable.test_build_request(Address("", target_name="nested"))]
     )
     assert built.cwd == "a"
 

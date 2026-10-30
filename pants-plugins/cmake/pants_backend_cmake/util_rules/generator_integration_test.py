@@ -13,11 +13,8 @@ from pants.backend.project_info import dependents, list_targets
 from pants.backend.project_info.dependents import Dependents, DependentsRequest
 from pants.backend.project_info.list_targets import List
 from pants.backend.python import register as python_register
-from pants.core import target_types as core_target_types
 from pants.core.target_types import FilesGeneratorTarget
-from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address, Addresses
-from pants.engine.internals.parametrize import Parametrize
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule, rule
 from pants.engine.target import (
@@ -31,20 +28,18 @@ from pants.engine.target import (
 from pants.engine.unions import UnionRule
 from pants.testutil.rule_runner import RuleRunner
 
-from pants_backend_cc import register as cc_register
 from pants_backend_cc.util_rules.outputs import DeclaredOutputs, DeclaredOutputsFieldSet
-from pants_backend_cmake import register
 from pants_backend_cmake.ninja.parser import NinjaParseError
 from pants_backend_cmake.target_types import (
     CMakeBuildTypeField,
     CMakeTargetNameField,
     CMakeTargetProjectField,
 )
+from pants_backend_cmake.testutil import cmake_rule_runner
 from pants_backend_cmake.util_rules import generator
 from pants_backend_cmake.util_rules.canonicalize import CanonicalizeError
 from pants_backend_cmake.util_rules.configure import ConfiguredProject, ConfigureRequest
 from pants_backend_cmake.util_rules.targets import CMakeTargetRequest, ResolvedCMakeTarget
-from pants_backend_platforms import register as platforms_register
 from pants_backend_platforms.target_types import PlatformsField
 from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS, OTHER, platforms_build
 from pants_backend_platforms.util_rules.platforms import TargetPlatform
@@ -98,33 +93,17 @@ class FakeConsumerTarget(Target):
 
 
 def _rule_runner(*extra: object, target_types: tuple[type[Target], ...] = ()) -> RuleRunner:
-    return RuleRunner(
-        rules=[
-            *external_tool.rules(),
-            *source_files.rules(),
-            *system_binaries.rules(),
-            *core_target_types.rules(),
-            *list_targets.rules(),
-            *dependents.rules(),
-            *register.rules(),
-            fake_outputs,
-            UnionRule(DeclaredOutputsFieldSet, FakeOutputsFieldSet),
-            QueryRule(ResolvedCMakeTarget, [CMakeTargetRequest]),
-            QueryRule(ConfiguredProject, [ConfigureRequest]),
-            QueryRule(Dependents, [DependentsRequest]),
-            QueryRule(Addresses, [DependenciesRequest]),
-            *extra,
-        ],
-        target_types=[
-            *register.target_types(),
-            *platforms_register.target_types(),
-            *cc_register.target_types(),
-            FilesGeneratorTarget,
-            FakeGeneratorTarget,
-            FakeConsumerTarget,
-            *target_types,
-        ],
-        objects={"parametrize": Parametrize},
+    return cmake_rule_runner(
+        *list_targets.rules(),
+        *dependents.rules(),
+        fake_outputs,
+        UnionRule(DeclaredOutputsFieldSet, FakeOutputsFieldSet),
+        QueryRule(ResolvedCMakeTarget, [CMakeTargetRequest]),
+        QueryRule(ConfiguredProject, [ConfigureRequest]),
+        QueryRule(Dependents, [DependentsRequest]),
+        QueryRule(Addresses, [DependenciesRequest]),
+        *extra,
+        target_types=(FilesGeneratorTarget, FakeGeneratorTarget, FakeConsumerTarget, *target_types),
     )
 
 

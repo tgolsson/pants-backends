@@ -66,7 +66,7 @@ fields. A test that fails to build is a failed test.
 - Test executables are built under their address without parameters, so parametrizing how a
   test runs shares its build.
 - A compile whose flags ask for coverage (`--coverage`) keeps its `.gcno` notes, in
-  `BuiltTest.coverage_notes`; see Coverage.
+  `BuiltExecutable.coverage_notes`; see Coverage.
 - Another backend can run tests under a wrapper (an emulator, a tracer) through the
   `CcTestWrapperRequest` union; `goals/wrapper.py` documents the contract.
 - `[cc-test-runner].skip` skips the tests.

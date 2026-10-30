@@ -185,12 +185,6 @@ class ExecutableBuildRequest:
 
 
 @dataclass(frozen=True)
-class TestBuildRequest:
-    address: Address
-    coverage: bool = False
-
-
-@dataclass(frozen=True)
 class BuiltExecutable:
     cwd: str
     """Where the executable runs, relative to the sandbox root."""
@@ -205,9 +199,6 @@ class BuiltExecutable:
     coverage: Digest
     """For a coverage build, what gcov reads besides the data a run writes: the libraries'
     `CcLinkInterface.coverage`, `coverage_notes` and the executable's own files."""
-
-
-BuiltTest = BuiltExecutable
 
 
 @dataclass(frozen=True)
@@ -553,15 +544,11 @@ async def build_executable(
     )
 
 
-@rule(desc="Build C/C++ test")
-async def build_test(request: TestBuildRequest) -> BuiltTest:
-    # Without the address's parameters: a parametrization that does not change the build (one
-    # that only changes how the test runs, say) then shares every compile and link process.
-    address = request.address
+def test_build_request(address: Address, coverage: bool = False) -> ExecutableBuildRequest:
+    """Without the address's parameters: a parametrization that does not change the build (one
+    that only changes how the test runs, say) then shares every compile and link process."""
     output_dir = f"{OUTPUT_DIR}/{address.parametrize({}, replace=True).path_safe_spec}"
-    return await build_executable(
-        ExecutableBuildRequest(address, output_dir, request.coverage), **implicitly()
-    )
+    return ExecutableBuildRequest(address, output_dir, coverage)
 
 
 def rules():

@@ -102,11 +102,11 @@ def test_errors():
 
 
 def test_fixture_counts(graph):
-    """A small demo project as configured by CMake, minus the regenerate and missing-input edges."""
-    assert len(graph.rules) == 21
-    assert len(graph.edges) == 51
+    """A small project in the shape CMake writes, canonicalized."""
+    assert len(graph.rules) == 10
+    assert len(graph.edges) == 22
     compile_edges = [e for e in graph.edges if "COMPILER" in e.rule]
-    assert len(compile_edges) == 20
+    assert len(compile_edges) == 6
     assert graph.bindings["cmake_ninja_workdir"] == "__PANTS_CMAKE_ROOT__/build/"
 
 
@@ -114,11 +114,13 @@ def test_fixture_targets_and_kinds(graph):
     kinds = {}
     for name, kind in graph.target_kinds.items():
         kinds.setdefault(kind, []).append(name)
-    assert len(kinds["EXECUTABLE"]) == 4
-    assert kinds["STATIC_LIBRARY"] == ["demo"]
-    assert kinds["SHARED_LIBRARY"] == ["demo_shared"]
-    assert sorted(kinds["OBJECT_LIBRARY"]) == ["demo_cpu", "demo_objects"]
-    assert sorted(kinds["UTILITY"]) == ["edit_cache", "gen_stubs", "gen_tables", "rebuild_cache", "test"]
+    assert kinds == {
+        "EXECUTABLE": ["test_vec"],
+        "STATIC_LIBRARY": ["demo"],
+        "SHARED_LIBRARY": ["demo_shared"],
+        "OBJECT_LIBRARY": ["demo_objects"],
+        "UTILITY": ["gen_tables", "rebuild_cache"],
+    }
 
 
 def test_fixture_section_tagging(graph):
@@ -152,7 +154,7 @@ def test_fixture_compile_command(graph):
 def test_fixture_link_edges(graph):
     archive = graph.producers["libdemo.a"]
     assert archive.target == "demo"
-    assert archive.order_only == ("demo_cpu", "demo_objects")
+    assert archive.order_only == ("demo_objects",)
     assert "CMakeFiles/demo_objects.dir/src/vec.cpp.o" in archive.inputs
     assert graph.command(archive).startswith(": && cmake -E rm -f libdemo.a && /usr/bin/ar qc libdemo.a")
     test_vec = graph.producers["test_vec"]

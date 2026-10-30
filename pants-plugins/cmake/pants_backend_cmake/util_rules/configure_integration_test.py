@@ -3,21 +3,16 @@
 import os
 
 import pytest
-from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.fs import DigestContents
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
 
-from pants_backend_cc import register as cc
 from pants_backend_cc.testutil import GenTarget, codegen_rules
-from pants_backend_cmake.subsystems import cmake, ninja
-from pants_backend_cmake.target_types import targets
-from pants_backend_cmake.util_rules import configure, toolchain
+from pants_backend_cmake.testutil import cmake_rule_runner
 from pants_backend_cmake.util_rules.canonicalize import PLACEHOLDER
 from pants_backend_cmake.util_rules.configure import ConfiguredProject, ConfigureRequest
-from pants_backend_platforms import register as platforms
 from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
 from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
@@ -38,20 +33,8 @@ target_link_libraries(demo_test PRIVATE demo)
 
 @pytest.fixture
 def rule_runner() -> RuleRunner:
-    return RuleRunner(
-        rules=[
-            *external_tool.rules(),
-            *source_files.rules(),
-            *system_binaries.rules(),
-            *cc.rules(),
-            *cmake.rules(),
-            *ninja.rules(),
-            *toolchain.rules(),
-            *configure.rules(),
-            *codegen_rules(),
-            QueryRule(ConfiguredProject, [ConfigureRequest]),
-        ],
-        target_types=[*targets(), *platforms.target_types(), *cc.target_types(), GenTarget],
+    return cmake_rule_runner(
+        *codegen_rules(), QueryRule(ConfiguredProject, [ConfigureRequest]), target_types=(GenTarget,)
     )
 
 
@@ -90,31 +73,18 @@ def test_configure_small_project(rule_runner: RuleRunner) -> None:
         "main.c",
     }
 
-    contents = rule_runner.request(DigestContents, [configured.tree])
-    by_path = {fc.path: fc.content.decode() for fc in contents}
-    assert set(by_path) == {
-        "build/build.ninja",
-        "build/CMakeFiles/rules.ninja",
-        "build/compile_commands.json",
-        "build/config.h",
-    }
-    # Configure-time inputs were real files, not placeholders.
-    assert by_path["build/config.h"] == (
-        f'#define DEMO_VERSION "1.2.3"\n#define DEMO_DATA "{PLACEHOLDER}/data"\n'
-    )
+    # Configure-time inputs were real files, not placeholders; the build reads `config.h` with
+    # the sandbox path rebased, as its commands are.
     assert configured.generated_paths == ("build/config.h",)
-    # The build reads it with the placeholder rebased, as its commands are.
     generated = rule_runner.request(DigestContents, [configured.generated])
     assert [fc.content.decode() for fc in generated] == [
         '#define DEMO_VERSION "1.2.3"\n#define DEMO_DATA "../data"\n'
     ]
-    for path, text in by_path.items():
-        assert "pants-sandbox" not in text, path
-        assert "/tmp/" not in text, path
-        assert "immutable_inputs" not in text, path
-    build_ninja = by_path["build/build.ninja"]
-    assert "RERUN_CMAKE" not in build_ninja
-    assert f"cmake_ninja_workdir = {PLACEHOLDER}/build/" in build_ninja
+    assert not any(e.rule == "RERUN_CMAKE" for e in configured.graph.edges)
+    for edge in (e for e in configured.graph.edges if not e.is_phony):
+        command = configured.graph.command(edge)
+        for host_path in ("pants-sandbox", "/tmp/", "immutable_inputs"):
+            assert host_path not in command, (edge.outputs, command)
 
     edge = configured.graph.producers["CMakeFiles/demo.dir/lib.c.o"]
     assert edge.target == "demo"

@@ -1,13 +1,12 @@
 """Make a configured tree independent of the sandbox it was configured in.
 
 CMake bakes the absolute configure directory into `build.ninja` (source paths, include flags,
-`cmake_ninja_workdir`), `rules.ninja` (the regenerate rule), `compile_commands.json` and every
-file it generates, and records the absolute paths of its own binaries and of ninja. Every such
-path is rewritten: the sandbox root to `PLACEHOLDER`, the tool paths (read exactly from
-`CMakeCache.txt`, not pattern-matched) to the bare tool name. The `RERUN_CMAKE` edge, whose
-inputs are the CMake module tree, is dropped, together with the "a missing CMake input file is
-not an error" phony edge that lists the same inputs. What remains has the same digest wherever
-it was produced.
+`cmake_ninja_workdir`), `rules.ninja` (the regenerate rule) and every file it generates, and
+records the absolute paths of its own binaries and of ninja. Every such path is rewritten: the
+sandbox root to `PLACEHOLDER`, the tool paths (read exactly from `CMakeCache.txt`, not
+pattern-matched) to the bare tool name. The `RERUN_CMAKE` edge, whose inputs are the CMake module
+tree, is dropped, together with the "a missing CMake input file is not an error" phony edge that
+lists the same inputs. What remains has the same digest wherever it was produced.
 """
 
 from __future__ import annotations

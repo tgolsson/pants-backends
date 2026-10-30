@@ -7,27 +7,20 @@ import json
 from typing import Any
 
 import pytest
-from pants.backend.python import register as python_register
-from pants.core import target_types as core_target_types
 from pants.core.goals import test as core_test
 from pants.core.goals.test import CoverageReports, FilesystemCoverageReport, TestResult
-from pants.core.util_rules import env_vars, external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.fs import Digest, DigestContents, DigestSubset, MergeDigests, PathGlobs
-from pants.engine.internals.parametrize import Parametrize
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
-from pants.source import source_root
 from pants.testutil.python_rule_runner import PythonRuleRunner
 
-from pants_backend_cc import register as cc_register
 from pants_backend_cc.coverage import register as coverage_register
 from pants_backend_cc.coverage.data import CcCoverageDataCollection
 from pants_backend_cc.goals.test import CcTestFieldSet, CcTestRequest
 from pants_backend_cc.testutil import implicit_toolchain_is_gcc
 from pants_backend_cc.util_rules import executable
-from pants_backend_cmake import register as cmake_register
-from pants_backend_platforms import register as platforms_register
+from pants_backend_cmake.testutil import cmake_rule_runner
 
 pytestmark = pytest.mark.skipif(not implicit_toolchain_is_gcc(), reason="the implicit toolchain must be gcc")
 
@@ -66,30 +59,15 @@ NOTES = [
 
 
 def _rule_runner(*, coverage: bool, build: str | None = None) -> PythonRuleRunner:
-    rule_runner = PythonRuleRunner(
-        rules=[
-            *python_register.rules(),
-            *core_target_types.rules(),
-            *core_test.rules(),
-            *env_vars.rules(),
-            *external_tool.rules(),
-            *source_files.rules(),
-            *source_root.rules(),
-            *system_binaries.rules(),
-            *coverage_register.rules(),
-            *cmake_register.rules(),
-            QueryRule(TestResult, [CcTestRequest.Batch]),
-            QueryRule(CoverageReports, [CcCoverageDataCollection]),
-            QueryRule(executable.BuiltTest, [executable.TestBuildRequest]),
-            QueryRule(Digest, [MergeDigests]),
-            QueryRule(Digest, [DigestSubset]),
-        ],
-        target_types=[
-            *cmake_register.target_types(),
-            *platforms_register.target_types(),
-            *cc_register.target_types(),
-        ],
-        objects={"parametrize": Parametrize},
+    rule_runner = cmake_rule_runner(
+        *core_test.rules(),
+        *coverage_register.rules(),
+        QueryRule(TestResult, [CcTestRequest.Batch]),
+        QueryRule(CoverageReports, [CcCoverageDataCollection]),
+        QueryRule(executable.BuiltExecutable, [executable.ExecutableBuildRequest]),
+        QueryRule(Digest, [MergeDigests]),
+        QueryRule(Digest, [DigestSubset]),
+        python=True,
     )
     rule_runner.write_files(
         {
@@ -102,11 +80,11 @@ def _rule_runner(*, coverage: bool, build: str | None = None) -> PythonRuleRunne
     return rule_runner
 
 
-def _build(rule_runner: PythonRuleRunner, coverage: bool) -> executable.BuiltTest:
-    return rule_runner.request(executable.BuiltTest, [executable.TestBuildRequest(TEST, coverage)])
+def _build(rule_runner: PythonRuleRunner, coverage: bool) -> executable.BuiltExecutable:
+    return rule_runner.request(executable.BuiltExecutable, [executable.test_build_request(TEST, coverage)])
 
 
-def _paths(rule_runner: PythonRuleRunner, built: executable.BuiltTest) -> list[str]:
+def _paths(rule_runner: PythonRuleRunner, built: executable.BuiltExecutable) -> list[str]:
     return sorted(fc.path for fc in rule_runner.request(DigestContents, [built.coverage]))
 
 

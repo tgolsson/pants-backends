@@ -3,17 +3,12 @@ compiler."""
 
 import os
 
-from pants.core import target_types as core_target_types
-from pants.core.util_rules import external_tool, source_files, system_binaries
 from pants.engine.addresses import Address
 from pants.engine.rules import QueryRule
-from pants.testutil.rule_runner import RuleRunner
 
-from pants_backend_cc import register as cc
 from pants_backend_cc.util_rules.compile import CompileSteps
-from pants_backend_cmake import register
+from pants_backend_cmake.testutil import cmake_rule_runner
 from pants_backend_cmake.util_rules.compile import CMakeCompileStepsFieldSet
-from pants_backend_platforms import register as platforms
 from pants_backend_platforms.testutil import HOST, HOST_ARCH, HOST_OS
 from pants_backend_platforms.util_rules.platforms import TargetPlatform
 
@@ -26,18 +21,7 @@ add_library(demo STATIC src/lib.c src/api.cpp ${CMAKE_BINARY_DIR}/gen.c)
 
 
 def test_compile_steps() -> None:
-    rule_runner = RuleRunner(
-        rules=[
-            *external_tool.rules(),
-            *source_files.rules(),
-            *system_binaries.rules(),
-            *core_target_types.rules(),
-            *cc.rules(),
-            *register.rules(),
-            QueryRule(CompileSteps, [CMakeCompileStepsFieldSet, TargetPlatform]),
-        ],
-        target_types=[*register.target_types(), *platforms.target_types()],
-    )
+    rule_runner = cmake_rule_runner(QueryRule(CompileSteps, [CMakeCompileStepsFieldSet, TargetPlatform]))
     rule_runner.write_files(
         {
             "BUILD": 'cmake_project(name="proj", sources=["CMakeLists.txt", "gen.c.in", "src/*"])\n',

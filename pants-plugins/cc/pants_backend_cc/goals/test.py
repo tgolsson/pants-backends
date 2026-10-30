@@ -54,10 +54,10 @@ from pants_backend_cc.target_types import (
     CcTestTimeoutField,
 )
 from pants_backend_cc.util_rules.executable import (
-    BuiltTest,
+    BuiltExecutable,
     ExecutableBuildError,
-    TestBuildRequest,
-    build_test,
+    build_executable,
+    test_build_request,
 )
 from pants_backend_cc.util_rules.library import CcLibraryError
 from pants_backend_cc.util_rules.scan import ScanError
@@ -94,9 +94,9 @@ async def _test_process(
     test_extra_env: TestExtraEnv,
     union_membership: UnionMembership,
     coverage: bool,
-) -> tuple[Process, BuiltTest]:
+) -> tuple[Process, BuiltExecutable]:
     built, packages, field_env = await concurrently(
-        build_test(TestBuildRequest(field_set.address, coverage), **implicitly()),
+        build_executable(test_build_request(field_set.address, coverage), **implicitly()),
         build_runtime_package_dependencies(
             BuildPackageDependenciesRequest(field_set.runtime_package_dependencies)
         ),

@@ -24,29 +24,33 @@ def targets(graph):
 
 
 def test_discovered_targets(targets):
-    addressable = [t for t in targets.values() if t.addressable]
-    assert len(addressable) == 6
+    addressable = [t.name for t in targets.values() if t.addressable]
+    assert sorted(addressable) == ["demo", "demo_shared", "test_vec"]
     assert targets["demo"].kind == "STATIC_LIBRARY"
     assert targets["demo"].final_outputs == ("libdemo.a",)
     assert targets["demo_shared"].final_outputs == ("libdemo_shared.so",)
+    assert targets["test_vec"].kind == "EXECUTABLE"
     assert targets["test_vec"].final_outputs == ("test_vec",)
-    assert targets["demo_tool"].kind == "EXECUTABLE"
     assert not targets["demo_objects"].addressable
     assert targets["demo_objects"].final_outputs == ()
     assert targets["gen_tables"].final_outputs == ()
+
+
+def _outputs(plan):
+    return {e.outputs[0] for e in plan.edges}
 
 
 def test_plan_static_library(graph, targets):
     plan = plan_target(graph, "demo", targets)
     assert plan.dependencies == ()
     assert plan.outputs == ("libdemo.a",)
-    assert len(plan.waves) == 2
-    compile_wave, link_wave = plan.waves
-    assert all("COMPILER" in e.rule for e in compile_wave)
-    # demo_objects (3 TUs) and demo_cpu (1) are object libraries pulled in through the
-    # archive's inputs, plus the two TUs demo compiles itself.
-    assert len(compile_wave) == 6
-    assert [e.outputs for e in link_wave] == [("libdemo.a",)]
+    # The object library's TUs come in through the archive's inputs, beside demo's own.
+    assert _outputs(plan) == {
+        "libdemo.a",
+        "CMakeFiles/demo.dir/src/api.cpp.o",
+        "CMakeFiles/demo_objects.dir/src/vec.cpp.o",
+        "CMakeFiles/demo_objects.dir/src/str.cpp.o",
+    }
     assert "__PANTS_CMAKE_ROOT__/src/vec.cpp" in plan.sources
     assert all(s.startswith("__PANTS_CMAKE_ROOT__/") for s in plan.sources)
 
@@ -54,17 +58,20 @@ def test_plan_static_library(graph, targets):
 def test_plan_shared_library_shares_objects(graph, targets):
     static = plan_target(graph, "demo", targets)
     shared = plan_target(graph, "demo_shared", targets)
-    shared_objects = {e for e in shared.waves[0] if e.target == "demo_objects"}
-    assert shared_objects == {e for e in static.waves[0] if e.target == "demo_objects"}
+    objects = {e for e in static.edges if e.target == "demo_objects"}
+    assert len(objects) == 2
+    assert {e for e in shared.edges if e.target == "demo_objects"} == objects
     assert shared.outputs == ("libdemo_shared.so",)
 
 
 def test_plan_test_executable_stops_at_library(graph, targets):
     plan = plan_target(graph, "test_vec", targets)
     assert plan.dependencies == ("demo",)
-    assert len(plan.waves) == 2
-    assert len(plan.waves[0]) == 4
-    assert plan.waves[1][0].outputs == ("test_vec",)
+    assert _outputs(plan) == {
+        "test_vec",
+        "CMakeFiles/test_vec.dir/tests/vec_a.cpp.o",
+        "CMakeFiles/test_vec.dir/tests/vendor/minitest.c.o",
+    }
     assert "__PANTS_CMAKE_ROOT__/tests/vendor/minitest.c" in plan.sources
     # Nothing of demo's own compile edges leaks into the test's plan.
     assert all(e.target == "test_vec" for e in plan.edges)
@@ -74,17 +81,8 @@ def test_every_addressable_target_plans(graph, targets):
     for info in targets.values():
         if info.addressable:
             plan = plan_target(graph, info.name, targets)
-            assert plan.waves, info.name
-            assert plan.waves[-1][-1].all_outputs[0] in info.final_outputs
-            produced_so_far: set[str] = set()
-            for wave in plan.waves:
-                for edge in wave:
-                    for dep in edge.dependencies:
-                        producer = graph.producers.get(dep)
-                        if producer is not None and producer in plan.edges:
-                            assert dep in produced_so_far, (info.name, edge.outputs, dep)
-                for edge in wave:
-                    produced_so_far.update(edge.all_outputs)
+            assert not any(e.is_phony for e in plan.edges), info.name
+            assert {graph.producers[o] for o in info.final_outputs} <= set(plan.edges), info.name
 
 
 MINI = """\
@@ -136,13 +134,13 @@ def test_versioned_shared_library():
     assert targets["app"].final_outputs == ("app",)
     app = plan_target(graph, "app", targets)
     assert app.dependencies == ("sh",)
-    assert [e.outputs for e in app.edges] == [("CMakeFiles/app.dir/app.c.o",), ("app",)]
+    assert {e.outputs for e in app.edges} == {("CMakeFiles/app.dir/app.c.o",), ("app",)}
     sh = plan_target(graph, "sh", targets)
-    assert [e.outputs for e in sh.edges] == [
+    assert {e.outputs for e in sh.edges} == {
         ("CMakeFiles/sh.dir/sh.c.o",),
         ("libsh.so.1.2.3",),
         ("libsh.so.1", "libsh.so"),
-    ]
+    }
 
 
 def test_generated_header_via_order_only_is_an_error():

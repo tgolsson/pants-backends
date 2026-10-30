@@ -84,19 +84,14 @@ def boundary_outputs(targets: FrozenDict[str, CMakeTargetInfo], name: str) -> di
 
 @dataclass(frozen=True)
 class BuildPlan:
-    """The edges a target needs, grouped into waves by longest path from a leaf."""
-
     target: str
-    waves: tuple[tuple[NinjaEdge, ...], ...]
+    edges: tuple[NinjaEdge, ...]
+    """The non-phony edges the target needs, each its own process; the engine orders them."""
     dependencies: tuple[str, ...]
     """Other addressable targets whose final outputs this plan consumes."""
     sources: tuple[str, ...]
     """Leaf inputs: paths no edge produces."""
     outputs: tuple[str, ...]
-
-    @property
-    def edges(self) -> tuple[NinjaEdge, ...]:
-        return tuple(edge for wave in self.waves for edge in wave)
 
 
 def plan_target(graph: NinjaGraph, name: str, targets: FrozenDict[str, CMakeTargetInfo]) -> BuildPlan:
@@ -142,29 +137,9 @@ def plan_target(graph: NinjaGraph, name: str, targets: FrozenDict[str, CMakeTarg
             "in, or list them as sources of the consuming target."
         )
 
-    levels: dict[str, int] = {}
-
-    def level_of(path: str) -> int:
-        if path in levels:
-            return levels[path]
-        edge = producers.get(path)
-        if edge is None or path in boundary or edge not in edges:
-            level = 0
-        else:
-            below = max((level_of(p) for p in edge.dependencies), default=0)
-            level = below if edge.is_phony else below + 1
-        levels[path] = level
-        return level
-
-    by_level: dict[int, list[NinjaEdge]] = {}
-    for edge in edges:
-        if edge.is_phony:
-            continue
-        by_level.setdefault(level_of(edge.all_outputs[0]), []).append(edge)
-
     return BuildPlan(
         target=name,
-        waves=tuple(tuple(by_level[level]) for level in sorted(by_level)),
+        edges=tuple(edge for edge in edges if not edge.is_phony),
         dependencies=tuple(dependencies),
         sources=tuple(sources),
         outputs=info.final_outputs,

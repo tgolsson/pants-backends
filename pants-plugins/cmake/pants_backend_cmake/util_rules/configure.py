@@ -102,11 +102,9 @@ class ConfiguredProject:
     """The CMake build directory, relative to the build root."""
     build_dir_digest: Digest
     """Just the empty build directory, so a process can run in it."""
-    tree: Digest
-    """The canonicalized generated files, under `build_dir`."""
     generated: Digest
-    """The configure-time outputs the build reads, such as `configure_file` results: `tree`
-    without the Ninja files and the compile database, rebased to `relative_root`."""
+    """What configure generated besides the Ninja files, such as `configure_file` results,
+    under `build_dir` and rebased to `relative_root`."""
     generated_paths: tuple[str, ...]
     graph: NinjaGraph
     targets: FrozenDict[str, CMakeTargetInfo]
@@ -188,7 +186,6 @@ def configure_process(
             if toolchain.toolchain_file
             else []
         ),
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         f"-DCMAKE_PROJECT_INCLUDE={{chroot}}/{probes_path}",
         *([f"-DCMAKE_BUILD_TYPE={build_type}"] if build_type else []),
         *cmake_args,
@@ -255,7 +252,6 @@ async def configure_inputs(
 
 @dataclass(frozen=True)
 class CanonicalTree:
-    tree: Digest
     generated: Digest
     generated_paths: tuple[str, ...]
     graph: NinjaGraph
@@ -315,47 +311,27 @@ async def canonical_tree(
         raise ValueError(f"{address}: configure produced no {build_ninja_path}")
     root = sandbox_root(raw[build_ninja_path].decode(), build_dir)
     relative_root = os.path.relpath(".", build_dir)
-    canonical: dict[str, bytes] = {}
-    # What the build reads: a generated file's paths rebased as its commands' are.
-    rebased: dict[str, bytes] = {}
+    ninja_files: dict[str, str] = {}
+    generated: dict[str, bytes] = {}
     for path, content in raw.items():
         try:
             text = content.decode()
         except UnicodeDecodeError:
-            canonical[path] = rebased[path] = content
+            generated[path] = content
             continue
         if path == build_ninja_path:
             text = canonicalize_build_ninja(text, root, tools)
         else:
             text = canonicalize(text, root, tools)
-        canonical[path] = text.encode()
-        rebased[path] = rebase(text, relative_root).encode()
-    build_files = {
-        build_ninja_path,
-        f"{build_dir}/CMakeFiles/rules.ninja",
-        f"{build_dir}/compile_commands.json",
-    }
-    tree, generated = await concurrently(
-        create_digest(
-            CreateDigest([FileContent(path, content) for path, content in sorted(canonical.items())])
-        ),
-        create_digest(
-            CreateDigest(
-                [
-                    FileContent(path, content)
-                    for path, content in sorted(rebased.items())
-                    if path not in build_files
-                ]
-            )
-        ),
+        if path.endswith(".ninja"):
+            ninja_files[path[len(build_dir) + 1 :]] = text
+        else:
+            # What the build reads: a generated file's paths rebased as its commands' are.
+            generated[path] = rebase(text, relative_root).encode()
+    digest = await create_digest(
+        CreateDigest([FileContent(path, content) for path, content in sorted(generated.items())])
     )
-    generated_paths = tuple(sorted(path for path in canonical if path not in build_files))
-    ninja_files = {
-        path[len(build_dir) + 1 :]: content.decode()
-        for path, content in canonical.items()
-        if path.endswith(".ninja")
-    }
-    return CanonicalTree(tree, generated, generated_paths, parse_ninja(ninja_files))
+    return CanonicalTree(digest, tuple(sorted(generated)), parse_ninja(ninja_files))
 
 
 @rule(desc="Configure CMake project", level=LogLevel.DEBUG)
@@ -414,7 +390,6 @@ async def configure_project(request: ConfigureRequest) -> ConfiguredProject:
         project_dir=project_dir,
         build_dir=build_dir,
         build_dir_digest=build_dir_digest,
-        tree=canonical.tree,
         generated=canonical.generated,
         generated_paths=canonical.generated_paths,
         graph=canonical.graph,

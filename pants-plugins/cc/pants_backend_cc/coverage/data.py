@@ -56,7 +56,7 @@ async def _entries(digest: Digest) -> list[FileEntry]:
 
 
 async def coverage_data(address: Address, coverage: Digest, run_outputs: Digest) -> CcCoverageData:
-    """`coverage` is `BuiltTest.coverage`; `run_outputs` the test process's outputs, `GCDA_DIR`
+    """`coverage` is `BuiltExecutable.coverage`; `run_outputs` the test process's outputs, `GCDA_DIR`
     relative to its working directory."""
     written, files = await concurrently(_entries(run_outputs), _entries(coverage))
     notes = [e.path for e in files if e.path.endswith(".gcno")]

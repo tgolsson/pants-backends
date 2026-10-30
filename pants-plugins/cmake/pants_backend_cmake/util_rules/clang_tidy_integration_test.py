@@ -6,28 +6,17 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pants.backend.python import register as python_register
-from pants.core import target_types as core_target_types
 from pants.core.goals.lint import LintResult
-from pants.core.util_rules import (
-    config_files,
-    env_vars,
-    external_tool,
-    source_files,
-    system_binaries,
-)
+from pants.core.util_rules import config_files
 from pants.engine.addresses import Address
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
-from pants.source import source_root
 from pants.testutil.python_rule_runner import PythonRuleRunner
 
-from pants_backend_cc import register as cc_register
 from pants_backend_cc.lint.clang_tidy import register
 from pants_backend_cc.lint.clang_tidy.rules import ClangTidyFieldSet, ClangTidyRequest
 from pants_backend_cc.testutil import GenTarget, codegen_rules
-from pants_backend_cmake import register as cmake_register
-from pants_backend_platforms import register as platforms_register
+from pants_backend_cmake.testutil import cmake_rule_runner
 
 CMAKELISTS = """\
 cmake_minimum_required(VERSION 3.20)
@@ -85,27 +74,13 @@ INPUTS = Address("", target_name="proj", generated_name="_inputs")
 
 @pytest.fixture
 def rule_runner() -> PythonRuleRunner:
-    return PythonRuleRunner(
-        rules=[
-            *python_register.rules(),
-            *core_target_types.rules(),
-            *config_files.rules(),
-            *source_files.rules(),
-            *external_tool.rules(),
-            *system_binaries.rules(),
-            *env_vars.rules(),
-            *source_root.rules(),
-            *cmake_register.rules(),
-            *register.rules(),
-            *codegen_rules(),
-            QueryRule(LintResult, [ClangTidyRequest.Batch]),
-        ],
-        target_types=[
-            *cmake_register.target_types(),
-            *platforms_register.target_types(),
-            *cc_register.target_types(),
-            GenTarget,
-        ],
+    return cmake_rule_runner(
+        *config_files.rules(),
+        *register.rules(),
+        *codegen_rules(),
+        QueryRule(LintResult, [ClangTidyRequest.Batch]),
+        target_types=(GenTarget,),
+        python=True,
     )
 
 
