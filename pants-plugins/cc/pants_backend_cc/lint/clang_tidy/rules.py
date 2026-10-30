@@ -16,23 +16,17 @@ from pants.core.goals.lint import LintResult, LintTargetsRequest
 from pants.core.util_rules.config_files import find_config_file
 from pants.core.util_rules.partitions import PartitionerType
 from pants.engine.fs import MergeDigests
-from pants.engine.internals.graph import find_valid_field_sets, resolve_target
 from pants.engine.intrinsics import execute_process, merge_digests
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
-from pants.engine.target import FieldSet, FieldSetsPerTargetRequest, Target, WrappedTargetRequest
+from pants.engine.target import FieldSet, Target
 from pants.util.logging import LogLevel
 from pants.util.strutil import Simplifier
 
 from pants_backend_cc.lint.clang_tidy.subsystem import ClangTidy
 from pants_backend_cc.lint.clang_tidy.target_types import ClangTidyPathsField
-from pants_backend_cc.util_rules.compile import (
-    CompileInputsRequest,
-    CompileStep,
-    CompileStepsFieldSet,
-    compile_inputs,
-    compile_steps,
-)
-from pants_backend_platforms.util_rules.platforms import KnownPlatforms, TargetPlatform
+from pants_backend_cc.lint.steps import build_root_dirs, steps_under
+from pants_backend_cc.util_rules.compile import CompileInputsRequest, compile_inputs
+from pants_backend_platforms.util_rules.platforms import KnownPlatforms
 
 
 @dataclass(frozen=True)
@@ -50,10 +44,6 @@ class ClangTidyRequest(LintTargetsRequest):
     field_set_type = ClangTidyFieldSet
     tool_subsystem = ClangTidy  # type: ignore[assignment]
     partitioner_type = PartitionerType.DEFAULT_ONE_PARTITION_PER_INPUT
-
-
-def _under(path: str, dirs: list[str]) -> bool:
-    return any(d == "." or path == d or path.startswith(f"{d}/") for d in dirs)
 
 
 def header_filter(cwd: str, dirs: list[str]) -> str:
@@ -107,40 +97,14 @@ def _ancestors(paths: Iterable[str]) -> list[str]:
     return sorted(dirs)
 
 
-async def _host_compile_steps(field_set: ClangTidyFieldSet, known: KnownPlatforms) -> list[CompileStep]:
-    wrapped = await resolve_target(
-        WrappedTargetRequest(field_set.address, description_of_origin="clang-tidy"), **implicitly()
-    )
-    per_target = await find_valid_field_sets(
-        FieldSetsPerTargetRequest(CompileStepsFieldSet, [wrapped.target]), **implicitly()
-    )
-    providers = per_target.field_sets
-    if len(providers) != 1:
-        kinds = sorted(type(fs).__name__ for fs in providers)
-        raise ValueError(
-            f"{field_set.address}: `{ClangTidyPathsField.alias}` needs exactly one compile-step "
-            f"provider for the target, found {kinds}"
-        )
-    steps = await compile_steps(
-        **implicitly({providers[0]: CompileStepsFieldSet, known.host: TargetPlatform})
-    )
-    return list(steps)
-
-
 @rule(desc="Lint with clang-tidy", level=LogLevel.DEBUG)
 async def clang_tidy_lint(
     request: ClangTidyRequest.Batch, clang_tidy: ClangTidy, known: KnownPlatforms
 ) -> LintResult:
     (field_set,) = request.elements
     paths = field_set.paths.value or ()
-    dirs = [os.path.normpath(os.path.join(field_set.address.spec_path, d)) for d in paths]
-    steps = [
-        s for s in await _host_compile_steps(field_set, known) if not s.generated and _under(s.source, dirs)
-    ]
-    if not steps:
-        raise ValueError(
-            f"{field_set.address}: no translation unit is under `{ClangTidyPathsField.alias}` {list(paths)}"
-        )
+    dirs = build_root_dirs(field_set.address, paths)
+    steps = await steps_under(field_set.address, ClangTidyPathsField.alias, paths, known)
     pex, config_files = await concurrently(
         create_pex(clang_tidy.to_pex_request()),
         find_config_file(clang_tidy.config_request(_ancestors(s.source for s in steps))),

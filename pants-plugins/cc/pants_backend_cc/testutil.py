@@ -5,6 +5,8 @@ a stand-in code generator, so codegen dependencies are tested without `pants-bac
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from dataclasses import dataclass
 
 from pants.backend.cc.target_types import CCSourceField
@@ -43,6 +45,19 @@ def toolchain_build(name: str, target: str, *, host: str = HOST, cc: str = "bash
 def toolchains_build() -> str:
     """A `cc_toolchain` from the host to itself and to Windows."""
     return toolchain_build(f"to-{HOST}", HOST) + toolchain_build(f"to-{OTHER}", OTHER)
+
+
+def implicit_toolchain_is_gcc() -> bool:
+    """Whether `gcc` and `g++`, the implicit native toolchain, are GNU's: macOS answers to both
+    names with clang."""
+    for name in ("gcc", "g++"):
+        path = shutil.which(name)
+        if path is None:
+            return False
+        version = subprocess.run([path, "--version"], capture_output=True, text=True).stdout
+        if "Free Software Foundation" not in version:
+            return False
+    return True
 
 
 class ToyCcSourcesField(MultipleSourcesField):

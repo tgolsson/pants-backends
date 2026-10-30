@@ -10,7 +10,8 @@
 - `dependencies` of `cmake_project` bring `files`, `cc_sources` and codegen producing either. A
   path both `sources` and a dependency provide is an error.
 - `cmake_project` provides pants-backend-cc compile steps, one per compile edge in the edge's
-  sandbox, and has `clang_tidy_paths` for `pants_backend_cc.lint.clang_tidy`.
+  sandbox, and has `clang_tidy_paths` for `pants_backend_cc.lint.clang_tidy` and
+  `compile_cost_paths` and `compile_cost_exempt_paths` for `pants_backend_cc.lint.compile_cost`.
 - Platforms through pants-backend-platforms: compilers from `cc_toolchain` (pants-backend-cc),
   `cmake_toolchain_file`, and `platforms` on `cmake_target`.
 - `cmake_project` is a target generator: a `cmake_target` per library and executable, from a

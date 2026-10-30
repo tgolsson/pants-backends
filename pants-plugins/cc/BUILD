@@ -12,6 +12,7 @@ python_distribution_with_secret(
         "//pants-plugins/cc/pants_backend_cc/goals:goals",
         "//pants-plugins/cc/pants_backend_cc/lint:lint",
         "//pants-plugins/cc/pants_backend_cc/lint/clang_tidy:clang_tidy",
+        "//pants-plugins/cc/pants_backend_cc/lint/compile_cost:compile_cost",
     ],
     provides=python_artifact(
         name="pants_backend_cc",

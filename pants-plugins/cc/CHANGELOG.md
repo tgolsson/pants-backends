@@ -16,5 +16,8 @@
 - `DeclaredOutputsFieldSet` and `declared_outputs`: the paths a target will produce, known
   without producing them; `pants_backend_cc.generate` provides them for every target with
   generator `outputs`.
+- `pants_backend_cc.lint.compile_cost`: `[compile-cost]` under `pants lint`, gcc
+  `-ftime-report` user CPU time per compile step under `compile_cost_paths`, as a report, with
+  an optional frontend budget that `compile_cost_exempt_paths` are not held to.
 - `find_cc_toolchain`: the toolchain for a platform, or why this host cannot build for it, without
   raising.

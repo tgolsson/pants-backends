@@ -12,6 +12,10 @@ from pants.engine.unions import UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_cc.lint.clang_tidy.target_types import ClangTidyPathsField
+from pants_backend_cc.lint.compile_cost.target_types import (
+    CompileCostExemptPathsField,
+    CompileCostPathsField,
+)
 from pants_backend_cc.util_rules.compile import (
     CompileInputs,
     CompileInputsRequest,
@@ -105,7 +109,10 @@ def rules():
         *collect_rules(),
         UnionRule(CompileStepsFieldSet, CMakeCompileStepsFieldSet),
         UnionRule(CompileInputsRequest, CMakeCompileInputsRequest),
-        # Inert unless `pants_backend_cc.lint.clang_tidy` is enabled.
-        CMakeProjectTarget.register_plugin_field(ClangTidyPathsField),
-        CMakeProjectInputsTarget.register_plugin_field(ClangTidyPathsField),
+        # Inert unless `pants_backend_cc.lint.clang_tidy` or `.compile_cost` is enabled.
+        *(
+            target.register_plugin_field(field)
+            for target in (CMakeProjectTarget, CMakeProjectInputsTarget)
+            for field in (ClangTidyPathsField, CompileCostPathsField, CompileCostExemptPathsField)
+        ),
     ]
