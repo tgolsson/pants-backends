@@ -2,6 +2,7 @@
 name = "pants_backend_cc"
 description = "C and C++ for Pants backends: cc_toolchain, cc_test, compile-step and library interfaces for providers, clang-tidy, gcovr coverage and cpp_generate."
 version = "0.1.0"
+requires-python = ">=3.11"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]

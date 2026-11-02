@@ -2,6 +2,7 @@
 name = "pants_backend_cmake"
 description = "A CMake backend for the Pants build system that replays the generated Ninja graph as cached per-edge processes."
 version = "0.1.0"
+requires-python = ">=3.11"
 authors = [
     { name = "Tom Solberg", email = "me@sbg.dev" }
 ]

@@ -42,3 +42,23 @@
 
 - [Introduction](bitwarden/readme.md)
 - [Changelog](bitwarden/changelog.md)
+
+# Platforms
+
+- [Introduction](platforms-readme.md)
+- [Changelog](./platforms-changelog.md)
+
+# CC
+
+- [Introduction](cc-readme.md)
+- [Changelog](./cc-changelog.md)
+
+# CMake
+
+- [Introduction](cmake-readme.md)
+- [Changelog](./cmake-changelog.md)
+
+# Generate
+
+- [Introduction](generate-readme.md)
+- [Changelog](./generate-changelog.md)
