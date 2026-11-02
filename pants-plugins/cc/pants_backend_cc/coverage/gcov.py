@@ -2,18 +2,28 @@
 `pants test --use-coverage` looks for them before it builds anything, so a host without them fails
 at once rather than after every test has run.
 
-gcovr runs gcov from a directory it finds by trying the root and the `.gcda`'s parent
-directories until the sources resolve, which works whatever sandbox the compile ran in. gcov's
-JSON format, which gcovr prefers from gcc 14 on, names sources from the compile's recorded working
-directory instead, a sandbox that is gone; so gcovr gets a gcov that drops `--json-format` (and
-`--conditions`, which only that format reports), and reads the text format.
+gcov resolves an object's sources from the working directory its compile ran in, which every note
+records as the absolute path of a sandbox that is gone. gcovr finds that directory by trying the
+root and then each parent of the object, running gcov once per attempt (`gcov_wrapper`, which
+drops the JSON options so that gcovr settles for the text format wherever gcov advertises both:
+the JSON format reports the recorded directory and resolves nothing).
+
+`SMART_WRAPPER`, the default, reads the directory off the note instead (`compile_directory`), so
+gcovr's first attempt succeeds and gcov runs once per object. With gcov 14 and newer, whose JSON
+format gcovr asks for, it runs gcov on a scratch copy of the object's notes and data with the
+recorded directory rewritten to this sandbox's (`patch_directory`); with older gcov it runs the
+text format from that directory and moves the `.gcov` files back to where gcovr looks for them.
+It runs on the interpreter gcovr's pex runs on, so `GCOV` is written where that pex is known
+(`rules.py`).
 """
 
 from __future__ import annotations
 
+import inspect
 import os
 import re
 import shlex
+import struct
 from dataclasses import dataclass
 
 from pants.core.util_rules.system_binaries import BashBinary, BinaryPath, find_binary
@@ -31,7 +41,9 @@ from pants_backend_cc.util_rules.toolchain import (
 from pants_backend_platforms.util_rules.platforms import KnownPlatforms
 
 GCOV = "__gcov/gcov"
-"""Where `GcovTools.wrapper` puts the gcov gcovr runs."""
+"""Where the gcov gcovr runs is."""
+SMART_WRAPPER = "__gcov/gcov.py"
+"""The Python wrapper `GCOV` runs unless `[gcovr].heuristic_object_directory`."""
 
 _DROPPED = ("--json-format", "--conditions")
 
@@ -68,13 +80,140 @@ def gcov_wrapper(bash: str, gcov: str) -> str:
     )
 
 
+def recorded_directory(note: bytes) -> str:
+    """The working directory a `.gcno` records. The header is the magic, the version, the stamp,
+    the checksum, then the directory as a length-prefixed, NUL-padded string (gcc 9 and newer)."""
+    if note[:4] != b"oncg":
+        raise ValueError("not a gcov notes file")
+    length = struct.unpack("<I", note[16:20])[0]
+    return note[20 : 20 + length].rstrip(b"\0").decode()
+
+
+def patch_directory(note: bytes, directory: str) -> bytes:
+    """A `.gcno` with its recorded working directory replaced (see `recorded_directory`)."""
+    if note[:4] != b"oncg":
+        raise ValueError("not a gcov notes file")
+    length = struct.unpack("<I", note[16:20])[0]
+    encoded = directory.encode() + b"\0"
+    encoded += b"\0" * (-len(encoded) % 4)
+    return note[:16] + struct.pack("<I", len(encoded)) + encoded + note[20 + length :]
+
+
+def compile_directory(recorded: str, note_path: str) -> str:
+    """Where the compile ran, relative to the sandbox root: the longest lead of the note's
+    directory that ends the recorded one. `/tmp/pants-sandbox-x/build` recorded for a note at
+    `build/CMakeFiles/a.dir/x.cpp.gcno` is `build`; a note at `toybuild/x.c.gcno` recorded under
+    `/tmp/pants-sandbox-x` was compiled at the root."""
+    recorded_parts = recorded.rstrip("/").split("/")
+    directory = os.path.dirname(note_path)
+    parts = directory.split("/") if directory else []
+    for k in range(len(parts), 0, -1):
+        if parts[:k] == recorded_parts[-k:]:
+            return "/".join(parts[:k])
+    return ""
+
+
+_SMART_WRAPPER = '''\
+"""gcov for gcovr, with the directory the object was compiled in read off its notes. Arguments:
+the gcov to run, then gcovr's arguments for it (`--help` and `--version` pass through)."""
+
+import os
+import shutil
+import struct
+import subprocess
+import sys
+
+{recorded_directory}
+
+{patch_directory}
+
+{compile_directory}
+
+gcov, args = sys.argv[1], sys.argv[2:]
+datafiles = [a for a in args if a.endswith((".gcda", ".gcno"))]
+if not datafiles:
+    os.execv(gcov, [gcov, *args])
+(data,) = datafiles
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+stem = data[: data.rfind(".")]
+with open(stem + ".gcno", "rb") as f:
+    note = f.read()
+directory = os.path.join(root, compile_directory(recorded_directory(note), os.path.relpath(stem, root)))
+if "--object-directory" in args:
+    index = args.index("--object-directory") + 1
+    args[index] = os.path.abspath(args[index])
+
+if "--json-format" in args:
+    # The JSON names sources relative to the recorded directory: a scratch copy records this one.
+    scratch = os.path.join(root, "__gcov", "notes", os.path.relpath(stem, root).replace(os.sep, "__"))
+    os.makedirs(scratch, exist_ok=True)
+    for suffix in (".gcno", ".gcda"):
+        if os.path.exists(stem + suffix):
+            shutil.copyfile(stem + suffix, os.path.join(scratch, os.path.basename(stem) + suffix))
+    with open(os.path.join(scratch, os.path.basename(stem) + ".gcno"), "wb") as f:
+        f.write(patch_directory(note, directory))
+    args = [os.path.join(scratch, os.path.basename(data)) if a == data else a for a in args]
+    if "--object-directory" in args:
+        args[args.index("--object-directory") + 1] = scratch
+    os.execv(gcov, [gcov, *args])
+
+# The text format opens the sources from gcov's own directory, and gcovr reads the `.gcov` files
+# gcov says it created from where it ran gcov, resolving their `Source:` line from there too: run
+# gcov in the compile directory, then bring each file here with its source named from here.
+run = subprocess.run([gcov, *args], cwd=directory, stdout=subprocess.PIPE, text=True)
+for line in run.stdout.splitlines():
+    if not (line.startswith("Creating '") and line.endswith("'")):
+        continue
+    created = line[len("Creating '") : -1]
+    written = os.path.join(directory, created)
+    if not os.path.exists(written):
+        continue
+    with open(written, encoding="utf-8", errors="surrogateescape") as f:
+        lines = f.readlines()
+    for i, text in enumerate(lines):
+        if ":Source:" in text:
+            head, source = text.rstrip("\\n").split(":Source:", 1)
+            if not os.path.isabs(source):
+                source = os.path.relpath(os.path.join(directory, source), os.getcwd())
+            lines[i] = head + ":Source:" + source + "\\n"
+            break
+    with open(os.path.join(os.getcwd(), created), "w", encoding="utf-8", errors="surrogateescape") as f:
+        f.writelines(lines)
+    os.remove(written)
+sys.stdout.write(run.stdout)
+sys.exit(run.returncode)
+'''
+
+
+def smart_wrapper() -> str:
+    return _SMART_WRAPPER.format(
+        recorded_directory=inspect.getsource(recorded_directory),
+        patch_directory=inspect.getsource(patch_directory),
+        compile_directory=inspect.getsource(compile_directory),
+    )
+
+
+def smart_shim(bash: str, python: str, gcov: str) -> str:
+    """`GCOV` running `SMART_WRAPPER` next to it with `python`."""
+    return f'#!{bash}\nexec {shlex.quote(python)} "$(dirname "$0")/gcov.py" {shlex.quote(gcov)} "$@"\n'
+
+
 @dataclass(frozen=True)
 class GcovTools:
     wrapper: Digest
-    """`gcov_wrapper` at `GCOV`."""
+    """`GCOV` as `gcov_wrapper`: gcovr's own search for the compile directory."""
+    gcov: str
     gcov_tool: str
+    bash: str
     fingerprint: str
     """Changes with either tool, whose output differs between versions while the paths may not."""
+
+    def smart_files(self, python: str) -> list[FileContent]:
+        """`GCOV` as `smart_shim` with `SMART_WRAPPER`."""
+        return [
+            FileContent(GCOV, smart_shim(self.bash, python, self.gcov).encode(), is_executable=True),
+            FileContent(SMART_WRAPPER, smart_wrapper().encode()),
+        ]
 
 
 async def _find(compiler: str, tool: str, search_path: tuple[str, ...]) -> BinaryPath | None:
@@ -135,7 +274,9 @@ async def find_gcov_tools(known: KnownPlatforms, bash: BashBinary) -> GcovTools:
     wrapper = await create_digest(
         CreateDigest([FileContent(GCOV, gcov_wrapper(bash.path, gcov.path).encode(), is_executable=True)])
     )
-    return GcovTools(wrapper, gcov_tool.path, f"{gcov.fingerprint},{gcov_tool.fingerprint}")
+    return GcovTools(
+        wrapper, gcov.path, gcov_tool.path, bash.path, f"{gcov.fingerprint},{gcov_tool.fingerprint}"
+    )
 
 
 def rules():

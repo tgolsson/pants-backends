@@ -59,7 +59,7 @@ from pants.option.global_options import KeepSandboxes
 from pants.util.logging import LogLevel
 
 from pants_backend_cc.coverage.data import CcCoverageDataCollection
-from pants_backend_cc.coverage.gcov import GCOV, GcovTools, find_gcov_tools
+from pants_backend_cc.coverage.gcov import GCOV, GcovError, GcovTools, find_gcov_tools
 from pants_backend_cc.coverage.subsystem import Gcovr, GcovrReportType
 
 TRACEFILE = "coverage.json"
@@ -170,6 +170,12 @@ async def _tracefile(
 ) -> Digest:
     """gcovr's JSON at `TRACEFILE`, over the notes and sources in `tree` and the sum of the
     `.gcda` files in `runs`."""
+    if gcovr.heuristic_object_directory:
+        wrapper = tools.wrapper
+    else:
+        if pex.python is None:
+            raise GcovError("gcovr's pex names no interpreter to run the gcov wrapper with")
+        wrapper = await create_digest(CreateDigest(tools.smart_files(pex.python.path)))
     inputs, summed = await concurrently(
         create_digest(CreateDigest(tree.values())),
         _sum_gcda(tools, runs),
@@ -185,7 +191,7 @@ async def _tracefile(
                 *_selection(gcovr),
                 *gcovr.args,
             ),
-            input_digest=await merge_digests(MergeDigests([inputs, summed, tools.wrapper])),
+            input_digest=await merge_digests(MergeDigests([inputs, summed, wrapper])),
             extra_env={"__PANTS_GCOV": tools.fingerprint},
             output_files=(TRACEFILE,),
             concurrency_available=max(1, sum(p.endswith(".gcno") for p in tree)),

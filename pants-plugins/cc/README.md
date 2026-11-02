@@ -108,6 +108,12 @@ backend_packages = [
 - gcov and gcov-tool are the ones next to the host toolchain's gcc with the same suffix
   (`gcc-13`, `gcov-13`, `gcov-tool-13`), else those on the search path; their major version must
   be the compiler's. They are checked before any test builds.
+- gcov resolves an object's sources from the directory its compile ran in, which the notes
+  record as a sandbox that is gone. The gcov gcovr runs reads that directory off the notes and
+  runs gcov once per object: on gcov 14 and newer, which write the JSON format gcovr prefers, on a
+  scratch copy of the notes and data with the directory rewritten to this sandbox's; on older
+  gcov, the text format from that directory. `[gcovr].heuristic_object_directory` restores
+  gcovr's own search instead (the root, then the object's parents, one gcov run per attempt).
 - gcov-tool sums the tests' `.gcda` files, two at a time, and one gcovr run reads the totals into a
   JSON tracefile; a last run writes the reports under `dist/coverage/cc/`. Tests whose notes or
   compile inputs differ at a path (two configures sharing a build directory) get a tracefile each,
