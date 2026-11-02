@@ -20,6 +20,7 @@ from pants.engine.unions import UnionRule
 from pants.util.frozendict import FrozenDict
 from pants.util.logging import LogLevel
 
+from pants_backend_cc.coverage.data import compile_directories
 from pants_backend_cc.util_rules.compile import ASM, CXX, C
 from pants_backend_cc.util_rules.library import (
     CcCompileInterface,
@@ -209,8 +210,8 @@ async def cmake_compile_interface(
 
 async def _coverage(project: ConfiguredProject, libraries: dict[str, None]) -> Digest:
     """The `.gcno` notes of the compile edges behind `libraries`, which the link line names
-    with everything they link, and the inputs of those compiles, which hold the sources gcov
-    reads."""
+    with everything they link, each with the build directory they ran in named next to it, and
+    the inputs of those compiles, which hold the sources gcov reads."""
     edges = dict.fromkeys(
         edge
         for name in libraries
@@ -223,7 +224,8 @@ async def _coverage(project: ConfiguredProject, libraries: dict[str, None]) -> D
     )
     objects = await merge_digests(MergeDigests(b.digest for b in built))
     notes = await digest_subset_to_digest(DigestSubset(objects, PathGlobs(["**/*.gcno"])))
-    return await merge_digests(MergeDigests([notes, *(i.digest for i in inputs)]))
+    directories = await compile_directories(notes, project.build_dir)
+    return await merge_digests(MergeDigests([notes, directories, *(i.digest for i in inputs)]))
 
 
 @rule(desc="Read the link interface of a CMake library", level=LogLevel.DEBUG)

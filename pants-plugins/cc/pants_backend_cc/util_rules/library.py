@@ -90,8 +90,9 @@ class CcLinkInterface:
     the consumer's `cwd`."""
     coverage: Digest = EMPTY_DIGEST
     """For a coverage consumer of an instrumented library: the `.gcno` notes of every object
-    the link brings and the files their compiles read, where those compiles had them, relative
-    to the sandbox root."""
+    the link brings, next to each the file naming the directory its compile ran in
+    (`pants_backend_cc.coverage.data.compile_directories`), and the files those compiles read,
+    where they had them, relative to the sandbox root."""
 
 
 @rule(polymorphic=True)

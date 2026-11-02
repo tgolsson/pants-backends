@@ -109,11 +109,12 @@ backend_packages = [
   (`gcc-13`, `gcov-13`, `gcov-tool-13`), else those on the search path; their major version must
   be the compiler's. They are checked before any test builds.
 - gcov resolves an object's sources from the directory its compile ran in, which the notes
-  record as a sandbox that is gone. The gcov gcovr runs reads that directory off the notes and
-  runs gcov once per object: on gcov 14 and newer, which write the JSON format gcovr prefers, on a
-  scratch copy of the notes and data with the directory rewritten to this sandbox's; on older
-  gcov, the text format from that directory. `[gcovr].heuristic_object_directory` restores
-  gcovr's own search instead (the root, then the object's parents, one gcov run per attempt).
+  record as a sandbox that is gone. Whoever ran the compile names that directory, relative to
+  the sandbox root, in a file next to the notes (`x.c.gcno.cwd`; `coverage/data.py` has the
+  helper every producer of a link interface's `coverage` uses), and the gcov gcovr runs is a
+  wrapper that runs gcov there, once per object, in the text format. gcovr asks gcov 14 and newer
+  for their JSON format, which names sources from the recorded directory; the wrapper drops the
+  request and gcovr reads the text it gets.
 - gcov-tool sums the tests' `.gcda` files, two at a time, and one gcovr run reads the totals into a
   JSON tracefile; a last run writes the reports under `dist/coverage/cc/`. Tests whose notes or
   compile inputs differ at a path (two configures sharing a build directory) get a tracefile each,
@@ -123,12 +124,8 @@ backend_packages = [
   build root; `fail_under_line` fails the goal below that line coverage, as does any other
   `--fail-under-*` threshold in `args`; `args` go to every gcovr run.
 - `pants test --debug` runs a test without coverage.
-- gcovr finds the directory each compile ran in by trying the sandbox root and the `.gcda`'s
-  parent directories until the sources resolve, so a compile must run in one of those and name
-  its source relative to it, not by its absolute sandbox path. gcov's JSON format (gcc 14 and
-  newer) names sources from the compile's recorded working directory, a sandbox path, so gcovr
-  is given a gcov that drops `--json-format` (and `--conditions`, which only that format
-  reports) and reads the text format.
+- A compile must name its source relative to the directory it runs in, not by its absolute
+  sandbox path, for gcov to find it again.
 
 ## clang-tidy
 

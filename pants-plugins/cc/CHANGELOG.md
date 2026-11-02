@@ -18,7 +18,7 @@
   - `pants_backend_cc.generate`: `cpp_generate`.
   - `pants_backend_cc.coverage`: `pants test --use-coverage` builds `cc_test`s against their
     libraries' instrumented builds, sums the `.gcda` files each run writes with gcov-tool and
-    reports them with gcovr (`[gcovr]`) under `dist/coverage/cc/`. The gcov it runs reads each
-    object's compile directory off its notes, one gcov run per object
-    (`[gcovr].heuristic_object_directory` restores gcovr's search); on gcov 14 and newer gcovr
-    gets gcov's JSON format, from notes rewritten to the sandbox.
+    reports them with gcovr (`[gcovr]`) under `dist/coverage/cc/`. Whoever compiles an object
+    names the directory it did so in next to the object's notes
+    (`pants_backend_cc.coverage.data.compile_directories`), and the gcov gcovr runs runs gcov
+    there, once per object.

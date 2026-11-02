@@ -50,6 +50,7 @@ from pants.engine.target import (
 from pants.source.source_root import SourceRootsRequest, get_optional_source_roots
 from pants.util.logging import LogLevel
 
+from pants_backend_cc.coverage.data import compile_directories
 from pants_backend_cc.target_types import (
     TRANSLATION_UNIT_SUFFIXES,
     CcTestCompilerArgsField,
@@ -531,7 +532,10 @@ async def build_executable(
             "coverage files",
             [
                 *((str(lib.target.address), link.coverage) for lib, link in zip(libraries, links)),
-                (str(address), await merge_digests(MergeDigests([notes, files]))),
+                (
+                    str(address),
+                    await merge_digests(MergeDigests([notes, await compile_directories(notes, cwd), files])),
+                ),
             ],
         )
     return BuiltExecutable(

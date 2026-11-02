@@ -8,13 +8,7 @@ from pants.backend.python.target_types import ConsoleScript
 from pants.core.goals.resolves import ExportableTool
 from pants.engine.rules import Rule, collect_rules
 from pants.engine.unions import UnionRule
-from pants.option.option_types import (
-    ArgsListOption,
-    BoolOption,
-    EnumListOption,
-    FloatOption,
-    StrListOption,
-)
+from pants.option.option_types import ArgsListOption, EnumListOption, FloatOption, StrListOption
 from pants.util.strutil import softwrap
 
 
@@ -72,16 +66,6 @@ class Gcovr(PythonToolBase):
     fail_under_line = FloatOption(
         default=None,
         help="Fail the test goal when the merged line coverage, in percent, is below this.",
-    )
-    heuristic_object_directory = BoolOption(
-        default=False,
-        help=softwrap(
-            """
-            Let gcovr find the directory each object was compiled in by trying the root and then
-            the object's parents, running gcov once per attempt, instead of reading it off the
-            object's notes and running gcov once.
-            """
-        ),
     )
     args = ArgsListOption(
         example="--exclude-unreachable-branches",

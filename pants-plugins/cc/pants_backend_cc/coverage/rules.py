@@ -170,14 +170,11 @@ async def _tracefile(
 ) -> Digest:
     """gcovr's JSON at `TRACEFILE`, over the notes and sources in `tree` and the sum of the
     `.gcda` files in `runs`."""
-    if gcovr.heuristic_object_directory:
-        wrapper = tools.wrapper
-    else:
-        if pex.python is None:
-            raise GcovError("gcovr's pex names no interpreter to run the gcov wrapper with")
-        wrapper = await create_digest(CreateDigest(tools.smart_files(pex.python.path)))
-    inputs, summed = await concurrently(
+    if pex.python is None:
+        raise GcovError("gcovr's pex names no interpreter to run the gcov wrapper with")
+    inputs, wrapper, summed = await concurrently(
         create_digest(CreateDigest(tree.values())),
+        create_digest(CreateDigest(tools.files(pex.python.path))),
         _sum_gcda(tools, runs),
     )
     result = await _run_gcovr(

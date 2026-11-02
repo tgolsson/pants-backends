@@ -1,11 +1,15 @@
-"""What a `cc_test` run under `--use-coverage` contributes to a report, and how the `.gcda` files
-it writes are matched to their notes.
+"""What a `cc_test` run under `--use-coverage` contributes to a report, how the `.gcda` files it
+writes are matched to their notes, and what the compiles that wrote the notes leave for gcov.
 
 gcc names an object's `.gcda` after the object's absolute path when it was compiled, inside that
 compile's sandbox. `-fprofile-prefix-path` could strip the sandbox, but only from a command that
 names it, which every library backend would then have to inject into its compiles. Instead the
 test runs with `GCOV_PREFIX` in a directory it outputs, where each `.gcda` lands under its whole
 compile-time path, and moves next to the `.gcno` whose path is the longest suffix of that path.
+
+gcov resolves an object's sources from the directory its compile ran in, which the notes record
+as a path in that sandbox. Whoever ran the compile knows that directory relative to the sandbox
+root and writes it next to the notes (`compile_directories`), for the gcov gcovr runs (`gcov.py`).
 """
 
 from __future__ import annotations
@@ -16,12 +20,33 @@ from dataclasses import dataclass
 
 from pants.core.goals.test import CoverageData, CoverageDataCollection
 from pants.engine.addresses import Address
-from pants.engine.fs import CreateDigest, Digest, FileEntry, MergeDigests
+from pants.engine.fs import CreateDigest, Digest, FileContent, FileEntry, MergeDigests
 from pants.engine.intrinsics import create_digest, get_digest_entries, merge_digests
 from pants.engine.rules import concurrently
 
 GCDA_DIR = "__pants_gcda"
 """Where a test writes its `.gcda` files, relative to its working directory."""
+
+COMPILE_DIRECTORY = ".gcno.cwd"
+"""The suffix of the file next to an object's notes (`x.c.gcno`, `x.c.gcno.cwd`) naming the
+directory its compile ran in, relative to the sandbox root; "" is the root."""
+
+
+def compile_directory_file(note: str) -> str:
+    return f"{note[: -len('.gcno')]}{COMPILE_DIRECTORY}"
+
+
+async def compile_directories(notes: Digest, directory: str) -> Digest:
+    """Next to each `.gcno` in `notes`, the file naming `directory`, where all of their compiles
+    ran. Every producer of a coverage digest (`CcLinkInterface.coverage`) merges this in."""
+    entries = await get_digest_entries(notes)
+    return await create_digest(
+        CreateDigest(
+            FileContent(compile_directory_file(e.path), directory.encode())
+            for e in entries
+            if isinstance(e, FileEntry) and e.path.endswith(".gcno")
+        )
+    )
 
 
 @dataclass(frozen=True)

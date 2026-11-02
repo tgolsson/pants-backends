@@ -206,17 +206,11 @@ def test_gcov_of_another_version_fails_before_the_build(tmp_path: Path) -> None:
         _run(rule_runner, TESTS[0])
 
 
-def test_the_heuristic_search_reports_the_same() -> None:
-    rule_runner = _rule_runner("--gcovr-heuristic-object-directory")
-    lines, functions = _counts(_report(rule_runner, [_test(rule_runner, TESTS[0])])[0])
-    assert lines == {1: 1, 2: 1, 3: 1, 4: 0, 6: 0, 7: 0}
-    assert functions == {"pick": 1, "unused": 0}
-
-
 @pytest.mark.skipif(
     not all(shutil.which(t) for t in ("gcc-14", "gcov-14", "gcov-tool-14")), reason="needs gcc 14"
 )
-def test_gcov_14_reads_the_json_format() -> None:
+def test_gcov_14_reports_the_same() -> None:
+    # gcovr asks gcov 14 for its JSON format; the wrapper runs the text format all the same.
     rule_runner = _rule_runner()
     toolchain = toolchain_build("gcc14", HOST, cc="gcc-14", ar="ar")
     rule_runner.write_files({"BUILD": FILES["BUILD"] + platforms_build() + toolchain})

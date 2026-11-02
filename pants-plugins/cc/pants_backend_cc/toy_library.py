@@ -36,6 +36,7 @@ from pants.engine.target import (
 )
 from pants.engine.unions import UnionRule
 
+from pants_backend_cc.coverage.data import compile_directories
 from pants_backend_cc.util_rules.compile import C
 from pants_backend_cc.util_rules.library import (
     CcCompileInterface,
@@ -181,10 +182,12 @@ async def toy_archive(request: ToyArchiveRequest, bash: BashBinary) -> ToyArchiv
     )
     coverage = EMPTY_DIGEST
     if notes:
+        written = await digest_subset_to_digest(DigestSubset(result.output_digest, PathGlobs(notes)))
         coverage = await merge_digests(
             MergeDigests(
                 [
-                    await digest_subset_to_digest(DigestSubset(result.output_digest, PathGlobs(notes))),
+                    written,
+                    await compile_directories(written, build_dir),
                     files.snapshot.digest,
                 ]
             )
