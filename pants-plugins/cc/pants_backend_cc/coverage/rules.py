@@ -183,6 +183,8 @@ async def _tracefile(
             argv=(
                 "--root=.",
                 f"--gcov-executable={{chroot}}/{GCOV}",
+                # gcovr locks the directory it runs gcov in: the object's own, not the root.
+                "--gcov-object-directory=.",
                 "-j{pants_concurrency}",
                 f"--json={TRACEFILE}",
                 *_selection(gcovr),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -70,35 +71,42 @@ def _recording_gcov(tmp_path: Path, script: str = "") -> tuple[Path, Path]:
 
 
 def test_wrapper_runs_text_gcov_in_the_compile_directory(tmp_path: Path) -> None:
-    # A gcov that writes its output file where it runs and says so, as gcov does.
+    # A gcov writing two sources' text to stdout, as `--stdout` does.
     gcov, argv = _recording_gcov(
         tmp_path,
-        "echo \"File '../x.c'\"\n"
-        "printf '%s\\n' '        -:    0:Source:../x.c' '        1:    1:int x;' > 'x.c##1234.gcov'\n"
-        "echo \"Creating 'x.c##1234.gcov'\"\n"
+        "printf '%s\\n' '        -:    0:Source:../x.c' '        1:    1:int x;'"
+        " 'function f called 1' '        -:    0:Source:/usr/include/y.h' '    #####:    7:int y;'\n"
         "exit 3\n",
     )
     root, gcov_shim, data = _sandbox(tmp_path, str(gcov))
+    (root / "build" / "obj" / "a.c.gcda").touch()
+    where = root / "build" / "obj"
     run = subprocess.run(
-        [str(gcov_shim), str(data), "--branch-counts", "--object-directory", "build/obj"],
-        cwd=root,
+        [str(gcov_shim), str(data), "--branch-counts", "--object-directory", "."],
+        cwd=where,
         env={"PATH": os.defpath},
         capture_output=True,
         text=True,
     )
     assert run.returncode == 3
-    assert run.stdout == "File '../x.c'\nCreating 'x.c##1234.gcov'\n"
-    # gcov ran in `build`, with the object directory made absolute, and its output moved to the root.
+    # gcov ran in `build`, to stdout, with the object directory made absolute.
     assert argv.read_text().splitlines() == [
         str(root / "build"),
+        "--stdout",
         str(data),
         "--branch-counts",
         "--object-directory",
-        str(root / "build" / "obj"),
+        str(where),
     ]
-    # Its `Source:` line now names the file from where gcovr ran gcov.
-    assert (root / "x.c##1234.gcov").read_text() == "        -:    0:Source:x.c\n        1:    1:int x;\n"
-    assert not (root / "build" / "x.c##1234.gcov").exists()
+    # One file per source where gcovr ran gcov, its `Source:` named from there, reported as gcov does.
+    x = f"x.c##{hashlib.md5(b'../../x.c').hexdigest()}.gcov"
+    y = f"y.h##{hashlib.md5(b'/usr/include/y.h').hexdigest()}.gcov"
+    assert run.stdout == f"Creating '{x}'\nCreating '{y}'\n"
+    assert (
+        where / x
+    ).read_text() == "        -:    0:Source:../../x.c\n        1:    1:int x;\nfunction f called 1\n"
+    assert (where / y).read_text() == "        -:    0:Source:/usr/include/y.h\n    #####:    7:int y;\n"
+    assert not list((root / "build").glob("*.gcov"))
 
 
 def test_wrapper_drops_the_json_format_options_and_passes_probes_through(tmp_path: Path) -> None:
@@ -110,7 +118,7 @@ def test_wrapper_drops_the_json_format_options_and_passes_probes_through(tmp_pat
         cwd=root,
         env={"PATH": os.defpath},
     )
-    assert argv.read_text().splitlines() == [str(root), "--branch-counts", str(data), "--stdout"]
+    assert argv.read_text().splitlines() == [str(root), "--stdout", "--branch-counts", str(data), "--stdout"]
     # gcovr probes gcov's options and version first.
     subprocess.run([str(gcov_shim), "--help"], check=True, cwd=root, env={"PATH": os.defpath})
     assert argv.read_text().splitlines() == [str(root), "--help"]

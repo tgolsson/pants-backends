@@ -112,9 +112,11 @@ backend_packages = [
   record as a sandbox that is gone. Whoever ran the compile names that directory, relative to
   the sandbox root, in a file next to the notes (`x.c.gcno.cwd`; `coverage/data.py` has the
   helper every producer of a link interface's `coverage` uses), and the gcov gcovr runs is a
-  wrapper that runs gcov there, once per object, in the text format. gcovr asks gcov 14 and newer
-  for their JSON format, which names sources from the recorded directory; the wrapper drops the
-  request and gcovr reads the text it gets.
+  wrapper that runs gcov there, once per object, in the text format on its stdout, and writes
+  the `.gcov` files where gcovr looks for them. gcovr asks gcov 14 and newer for their JSON
+  format, which names sources from the recorded directory; the wrapper drops the request and
+  gcovr reads the text it gets. gcovr runs gcov for one object at a time per directory it runs
+  it in, so it is told to run it in each object's own directory (`--gcov-object-directory=.`).
 - gcov-tool sums the tests' `.gcda` files, two at a time, and one gcovr run reads the totals into a
   JSON tracefile; a last run writes the reports under `dist/coverage/cc/`. Tests whose notes or
   compile inputs differ at a path (two configures sharing a build directory) get a tracefile each,

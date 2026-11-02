@@ -8,9 +8,11 @@ directory by trying the root and then each parent of the object, running gcov on
 The gcov it runs here is `WRAPPER`, a Python script on the interpreter gcovr's pex runs on (so
 `GCOV` is written where that pex is known, `rules.py`): it reads the directory from the file the
 compile's producer wrote next to the notes (`data.COMPILE_DIRECTORY`), runs gcov there once, in
-the text format, and moves the `.gcov` files back to where gcovr looks for them. gcov 14 and newer
-offer a JSON format, which gcovr asks for when it sees it; the wrapper drops the request, as that
-format names sources from the recorded directory, and gcovr reads text wherever gcov writes it.
+the text format on its stdout, and writes the `.gcov` files where gcovr looks for them. gcov 14
+and newer offer a JSON format, which gcovr asks for when it sees it; the wrapper drops the
+request, as that format names sources from the recorded directory, and gcovr reads text wherever
+gcov writes it. gcovr runs gcov for one object at a time per directory it runs it in, so `rules.py`
+has it run in each object's own directory (`--gcov-object-directory=.`) rather than the root.
 """
 
 from __future__ import annotations
@@ -63,12 +65,19 @@ def major_version(output: str) -> str | None:
 
 _WRAPPER = '''\
 """gcov for gcovr, run in the directory the object was compiled in, which the compile's producer
-named next to its notes. Arguments: the gcov to run, then gcovr's arguments for it (`--help` and
-`--version` pass through)."""
+named next to its notes. gcov writes to this script instead of to files (`--stdout`), and the
+script writes one `.gcov` file per source where gcovr runs it, named as gcov would name it, with
+the source named from there, and reports it as gcov would (`Creating '...'`): gcovr may run it for
+objects of different directories at once, and the compile directory is shared. Arguments: the
+gcov to run, then gcovr's arguments for it (`--help` and `--version` pass through)."""
 
+import hashlib
 import os
+import re
 import subprocess
 import sys
+
+SOURCE = re.compile(r"^(\\s*-:\\s*0:Source:)(.*)$")
 
 gcov, args = sys.argv[1], sys.argv[2:]
 datafiles = [a for a in args if a.endswith((".gcda", ".gcno"))]
@@ -85,34 +94,34 @@ except FileNotFoundError:
 if "--object-directory" in args:
     index = args.index("--object-directory") + 1
     args[index] = os.path.abspath(args[index])
-# The JSON format names sources from the recorded directory, a sandbox that is gone; the text
-# format opens them from gcov's own directory.
+# gcovr asks gcov 14 and newer for the JSON format, which names sources from the recorded
+# directory, a sandbox that is gone; the text format opens them from gcov's own directory.
 args = [a for a in args if a not in ("--json-format", "--conditions")]
 
-# gcovr reads the `.gcov` files gcov says it created from where it ran gcov, resolving their
-# `Source:` line from there too: run gcov in the compile directory, then bring each file here
-# with its source named from here.
-run = subprocess.run([gcov, *args], cwd=directory, stdout=subprocess.PIPE, text=True)
-for line in run.stdout.splitlines():
-    if not (line.startswith("Creating '") and line.endswith("'")):
-        continue
-    created = line[len("Creating '") : -1]
-    written = os.path.join(directory, created)
-    if not os.path.exists(written):
-        continue
-    with open(written, encoding="utf-8", errors="surrogateescape") as f:
-        lines = f.readlines()
-    for i, text in enumerate(lines):
-        if ":Source:" in text:
-            head, source = text.rstrip("\\n").split(":Source:", 1)
-            if not os.path.isabs(source):
-                source = os.path.relpath(os.path.join(directory, source), os.getcwd())
-            lines[i] = head + ":Source:" + source + "\\n"
-            break
-    with open(os.path.join(os.getcwd(), created), "w", encoding="utf-8", errors="surrogateescape") as f:
+run = subprocess.run(
+    [gcov, "--stdout", *args],
+    cwd=directory,
+    stdout=subprocess.PIPE,
+    text=True,
+    errors="surrogateescape",
+)
+files = []
+for line in run.stdout.splitlines(keepends=True):
+    match = SOURCE.match(line)
+    if match:
+        source = match.group(2)
+        if not os.path.isabs(source):
+            source = os.path.relpath(os.path.join(directory, source), os.getcwd())
+        line = match.group(1) + source + "\\n"
+        files.append((source, []))
+    if files:
+        files[-1][1].append(line)
+for source, lines in files:
+    digest = hashlib.md5(source.encode("utf-8", errors="surrogateescape")).hexdigest()
+    name = f"{{os.path.basename(source)}}##{{digest}}.gcov"
+    with open(name, "w", encoding="utf-8", errors="surrogateescape") as f:
         f.writelines(lines)
-    os.remove(written)
-sys.stdout.write(run.stdout)
+    print(f"Creating '{{name}}'")
 sys.exit(run.returncode)
 '''
 
@@ -122,8 +131,8 @@ def wrapper() -> str:
 
 
 def shim(bash: str, python: str, gcov: str) -> str:
-    """`GCOV`: `WRAPPER` next to it, on `python`, over `gcov`."""
-    return f'#!{bash}\nexec {shlex.quote(python)} "$(dirname "$0")/gcov.py" {shlex.quote(gcov)} "$@"\n'
+    """`GCOV`: `WRAPPER` next to it, on `python` without its site, over `gcov`."""
+    return f'#!{bash}\nexec {shlex.quote(python)} -I -S "$(dirname "$0")/gcov.py" {shlex.quote(gcov)} "$@"\n'
 
 
 @dataclass(frozen=True)
