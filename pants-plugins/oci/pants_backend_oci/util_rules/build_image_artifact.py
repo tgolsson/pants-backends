@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 from typing import ClassVar
 
 from pants.core.goals.package import OutputPathField, PackageFieldSet
+from pants.engine.addresses import Address
 from pants.engine.internals.graph import (
     resolve_target,
     resolve_targets,
@@ -33,7 +33,9 @@ from pants_backend_oci.util_rules.assemble import (
     assembled_or_raise,
 )
 from pants_backend_oci.util_rules.image_bundle import (
+    FallibleImageBundle,
     FallibleImageBundleRequest,
+    ImageBundle,
     ImageBundleRequest,
     ibr_to_fibr,
     resolve_image_bundle,
@@ -81,6 +83,16 @@ class ImageArtifactExtractRequest(FallibleImageBundleRequest):
     field_set_type: ClassVar[type[FieldSet]] = ImageArtifactExtractFieldSet
 
 
+class ImageArtifactBaseError(Exception):
+    pass
+
+
+def base_or_raise(base: FallibleImageBundle, address: Address) -> ImageBundle:
+    if base.output is None:
+        raise ImageArtifactBaseError(f"Failed to build the base image for {address}:\n{base.stderr}")
+    return base.output
+
+
 @rule(desc="Build artifact in container", level=LogLevel.DEBUG)
 async def build_image_artifact(
     request: ImageArtifactBuildRequest,
@@ -103,10 +115,7 @@ async def build_image_artifact(
         *(build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies),
     )
 
-    if maybe_built_base.output is None:
-        return dataclasses.replace(maybe_built_base, dependency_failed=True)
-
-    bundle = maybe_built_base.output
+    bundle = base_or_raise(maybe_built_base, request.target.address)
 
     if request.target.dependencies.value:
         config = ConfigEdit(env=tuple(request.target.environment.value or ()), history=True)
@@ -147,14 +156,13 @@ async def extract_image_artifact(
         **implicitly({build_request.request: FallibleImageBundleRequest})
     )
 
-    if maybe_built_base.output is None:
-        return dataclasses.replace(maybe_built_base, dependency_failed=True)
+    bundle = base_or_raise(maybe_built_base, request.target.address)
 
     return await image_files(
         ImageFilesRequest(
             request.target.address,
             request.target.output_path.value_or_default(file_ending="tar.gz"),
-            maybe_built_base.output,
+            bundle,
             None,
             tuple(request.target.outputs.value or ()),
             exclude_patterns=tuple(request.target.exclude.value or ()),
