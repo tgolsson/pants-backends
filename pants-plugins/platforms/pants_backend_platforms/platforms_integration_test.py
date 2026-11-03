@@ -5,7 +5,7 @@ import logging
 import pytest
 from pants.core.goals.package import BuiltPackage
 from pants.engine.addresses import Address
-from pants.engine.fs import DigestContents
+from pants.engine.fs import CreateDigest, Digest, DigestContents, DigestSubset, FileContent
 from pants.engine.internals.scheduler import ExecutionError
 from pants.engine.rules import QueryRule
 from pants.testutil.rule_runner import RuleRunner
@@ -21,9 +21,24 @@ from pants_backend_platforms.testutil import (
     platforms_build,
     rule_runner,
 )
+from pants_backend_platforms.util_rules.contract import PlatformBuild, platform_build_files
 from pants_backend_platforms.util_rules.lookup import TargetsOfAlias, TargetsOfAliasRequest
 
 BOTH = f'platforms=["{HOST}", "{OTHER}"]'
+
+
+def test_a_declared_file_the_build_does_not_hold_is_an_error() -> None:
+    runner = rule_runner(QueryRule(Digest, [CreateDigest]), QueryRule(Digest, [DigestSubset]))
+    digest = runner.request(Digest, [CreateDigest([FileContent("a/a.txt", b"A")])])
+    held = runner.request(
+        Digest, [platform_build_files(PlatformBuild(digest, ("a/a.txt",)), "the build of a:a")]
+    )
+    assert held == digest
+    # One of two: the other is not quietly dropped.
+    with pytest.raises(ExecutionError, match=r"the build of a:a.*a/b\.txt"):
+        runner.request(
+            Digest, [platform_build_files(PlatformBuild(digest, ("a/a.txt", "a/b.txt")), "the build of a:a")]
+        )
 
 
 @pytest.fixture

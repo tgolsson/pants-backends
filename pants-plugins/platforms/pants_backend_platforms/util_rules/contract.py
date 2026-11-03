@@ -14,6 +14,7 @@ from pants.engine.fs import (
     AddPrefix,
     Digest,
     DigestSubset,
+    GlobExpansionConjunction,
     GlobMatchErrorBehavior,
     MergeDigests,
     PathGlobs,
@@ -53,12 +54,13 @@ class PlatformBuild:
 
 
 def platform_build_files(build: PlatformBuild, description_of_origin: str) -> DigestSubset:
-    """The build's `files` alone; a file it does not hold is an error naming its origin."""
+    """The build's `files` alone; any file it does not hold is an error naming its origin."""
     return DigestSubset(
         build.digest,
         PathGlobs(
             build.files,
             glob_match_error_behavior=GlobMatchErrorBehavior.error,
+            conjunction=GlobExpansionConjunction.all_match,
             description_of_origin=description_of_origin,
         ),
     )

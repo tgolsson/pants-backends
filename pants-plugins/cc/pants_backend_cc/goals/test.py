@@ -24,12 +24,13 @@ from pants.core.util_rules.env_vars import environment_vars_subset
 from pants.engine.env_vars import EnvironmentVarsRequest
 from pants.engine.fs import EMPTY_FILE_DIGEST, MergeDigests
 from pants.engine.internals.graph import resolve_target
-from pants.engine.intrinsics import execute_process, merge_digests
+from pants.engine.intrinsics import execute_process_with_retry, merge_digests
 from pants.engine.process import (
     InteractiveProcess,
     Process,
     ProcessCacheScope,
     ProcessExecutionFailure,
+    ProcessWithRetries,
 )
 from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import WrappedTargetRequest
@@ -168,17 +169,14 @@ async def run_cc_test(
         CcTestWrapperError,
     ) as error:
         return _build_failure(field_set, error, test_subsystem)
-    results = []
-    for _ in range(test_subsystem.attempts_default):
-        result = await execute_process(process, **implicitly())
-        results.append(result)
-        if result.exit_code == 0:
-            break
+    # Each attempt is a distinct process to the engine; the same one again would be its memoized
+    # result.
+    results = await execute_process_with_retry(ProcessWithRetries(process, test_subsystem.attempts_default))
     data = None
     if coverage:
-        data = await coverage_data(field_set.address, built.coverage, results[-1].output_digest)
+        data = await coverage_data(field_set.address, built.coverage, results.last.output_digest)
     return TestResult.from_fallible_process_result(
-        tuple(results),
+        results.results,
         address=field_set.address,
         output_setting=test_subsystem.output,
         coverage_data=data,

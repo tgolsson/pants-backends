@@ -52,8 +52,11 @@ def header_filter(cwd: str, dirs: list[str]) -> str:
     next to the file including it. In the sandbox root that absolute path is the sandbox's own,
     which the process substitutes for `{chroot}`, so a system header's `/<dir>/` never matches."""
     prefixes = sorted({_relative(d, cwd) for d in dirs})
-    alternatives = "|".join(re.escape(p) for p in prefixes)
     anchor = f"(^|/{re.escape(cwd)}/)" if cwd else "^(\\./|{chroot}/)?"
+    if "." in prefixes:
+        # The compile directory itself is selected: every header reached by a relative path.
+        return f"{anchor}[^/]"
+    alternatives = "|".join(re.escape(p) for p in prefixes)
     return f"{anchor}({alternatives})/"
 
 

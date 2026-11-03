@@ -77,6 +77,10 @@ FILES = {
     'int main(void) { FILE *f = fopen("data/input.txt", "r"); if (!f) return 2; '
     'char buf[32] = {0}; fgets(buf, sizeof buf, f); printf("%s %s\\n", getenv("DEMO_GREETING"), buf); return 0; }\n',  # noqa: E501
     "tests/broken/main.c": "int main(void) { return not_declared_anywhere(); }\n",
+    # Fails until a marker file outside the sandbox exists, which its first run creates.
+    "tests/flaky/main.c": "#include <stdio.h>\n#include <stdlib.h>\n"
+    'int main(void) { const char *m = getenv("FLAKY_MARKER"); FILE *f = fopen(m, "r"); '
+    'if (f) { fclose(f); return 0; } f = fopen(m, "w"); fclose(f); return 1; }\n',
     "data/input.txt": "world\n",
     "extra/single.h": "#define SINGLE_BASE 21\n",
     "single.c": '#include <math.h>\n#include "demo.h"\n#include "single.h"\n'
@@ -217,6 +221,18 @@ def test_run_tests(rule_runner: RuleRunner) -> None:
     with_data = _test(rule_runner, _generated("tests/data"))
     assert with_data.exit_code == 0, with_data.stderr_bytes.decode()
     assert "hello world" in with_data.stdout_bytes.decode()
+
+
+def test_attempts_run_the_test_again(rule_runner: RuleRunner, tmp_path) -> None:
+    flaky = f'"tests/flaky": {{"extra_env_vars": ["FLAKY_MARKER={tmp_path / "marker"}"]}},'
+    _write_project(
+        rule_runner,
+        BUILD=BUILD.replace('"tests/failing": {"args": []},', f'"tests/failing": {{"args": []}}, {flaky}'),
+    )
+    rule_runner.set_options(["--test-attempts-default=2"], env_inherit={"PATH"})
+    result = _test(rule_runner, _generated("tests/flaky"))
+    assert [r.exit_code for r in result.process_results] == [1, 0]
+    assert result.exit_code == 0
 
 
 def test_build_failure_is_a_failed_test(rule_runner: RuleRunner) -> None:
