@@ -81,6 +81,7 @@ jobs:
         docker run --rm --cap-drop all --cap-add CAP_SETUID ubuntu:22.04 cat /proc/self/uid_map
 
         /home/runner/bin/pants package ::
+        [[ $(dist/examples.cargo.hello-world/hello-world) = "Hello, world!" ]]
 
   package-examples:
 
