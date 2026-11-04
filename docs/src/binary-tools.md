@@ -1,8 +1,10 @@
 # Binary tool versions
 
 The plugin defaults and download metadata were refreshed on 2026-10-16; crane
-was added on 2026-10-21 and zstd on 2026-10-22. Each known-version entry pins both SHA-256 and byte size. Versions can be selected with
-the corresponding subsystem's `--version` option.
+was added on 2026-10-21 and zstd on 2026-10-22. CMake and Ninja (cmake plugin)
+and rustup and kache (cargo plugin) were added on 2026-11-04. Each known-version
+entry pins both SHA-256 and byte size. Versions can be selected with the
+corresponding subsystem's `--version` option.
 
 | Tool | Default | Additional release lines covered |
 | --- | --- | --- |
@@ -12,9 +14,23 @@ the corresponding subsystem's `--version` option.
 | mdBook | 0.5.4 | Latest 0.4 (0.4.52), plus existing historical entries |
 | Bitwarden CLI | 2026.10.0 | 2026.9.1, plus existing historical entries |
 | zstd | 1.5.6-bcr2 | Latest only |
+| CMake | 3.31.12 | None |
+| Ninja | 1.13.2 | None |
+| rustup | 1.28.2 | None |
+| kache | 1.2.2 | None |
 
 The OCI plugin uses crane to pull, publish, and mirror images. It writes packaged
 images as OCI archives itself, without an external tool.
+
+The cmake plugin runs Ninja only to configure a project; replaying the build
+never runs it. The cargo plugin runs kache as `RUSTC_WRAPPER`, a compiler cache.
+rustup-init is pinned by hash like the other tools, but the Rust toolchain it
+installs is pinned only by exact version, from `[rustup].rust_version` or the
+`channel` of `rust-toolchain.toml`. rustup checks the toolchain against the
+hashes in Rust's own release manifest; this repository records none for it.
+
+The cc plugin's clang-tidy and gcovr are Python tools, pinned by the lockfiles
+bundled with the plugin, so they are not listed here.
 
 ## Kubernetes and Kustomize
 
@@ -37,10 +53,16 @@ upstream maintenance of an older release line.
 
 ## Binary providers and platforms
 
-Kubernetes, Kustomize, crane, mdBook, and Bitwarden use official release
-artifacts. crane comes from the
+Kubernetes, Kustomize, crane, mdBook, Bitwarden, CMake, Ninja, rustup, and
+kache use official release artifacts. crane comes from the
 [go-containerregistry release](https://github.com/google/go-containerregistry/releases)
 tarballs.
+CMake comes from the [Kitware/CMake releases](https://github.com/Kitware/CMake/releases)
+and Ninja from the [ninja-build/ninja releases](https://github.com/ninja-build/ninja/releases);
+both publish one universal macOS artifact, used for x86-64 and ARM64 alike.
+rustup-init comes from Rust's archive at `static.rust-lang.org/rustup/archive`,
+and kache from the [kunobi-ninja/kache releases](https://github.com/kunobi-ninja/kache/releases),
+whose Linux builds are statically linked against musl.
 zstd's upstream publishes Windows binaries only, so its downloads use the static
 builds from [aspect-build/zstd-prebuilt](https://github.com/aspect-build/zstd-prebuilt),
 which Bazel's bazel-lib uses as well. The OCI plugin runs it to read
@@ -57,6 +79,15 @@ Odin and odinfmt are unchanged by this refresh.
 
 The subsystem download tests cover every recorded version/platform pair and
 exercise Pants' URL generation, hash/size verification, and archive extraction.
-Run the five `subsystem_test.py` files under k8s, kustomize, oci, mdbook, and
-bitwarden after updating the tables. Successful downloads do not establish
+Run these after updating the tables:
+
+- `pants-plugins/k8s/pants_backend_k8s/subsystem_test.py`
+- `pants-plugins/kustomize/pants_backend_kustomize/subsystem_test.py`
+- `pants-plugins/oci/pants_backend_oci/subsystem_test.py`
+- `pants-plugins/mdbook/pants_backend_mdbook/subsystem_test.py`
+- `pants-plugins/bitwarden/pants_backend_bitwarden/subsystem_test.py`
+- `pants-plugins/cmake/pants_backend_cmake/subsystems/subsystems_test.py`
+- `pants-plugins/cargo/pants_backend_cargo/subsystems_test.py`
+
+Successful downloads do not establish
 runtime compatibility on a different host architecture.
