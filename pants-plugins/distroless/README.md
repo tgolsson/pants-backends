@@ -1,6 +1,6 @@
 # Distroless backend for Pants
 
-This release targets Pants **2.31.0**. Install it with
+This release targets Pants **2.32.x**. Install it with
 `pants-backend-distroless==0.1.0` in `[GLOBAL].plugins` in `pants.toml`, and enable
 `pants_backend_distroless` in `[GLOBAL].backend_packages`.
 

@@ -3,7 +3,11 @@
 A [Pants](https://www.pantsbuild.org) backend for the C and C++ pieces that build-system backends
 share: toolchains, interfaces for their compiles and libraries, and the tools built on them.
 
-**Status: alpha.** Works with Pants 2.31 and 2.33.
+This release targets Pants **2.32.x**. Install it with `pants-backend-cc==0.1.0` in
+`[GLOBAL].plugins` in `pants.toml`, and enable `pants_backend_cc` in
+`[GLOBAL].backend_packages`.
+
+**Status: alpha.**
 
 [`examples/cc`](https://github.com/tgolsson/pants-backends/tree/main/examples/cc) declares a platform and its `cc_toolchain`, and builds a `cc_binary` and a
 `cc_test` against a static library from a `cmake_project`.

@@ -1,7 +1,7 @@
 # OCI backend for Pants
 
-This release targets Pants **2.31.0**. Install it with
-`pants-backend-oci==0.10.0` in `[GLOBAL].plugins` in `pants.toml`.
+This release targets Pants **2.32.x**. Install it with
+`pants-backend-oci==0.11.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-oci?label=Latest%20release)
 
@@ -11,7 +11,7 @@ This release targets Pants **2.31.0**. Install it with
 This is a backend implementing support for building OCI images in pants; running them, and publishing them to container registries. Images are assembled by the plugin itself: layers, config, manifest and index are written by a small Python script run in a sandboxed process, deterministically and without any container tool. Beyond that, this plugin uses these tools:
 
 * `oci-builder`, a [scie](https://github.com/a-scie/jump) the plugin builds with pex from its own builder scripts and a pinned python-build-standalone Python. It is built once per machine and downloads that Python and pex's `science` tool from GitHub the first time; on first use it unpacks into the `oci_builder` named cache, for `pants run` too
-* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps (on macOS, run and repl only, through `podman machine`); or Docker 23.0 or newer instead, with `[oci].runner = "docker"` (see [Running with Docker](#running-with-docker))
+* [podman](https://podman.io/docs/installation) 4.0 or newer, installed by the user, for `pants run`, OCI repl and scripted build steps (on macOS, run and repl only, through `podman machine`, experimental); or Docker 23.0 or newer instead, with `[oci].runner = "docker"` (see [Running with Docker](#running-with-docker))
 * [crane](https://github.com/google/go-containerregistry/tree/main/cmd/crane) for pulling, pushing and mirroring images
 
 `pants package` writes each `oci_image_build` to `dist/` as an OCI archive, `<name>.tar`, with the
@@ -58,6 +58,9 @@ part of a build step's cache key, so after changing it, rebuild with `--no-local
 whether podman runs locally or through a connection.
 
 ### Running through podman machine (macOS) or another connection
+
+**Experimental.** Connections are tested in CI against a Linux podman service, but running
+through `podman machine` has not yet been validated on a real Mac.
 
 On macOS, `pants run` and OCI repl run images through [podman machine](https://docs.podman.io/en/stable/markdown/podman-machine.1.html):
 
@@ -250,7 +253,7 @@ to `latest`.
 
 * Currently there's no support for pulling tags, as that would break determinism
 * Multi-platform SHA/.sig is untested/unsupported
-* Scripted build steps require local Linux podman; only `pants run` and OCI repl work through `podman machine` or another podman connection.
+* Scripted build steps require local Linux podman; only `pants run` and OCI repl work through `podman machine` (experimental on macOS) or another podman connection.
 
 ## Targets
 

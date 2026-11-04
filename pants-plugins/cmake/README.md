@@ -6,6 +6,10 @@ the backend runs `cmake -G Ninja` once, reads the generated `build.ninja`, and r
 `CMakeLists.txt` is declared twice, and the unit of caching is the edge, not the project.
 CMake provides the build artefacts; tests, packaging and dependencies are Pants' business.
 
+This release targets Pants **2.32.x**. Install it with `pants-backend-cmake==0.1.0` in
+`[GLOBAL].plugins` in `pants.toml`, and enable `pants_backend_cmake` in
+`[GLOBAL].backend_packages`.
+
 **Status: alpha.** Linux hosts, cross builds through a `cmake_toolchain_file`, Ninja generator,
 local execution only (the compilers are found on the machine).
 

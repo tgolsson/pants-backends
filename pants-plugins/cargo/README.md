@@ -4,6 +4,10 @@ A [Pants](https://www.pantsbuild.org) backend for Rust that wraps Cargo rather t
 it: Cargo keeps its package model, its lockfiles and its workspaces, and Pants adds target
 addresses, caching, a hermetic toolchain and the usual goals on top.
 
+This release targets Pants **2.32.x**. Install it with `pants-backend-cargo==0.1.0` in
+`[GLOBAL].plugins` in `pants.toml`, and enable `pants_backend_cargo` in
+`[GLOBAL].backend_packages`.
+
 **Status: alpha.** No stability guarantees until it nears feature completeness.
 
 ## Targets
