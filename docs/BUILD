@@ -1,6 +1,7 @@
 md_book(
     dependencies=[
         "//pants-plugins/bitwarden:package_data",
+        "//pants-plugins/cargo:package_data",
         "//pants-plugins/cc:package_data",
         "//pants-plugins/cmake:package_data",
         "//pants-plugins/distroless:package_data",

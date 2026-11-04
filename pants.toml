@@ -15,6 +15,7 @@ pythonpath = [
    "%(buildroot)s/pants-plugins/distroless",
    "%(buildroot)s/pants-plugins/generate",
    "%(buildroot)s/pants-plugins/platforms",
+   "%(buildroot)s/pants-plugins/cargo",
 ]
 
 backend_packages = [
@@ -34,6 +35,8 @@ backend_packages = [
   "pants_backend_distroless",
   "pants_backend_bitwarden",
   "pants_backend_secrets",
+  "pants_backend_cargo",
+  "pants_backend_cargo.backends.clippy",
 
   "pants.backend.shell",
   "pants.backend.experimental.python.lint.ruff.check",
@@ -114,3 +117,9 @@ install_from_resolve = "pytest"
 
 [twine]
 install_from_resolve = "twine"
+
+[rustup]
+rust_version = "1.97.0"
+
+[clippy]
+args = ["--", "-Dwarnings"]
