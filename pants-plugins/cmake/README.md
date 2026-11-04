@@ -9,6 +9,9 @@ CMake provides the build artefacts; tests, packaging and dependencies are Pants'
 **Status: alpha.** Linux hosts, cross builds through a `cmake_toolchain_file`, Ninja generator,
 local execution only (the compilers are found on the machine).
 
+[`examples/cc`](https://github.com/tgolsson/pants-backends/tree/main/examples/cc) has a `cmake_project` with a static library and an executable, and a
+`cc_binary` and a `cc_test` that link the library.
+
 ## Targets
 
 - `cmake_project`: the project. `sources` is what CMake reads: CMake files, configure-time

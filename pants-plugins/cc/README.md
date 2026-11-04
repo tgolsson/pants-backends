@@ -5,6 +5,9 @@ share: toolchains, interfaces for their compiles and libraries, and the tools bu
 
 **Status: alpha.** Works with Pants 2.31 and 2.33.
 
+[`examples/cc`](https://github.com/tgolsson/pants-backends/tree/main/examples/cc) declares a platform and its `cc_toolchain`, and builds a `cc_binary` and a
+`cc_test` against a static library from a `cmake_project`.
+
 ## Toolchains
 
 ```toml

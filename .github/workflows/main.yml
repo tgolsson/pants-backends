@@ -82,6 +82,8 @@ jobs:
 
         /home/runner/bin/pants package ::
         [[ $(dist/examples.cargo.hello-world/hello-world) = "Hello, world!" ]]
+        [[ $(dist/examples/cc/cmake/build/hello) = "Hello from CMake!" ]]
+        [[ $(dist/examples/cc/greet) = "Hello from cc!" ]]
 
   package-examples:
 
