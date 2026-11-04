@@ -5,7 +5,7 @@ It has no build rules of its own: language backends (such as pants-backend-cmake
 know which platforms to build and how to ask another backend for a dependency built for the
 same platform. The C and C++ toolchain for each platform is in [pants-backend-cc](../cc).
 
-This release targets Pants **2.32.x**. Install it with `pants-backend-platforms==0.1.0` in
+This release targets Pants **2.32.x**. Install it with `pants-backend-platforms==0.1.0rc0` in
 `[GLOBAL].plugins` in `pants.toml`, and enable `pants_backend_platforms` in
 `[GLOBAL].backend_packages`.
 

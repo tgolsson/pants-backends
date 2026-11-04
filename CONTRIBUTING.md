@@ -54,7 +54,8 @@ below use `X` for the new Pants version.
     `subsystems/ninja.py`), update the table and refresh date in `docs/src/binary-tools.md`, and note new defaults in
     the CHANGELOG entries below.
 12. For each released plugin — secrets, bitwarden; k8s, kustomize, oci; distroless, mdbook; platforms, generate, cc,
-    cmake, cargo (odin is unreleased, `skip_twine=True`; don't bump it):
+    cmake, cargo (odin is unreleased, `skip_twine=True`; don't bump it; for a pre-release, see "Cutting a release
+    candidate" below):
     - bump `version` in `pants-plugins/<name>/pyproject.toml` to the new plugin version `V`;
     - bump `python_artifact(version=...)` in `pants-plugins/<name>/BUILD` to `V`;
     - update `pants-plugins/<name>/README.md`: "This release targets Pants **X**. Install it with
@@ -74,3 +75,25 @@ below use `X` for the new Pants version.
 14. Publish by hand, e.g. `pants publish pants-plugins/secrets:package`; the PyPI token is read from Bitwarden. Publish in
     dependency order: secrets, bitwarden; k8s, kustomize, oci; platforms and generate, then cc, then cmake and cargo;
     distroless and mdbook at any point.
+
+## Cutting a release candidate
+
+A release candidate is the same batch release with a PEP 440 pre-release version, `VrcN` (for example `0.11.0rc0`), so
+the plugins can be tried before the final.
+
+1. In step 12 above, use `VrcN` instead of `V` everywhere: `pyproject.toml`, `python_artifact(version=...)`, the README
+   install line, and the CHANGELOG heading, which becomes `## VrcN - <YYYY-MM-DD>`.
+2. Name the upstream rc in every inter-plugin floor, for example `pants_backend_secrets>=0.8.0rc0`, and say so in the
+   "Require" CHANGELOG line. Under PEP 440, `>=0.8.0` does **not** match `0.8.0rc0`, so an rc whose floors name the
+   final version cannot be installed until the final exists. A specifier that names a pre-release also lets pip and Pex
+   pick pre-releases for that requirement, so nobody needs `--pre`.
+3. Dry-run before uploading, because PyPI never accepts the same file name twice: after `pants package ::`, check that
+   `pip install --no-index --find-links dist/ pants-backend-cmake==VrcN` pulls the upstream rcs, and likewise for
+   every plugin with a floor: cargo, `cc[generate]`, oci, kustomize and bitwarden. Then run a scratch Pants repo with
+   the rcs in `[GLOBAL].plugins` and `[python-repos].find_links` pointing at `dist/`. A broken rc after upload means
+   cutting the next rc.
+4. Publish in the order in step 14.
+5. Check the rcs from PyPI: a fresh venv `pip install --no-cache-dir`, and the scratch repo again without `find_links`.
+
+To promote to the final, drop the `rcN` suffix everywhere, set the floors back to `>=V`, and date the CHANGELOG heading
+`## V - <YYYY-MM-DD>`.

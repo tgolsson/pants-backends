@@ -1,7 +1,7 @@
 # Distroless backend for Pants
 
 This release targets Pants **2.32.x**. Install it with
-`pants-backend-distroless==0.1.0` in `[GLOBAL].plugins` in `pants.toml`, and enable
+`pants-backend-distroless==0.1.0rc0` in `[GLOBAL].plugins` in `pants.toml`, and enable
 `pants_backend_distroless` in `[GLOBAL].backend_packages`.
 
 [![PyPI](https://img.shields.io/pypi/v/pants-backend-distroless?label=Latest%20release)](https://pypi.org/project/pants-backend-distroless)

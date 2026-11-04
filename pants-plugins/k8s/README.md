@@ -1,7 +1,7 @@
 # Kubernetes backend for Pants
 
 This release targets Pants **2.32.x**. Install it with
-`pants-backend-k8s==0.8.0` in `[GLOBAL].plugins` in `pants.toml`.
+`pants-backend-k8s==0.8.0rc0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-k8s?label=Latest%20release)
 

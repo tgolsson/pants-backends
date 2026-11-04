@@ -1,7 +1,7 @@
 # Secrets backend for Pants
 
 This release targets Pants **2.32.x**. Install it with
-`pants-backend-secrets==0.8.0` in `[GLOBAL].plugins` in `pants.toml`.
+`pants-backend-secrets==0.8.0rc0` in `[GLOBAL].plugins` in `pants.toml`.
 
 [![PyPI](https://img.shields.io/pypi/v/pants-backend-secrets?label=Latest%20release)](https://pypi.org/project/pants-backend-secrets)
 

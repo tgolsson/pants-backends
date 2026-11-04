@@ -10,7 +10,7 @@ python_distribution_with_secret(
     ],
     provides=python_artifact(
         name="pants_backend_distroless",
-        version="0.1.0",
+        version="0.1.0rc0",
         long_description_content_type="markdown",
     ),
     long_description_path="pants-plugins/distroless/README.md",

@@ -5,10 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0 - Unreleased
+## 0.1.0rc0 - 2026-11-04
 
 - Target Pants `2.32.x`.
-- Require `pants_backend_cc>=0.1.0` and `pants_backend_platforms>=0.1.0`.
+- Require `pants_backend_cc>=0.1.0rc0` and `pants_backend_platforms>=0.1.0rc0`.
 
 First release as `pants-backend-cargo`. This plugin was `pants_cargo_porcelain`, whose last
 version, 0.4.0, targeted Pants 2.24 and was distributed as pre-release builds from
@@ -31,8 +31,7 @@ unset, and is always installed with clippy and rustfmt. Every cargo process gets
 
 A `cargo_package`'s new `platforms` field builds its binaries for the enabled `platform` targets
 of pants-backend-platforms, under `dist/<platform>/`. The platform's `cc_toolchain`, from
-pants-backend-cc, links and serves cc-rs. Both backends are dependencies, required from PyPI
-at `>=0.1.0`.
+pants-backend-cc, links and serves cc-rs. Both backends are dependencies, required from PyPI.
 
 ### Other changes
 

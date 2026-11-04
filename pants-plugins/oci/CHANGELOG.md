@@ -5,10 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.11.0 - Unreleased
+## 0.11.0rc0 - 2026-11-04
 
 - Target Pants `2.32.x`.
-- Require `pants-backend-kustomize>=0.8.0`.
+- Require `pants-backend-kustomize>=0.8.0rc0`.
 
 This release replaces umoci, runc and skopeo: images are assembled by the plugin's own Python,
 scripted steps and `pants run` use podman (or Docker), and registries are reached with crane.
