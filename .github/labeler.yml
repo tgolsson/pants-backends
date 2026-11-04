@@ -58,3 +58,53 @@
       - 'examples/mdbook/**/*'
       - 'pants-plugins/mdbook/*'
       - 'pants-plugins/mdbook/**/*'
+
+"a: secrets":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pants-plugins/secrets/*'
+      - 'pants-plugins/secrets/**/*'
+
+"a: bitwarden":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/bitwarden/*'
+      - 'examples/bitwarden/**/*'
+      - 'pants-plugins/bitwarden/*'
+      - 'pants-plugins/bitwarden/**/*'
+
+"a: platforms":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pants-plugins/platforms/*'
+      - 'pants-plugins/platforms/**/*'
+
+"a: generate":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pants-plugins/generate/*'
+      - 'pants-plugins/generate/**/*'
+
+"a: cc":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/cc/*'
+      - 'examples/cc/**/*'
+      - 'pants-plugins/cc/*'
+      - 'pants-plugins/cc/**/*'
+
+"a: cmake":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/cmake/*'
+      - 'examples/cmake/**/*'
+      - 'pants-plugins/cmake/*'
+      - 'pants-plugins/cmake/**/*'
+
+"a: cargo":
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'examples/cargo/*'
+      - 'examples/cargo/**/*'
+      - 'pants-plugins/cargo/*'
+      - 'pants-plugins/cargo/**/*'

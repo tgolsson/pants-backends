@@ -50,19 +50,27 @@ below use `X` for the new Pants version.
    per job).
 10. Update the Pants badge in the root `README.md`.
 11. Refresh pinned binary tools: update `default_version` and `default_known_versions` (SHA-256 and byte size) in each
-    plugin's `subsystem.py`, update the table and refresh date in `docs/src/binary-tools.md`, and note new defaults in
+    plugin's subsystem module(s) (`subsystem.py`, `subsystems.py`, or cmake's `subsystems/cmake.py` and
+    `subsystems/ninja.py`), update the table and refresh date in `docs/src/binary-tools.md`, and note new defaults in
     the CHANGELOG entries below.
-12. For each released plugin — bitwarden, distroless, k8s, kustomize, mdbook, oci, secrets (odin is unreleased, `skip_twine=True`;
-    don't bump it):
+12. For each released plugin — secrets, bitwarden; k8s, kustomize, oci; distroless, mdbook; platforms, generate, cc,
+    cmake, cargo (odin is unreleased, `skip_twine=True`; don't bump it):
     - bump `version` in `pants-plugins/<name>/pyproject.toml` to the new plugin version `V`;
     - bump `python_artifact(version=...)` in `pants-plugins/<name>/BUILD` to `V`;
     - update `pants-plugins/<name>/README.md`: "This release targets Pants **X**. Install it with
       `pants-backend-<name>==V`";
     - add a `## V - <YYYY-MM-DD>` entry to `pants-plugins/<name>/CHANGELOG.md`, starting with "Target Pants `X`."
-    - if the plugin depends on another one, raise the floor in its `pyproject.toml` `dependencies` to the upstream's new
-      version and add a "Require `<dep>>=<version>`." CHANGELOG line. The floors are bitwarden → `pants_backend_secrets`,
-      kustomize → `pants_backend_k8s` and oci → `pants-backend-kustomize`.
+    - if the plugin depends on another one, raise the floor in its `pyproject.toml` `dependencies` or
+      `[project.optional-dependencies]` to the upstream's new version and add a "Require `<dep>>=<version>`." CHANGELOG
+      line. The floors are:
+      - bitwarden → `pants_backend_secrets`
+      - kustomize → `pants_backend_k8s`
+      - oci → `pants-backend-kustomize`
+      - cc → `pants_backend_platforms`, and its `generate` extra → `pants_backend_generate`
+      - cmake → `pants_backend_cc`, `pants_backend_platforms`
+      - cargo → `pants_backend_cc`, `pants_backend_platforms`
 13. Verify as described above, and check CI is green. Compare the example digests with step 3. A new Pex version alone
     changes every image that contains a pex (2.32's Pex 2.81.0 → 2.95.1 did); say so in the oci CHANGELOG.
 14. Publish by hand, e.g. `pants publish pants-plugins/secrets:package`; the PyPI token is read from Bitwarden. Publish in
-    dependency order: secrets, bitwarden; k8s, kustomize, oci; distroless and mdbook at any point.
+    dependency order: secrets, bitwarden; k8s, kustomize, oci; platforms and generate, then cc, then cmake and cargo;
+    distroless and mdbook at any point.

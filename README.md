@@ -4,6 +4,13 @@
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-k8s?label=pants-backend-k8s)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-kustomize?label=pants-backend-kustomize)
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-distroless?label=pants-backend-distroless)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-secrets?label=pants-backend-secrets)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-bitwarden?label=pants-backend-bitwarden)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-platforms?label=pants-backend-platforms)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-generate?label=pants-backend-generate)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-cc?label=pants-backend-cc)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-cmake?label=pants-backend-cmake)
+![PyPI](https://img.shields.io/pypi/v/pants-backend-cargo?label=pants-backend-cargo)
 ![Pants](https://img.shields.io/badge/Pants-2.32.1-%2355acee)
 
 # Tom's Pants backends
