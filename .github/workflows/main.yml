@@ -35,9 +35,40 @@ jobs:
         gha-cache-key: cache1-test-py3.14-pants2.32.1
         named-caches-hash: ${{ hashFiles('pants-plugins/*.lock') }}
 
-    # The cc and cmake cross-build tests skip without MinGW-w64.
+    # The cc and cmake cross-build tests skip without MinGW-w64. Its debs (~144 MB) are cached:
+    # some azure.archive.ubuntu.com regions serve archives at ~65 kB/s, which turns a seconds-long
+    # install into half an hour (actions/runner-images#14823). The key is the resolved package
+    # versions, so an update to any of them refetches.
+    - name: Resolve MinGW-w64 packages
+      id: mingw
+      run: |
+        sudo apt-get update
+        key=$(apt-get -s install --no-install-recommends g++-mingw-w64-x86-64 | grep '^Inst' | sha256sum | cut -c1-16)
+        echo "key=apt-mingw-${{ runner.os }}-${{ runner.arch }}-$key" >> "$GITHUB_OUTPUT"
+
+    - name: Restore MinGW-w64 debs
+      id: mingw-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: ~/apt-archives/*.deb
+        key: ${{ steps.mingw.outputs.key }}
+
     - name: Install MinGW-w64
-      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64
+      run: |
+        if [ "${{ steps.mingw-cache.outputs.cache-hit }}" != "true" ]; then
+          # Fetch from archive.ubuntu.com, not the slow regional Azure mirror.
+          [ -f /etc/apt/apt-mirrors.txt ] && sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+        fi
+        mkdir -p ~/apt-archives/partial
+        sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" g++-mingw-w64-x86-64
+
+    # Saved now rather than at the end of the job, so a failing test run still keeps the debs.
+    - name: Save MinGW-w64 debs
+      if: steps.mingw-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: ~/apt-archives/*.deb
+        key: ${{ steps.mingw.outputs.key }}
 
     - name: Test everything
       run: |
