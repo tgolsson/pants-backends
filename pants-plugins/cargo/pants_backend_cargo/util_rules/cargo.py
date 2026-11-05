@@ -50,6 +50,8 @@ SCRIPT_NAME = "__cargo.sh"
 # every crate is "uncacheable".
 _SHIMMED = ("cc", "ld", "ar", "as", "getconf")
 _SHIMMED_LINUX = ("ldd",)
+# rustc asks xcrun for the SDK root when linking for an Apple target (unless SDKROOT is set).
+_SHIMMED_MACOS = ("xcrun",)
 # Shimmed when the host has them: what `-sys` crates' build scripts look for.
 _OPTIONAL = ("pkg-config",)
 
@@ -116,6 +118,7 @@ async def make_cargo_process(
         BinaryShimsRequest.for_binaries(
             *_SHIMMED,
             *(_SHIMMED_LINUX if platform.value.startswith("linux") else ()),
+            *(_SHIMMED_MACOS if platform.is_macos else ()),
             *request.extra_shims,
             rationale="run cargo",
             search_path=system_binaries.system_binary_paths,
