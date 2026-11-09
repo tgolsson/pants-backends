@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable, Optional
+from typing import Iterable, Optional
 
 from pants.core.goals.package import OutputPathField
 from pants.engine.addresses import Address
@@ -16,8 +16,14 @@ from pants.engine.target import (
 )
 from pants.util.strutil import softwrap
 
-if TYPE_CHECKING:
-    from pants_backend_oci.util_rules.helper_layer_builder import GroupEntry, PasswdEntry
+from pants_backend_oci.util_rules.helper_layer_builder import (
+    GroupEntry,
+    HelperLayerError,
+    PasswdEntry,
+    parse_group_entries,
+    parse_locales,
+    parse_passwd_entries,
+)
 
 
 class ImageBundle(StringField):
@@ -219,12 +225,6 @@ class PasswdUsersField(Field):
 
     @classmethod
     def compute_value(cls, raw_value: Optional[object], address: Address) -> tuple[PasswdEntry, ...]:
-        # Imported here: `util_rules` imports this module.
-        from pants_backend_oci.util_rules.helper_layer_builder import (
-            HelperLayerError,
-            parse_passwd_entries,
-        )
-
         value = super().compute_value(raw_value, address)
         try:
             return parse_passwd_entries(value)
@@ -245,12 +245,6 @@ class GroupEntriesField(Field):
 
     @classmethod
     def compute_value(cls, raw_value: Optional[object], address: Address) -> tuple[GroupEntry, ...]:
-        # Imported here: `util_rules` imports this module.
-        from pants_backend_oci.util_rules.helper_layer_builder import (
-            HelperLayerError,
-            parse_group_entries,
-        )
-
         value = super().compute_value(raw_value, address)
         try:
             return parse_group_entries(value)
@@ -294,12 +288,6 @@ class LocalesField(StringSequenceField):
 
     @classmethod
     def compute_value(cls, raw_value: Optional[Iterable[str]], address: Address) -> tuple[str, ...]:
-        # Imported here: `util_rules` imports this module.
-        from pants_backend_oci.util_rules.helper_layer_builder import (
-            HelperLayerError,
-            parse_locales,
-        )
-
         value = super().compute_value(raw_value, address)
         try:
             return parse_locales(value)
