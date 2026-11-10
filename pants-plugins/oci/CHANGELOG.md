@@ -80,12 +80,12 @@ Read the breaking changes before upgrading.
   store, so packaging, and `pants publish`, which packages every image it pushes, no longer
   write and store a multi-GB copy of a large image. The archive stays the default. See
   "Packaging as an OCI layout" in the README.
-- **Experimental:** `pants run` and OCI repl on macOS through `podman machine`, and on any
+- `pants run` and OCI repl on macOS through `podman machine`, and on any
   platform through a named podman connection with the new `[oci].podman_connection` option. The
   image is loaded into the connection's store as `localhost/pants-oci-run:<digest>` and kept for
   later runs; a missing or stopped machine is reported with the command to fix it. Connections
-  are tested in CI against a Linux podman service; macOS has not yet been validated on a real
-  Mac. Scripted build steps still need local Linux podman. See "Running through podman machine"
+  are tested in CI against a Linux podman service; macOS was validated manually on an Apple
+  silicon Mac. Scripted build steps still need local Linux podman. See "Running through podman machine"
   in the README.
 - `[oci].runner = "docker"` runs `pants run`, OCI repl and scripted build steps with Docker
   instead of podman, for teams without podman. It needs Docker 23.0 or newer and the
