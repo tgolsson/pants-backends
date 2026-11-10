@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Breaking
+
+- `deb_packages` generates targets only for the requested `packages`, from the BUILD file: a
+  `deb_package` per architecture and package, whose sources are the `.deb` files of its locked
+  closure, and the `deb_package_group` per architecture. The `deb_package_file` targets
+  (`<arch>/<package>/deb`) and the targets for unrequested packages in a closure are gone; add a
+  package to `packages` to depend on it directly.
+- The lockfile format is version 3, which records the package each requested name resolved to.
+  Regenerate lockfiles with `pants generate-lockfiles`.
+
+### Changed
+
+- Target generation no longer reads the lockfile, so a missing or out-of-date lockfile no longer
+  breaks `pants list ::` and the like, and `generate-lockfiles` doesn't depend on it. Building
+  anything from the packages fails with an error naming the lockfile and the `generate-lockfiles`
+  command, instead of a warning followed by an error that the package's target was not generated.
+
 ## 0.1.0rc0 - 2026-11-04
 
 - Target Pants `2.32.x`.

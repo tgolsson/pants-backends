@@ -72,7 +72,8 @@ async def determine_deb_packages_user_resolves(
 async def setup_deb_packages_lockfile_requests(
     requested: RequestedDebPackagesUserResolveNames, subsystem: AptSubsystem
 ) -> UserGenerateLockfiles:
-    # Unexpanded, since expanding a `deb_packages` target needs the lockfile being generated.
+    # Unexpanded, since the `deb_packages` targets declare the resolves. Neither these nor their
+    # generated targets need the lockfile being generated.
     targets = await find_all_unexpanded_targets()
     by_resolve: dict[str, list[DebPackagesTargetGenerator]] = {}
     for tgt in targets:

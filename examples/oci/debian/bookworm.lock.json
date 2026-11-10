@@ -103,11 +103,11 @@
           "version": "3.0.20-1~deb12u2"
         }
       ],
-      "roots": [
-        "ca-certificates",
-        "jq",
-        "libc-bin"
-      ]
+      "roots": {
+        "ca-certificates": "ca-certificates",
+        "jq": "jq",
+        "libc-bin": "libc-bin"
+      }
     },
     "arm64": {
       "packages": [
@@ -212,11 +212,11 @@
           "version": "3.0.20-1~deb12u2"
         }
       ],
-      "roots": [
-        "ca-certificates",
-        "jq",
-        "libc-bin"
-      ]
+      "roots": {
+        "ca-certificates": "ca-certificates",
+        "jq": "jq",
+        "libc-bin": "libc-bin"
+      }
     }
   },
   "inputs": {
@@ -236,5 +236,5 @@
       "https://snapshot.debian.org/archive/debian/20261027T000000Z bookworm main"
     ]
   },
-  "version": 2
+  "version": 3
 }

@@ -131,7 +131,7 @@ def test_resolves_transitive_closure() -> None:
         stanza("unrelated"),
     )
     roots, resolved = resolve(idx, ["jq"], [])
-    assert roots == ["jq"]
+    assert roots == {"jq": "jq"}
     assert names(resolved) == {"jq": "1.0", "libjq1": "1.0", "libonig5": "1.0", "libc6": "2.36"}
     assert {r.package.name: r.depends for r in resolved}["libjq1"] == ("libc6", "libonig5")
 
@@ -179,6 +179,13 @@ def test_virtual_package_with_single_provider() -> None:
     roots, resolved = resolve(idx, ["app"], [])
     assert set(names(resolved)) == {"app", "mawk"}
     assert {r.package.name: r.depends for r in resolved}["app"] == ("mawk",)
+
+
+def test_requested_virtual_package_maps_to_its_provider() -> None:
+    idx = index(stanza("mawk", Provides="awk"))
+    roots, resolved = resolve(idx, ["awk"], [])
+    assert roots == {"awk": "mawk"}
+    assert set(names(resolved)) == {"mawk"}
 
 
 def test_virtual_package_prefers_required_then_version_then_name() -> None:
@@ -352,7 +359,7 @@ def test_cyclic_dependencies_resolve_and_lock_their_closures() -> None:
         stanza("libgcc-s1", Depends="libc6"),
     )
     roots, resolved = resolve(idx, ["app"], [])
-    assert roots == ["app"]
+    assert roots == {"app": "app"}
     assert {r.package.name: r.depends for r in resolved} == {
         "app": ("libc6",),
         "libc6": ("libgcc-s1",),
@@ -608,9 +615,9 @@ def test_main_writes_lockfile(tmp_path: Path) -> None:
     assert main([*argv, "--keyring", str(tmp_path / "keyring.asc")]) == 0
 
     locked = json.loads(output.read_text())
-    assert locked["version"] == 2
+    assert locked["version"] == 3
     assert locked["inputs"] == inputs
-    assert locked["architectures"]["amd64"]["roots"] == ["jq"]
+    assert locked["architectures"]["amd64"]["roots"] == {"jq": "jq"}
     assert [(p["name"], p["closure"]) for p in locked["architectures"]["amd64"]["packages"]] == [
         ("jq", ["libjq1"]),
         ("libjq1", []),

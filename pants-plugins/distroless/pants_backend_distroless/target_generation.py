@@ -1,32 +1,44 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 
-from pants.core.target_types import http_source
-from pants.engine.fs import GlobMatchErrorBehavior, PathGlobs
-from pants.engine.intrinsics import get_digest_contents, path_globs_to_digest
-from pants.engine.rules import collect_rules, rule
+from pants.core.target_types import FileSourceField
+from pants.engine.download_file import download_file
+from pants.engine.fs import (
+    CreateDigest,
+    DownloadFile,
+    FileDigest,
+    FileEntry,
+    GlobMatchErrorBehavior,
+    PathGlobs,
+)
+from pants.engine.internals.graph import resolve_target
+from pants.engine.intrinsics import digest_to_snapshot, get_digest_contents, path_globs_to_digest
+from pants.engine.rules import collect_rules, concurrently, implicitly, rule
 from pants.engine.target import (
     Dependencies,
+    GeneratedSources,
     GeneratedTargets,
+    GenerateSourcesRequest,
     GenerateTargetsRequest,
     InvalidFieldException,
+    WrappedTargetRequest,
 )
 from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.docutil import bin_name
+from pants.util.logging import LogLevel
 from pants.util.strutil import softwrap
 
 from pants_backend_distroless import apt_resolver
 from pants_backend_distroless.subsystem import AptSubsystem
 from pants_backend_distroless.target_types import (
-    DebPackageDependenciesField,
-    DebPackageFileSourceField,
-    DebPackageFileTarget,
+    DebPackageArchitectureField,
     DebPackageGroupTarget,
+    DebPackagePackageField,
     DebPackagesArchitecturesField,
     DebPackagesExcludeField,
+    DebPackageSourcesField,
     DebPackagesPackagesField,
     DebPackagesResolveField,
     DebPackagesSourcesField,
@@ -34,7 +46,9 @@ from pants_backend_distroless.target_types import (
     DebPackageTarget,
 )
 
-logger = logging.getLogger(__name__)
+
+class DebPackagesLockfileError(Exception):
+    """A `deb_packages` lockfile is missing, out of date or in an unsupported format."""
 
 
 class GenerateFromDebPackagesRequest(GenerateTargetsRequest):
@@ -63,13 +77,85 @@ def lockfile_path(generator: DebPackagesTargetGenerator, subsystem: AptSubsystem
     return path
 
 
-@rule(desc="Generate targets from a Debian package lockfile")
+@rule(desc="Generate targets from a `deb_packages` target")
 async def generate_from_deb_packages(
     request: GenerateFromDebPackagesRequest,
     subsystem: AptSubsystem,
     union_membership: UnionMembership,
 ) -> GeneratedTargets:
+    # Like Python requirements, the targets are only the requested packages, from the BUILD file.
+    # The lockfile is read when their `.deb` files are generated, so a missing or stale lockfile
+    # fails only what uses them, and `generate-lockfiles` can resolve this target without one.
     generator = request.generator
+    lockfile_path(generator, subsystem)
+    packages = sorted(set(generator[DebPackagesPackagesField].value or ()))
+
+    def address(name: str):
+        return request.template_address.create_generated(name)
+
+    generated = []
+    for arch in sorted(set(generator[DebPackagesArchitecturesField].value or ())):
+        for package in packages:
+            generated.append(
+                DebPackageTarget(
+                    {
+                        **request.template,
+                        DebPackageArchitectureField.alias: arch,
+                        DebPackagePackageField.alias: package,
+                    },
+                    address(f"{arch}/{package}"),
+                    union_membership,
+                )
+            )
+        generated.append(
+            DebPackageGroupTarget(
+                {
+                    **request.template,
+                    Dependencies.alias: [address(f"{arch}/{package}").spec for package in packages],
+                },
+                address(arch),
+                union_membership,
+            )
+        )
+    return GeneratedTargets(generator, generated)
+
+
+def locked_entries(lockfile: dict, arch: str, package: str, directory: str) -> list[tuple[str, FileEntry]]:
+    """The URL and file entry of each `.deb` in the locked closure of a requested package.
+
+    Each file goes where a `file` target with an `http_source` in `directory` would put it. Raises
+    `KeyError`, `TypeError` or `ValueError` if the lockfile doesn't lock the package consistently.
+    """
+    locked = lockfile["architectures"][arch]
+    by_name = {p["name"]: p for p in locked["packages"]}
+    root = by_name[locked["roots"][package]]
+    return [
+        (
+            p["url"],
+            FileEntry(
+                os.path.join(directory, os.path.basename(p["url"])), FileDigest(p["sha256"], p["size"])
+            ),
+        )
+        for p in [root, *(by_name[name] for name in root["closure"])]
+    ]
+
+
+class GenerateDebFilesRequest(GenerateSourcesRequest):
+    input = DebPackageSourcesField
+    output = FileSourceField
+
+
+@rule(desc="Download the locked .deb files of a Debian package", level=LogLevel.DEBUG)
+async def generate_deb_files(request: GenerateDebFilesRequest, subsystem: AptSubsystem) -> GeneratedSources:
+    target = request.protocol_target
+    wrapped = await resolve_target(
+        WrappedTargetRequest(
+            target.address.maybe_convert_to_target_generator(),
+            description_of_origin=f"the `deb_packages` target of {target.address}",
+        ),
+        **implicitly(),
+    )
+    generator = wrapped.target
     resolve = generator[DebPackagesResolveField].value
     path = lockfile_path(generator, subsystem)
 
@@ -79,8 +165,6 @@ async def generate_from_deb_packages(
     contents = await get_digest_contents(digest)
     lockfile = json.loads(contents[0].content) if contents else None
 
-    # `generate-lockfiles` expands every target, so a missing or stale lockfile can't be an error
-    # here. Generating nothing instead fails any use of the packages, after this warning.
     problem = None
     if lockfile is None:
         problem = "doesn't exist"
@@ -91,68 +175,37 @@ async def generate_from_deb_packages(
             "is out of date: it was generated for different `sources`, `architectures`, `packages` "
             "or `exclude`"
         )
+    else:
+        try:
+            entries = locked_entries(
+                lockfile,
+                target[DebPackageArchitectureField].value,
+                target[DebPackagePackageField].value,
+                target.address.spec_path,
+            )
+        except (KeyError, TypeError, ValueError):
+            problem = (
+                f"is malformed: it has no consistent closure of `{target[DebPackagePackageField].value}`"
+            )
     if problem is not None:
-        logger.warning(
+        raise DebPackagesLockfileError(
             softwrap(f"""
-            The lockfile {path} for the `{resolve}` resolve of {generator.address} {problem}, so
-            no packages are generated from it. Run
-            `{bin_name()} generate-lockfiles --resolve={resolve}` to update it.
+            The lockfile {path} for the `{resolve}` resolve of {generator.address} {problem}. Run
+            `{bin_name()} generate-lockfiles --resolve={resolve}` to generate it.
             """)
         )
-        return GeneratedTargets(generator, ())
 
-    def address(name: str):
-        return request.template_address.create_generated(name)
-
-    # Apt dependencies can be cyclic, which Pants doesn't allow between these targets. So each
-    # package depends on the `.deb` files of its locked closure rather than on other packages.
-    generated = []
-    for arch, locked in sorted(lockfile["architectures"].items()):
-        for package in locked["packages"]:
-            name = package["name"]
-            generated.append(
-                DebPackageFileTarget(
-                    {
-                        **request.template,
-                        DebPackageFileSourceField.alias: http_source(
-                            package["url"],
-                            len=package["size"],
-                            sha256=package["sha256"],
-                            filename=os.path.basename(package["url"]),
-                        ),
-                    },
-                    address(f"{arch}/{name}/deb"),
-                    union_membership,
-                )
-            )
-            generated.append(
-                DebPackageTarget(
-                    {
-                        **request.template,
-                        DebPackageDependenciesField.alias: [
-                            address(f"{arch}/{dep}/deb").spec for dep in [name, *package["closure"]]
-                        ],
-                    },
-                    address(f"{arch}/{name}"),
-                    union_membership,
-                )
-            )
-        generated.append(
-            DebPackageGroupTarget(
-                {
-                    **request.template,
-                    Dependencies.alias: [address(f"{arch}/{root}").spec for root in locked["roots"]],
-                },
-                address(arch),
-                union_membership,
-            )
-        )
-
-    return GeneratedTargets(generator, generated)
+    await concurrently(
+        download_file(DownloadFile(url, entry.file_digest), **implicitly()) for url, entry in entries
+    )
+    return GeneratedSources(
+        await digest_to_snapshot(**implicitly(CreateDigest(entry for _, entry in entries)))
+    )
 
 
 def rules():
     return [
         *collect_rules(),
         UnionRule(GenerateTargetsRequest, GenerateFromDebPackagesRequest),
+        UnionRule(GenerateSourcesRequest, GenerateDebFilesRequest),
     ]

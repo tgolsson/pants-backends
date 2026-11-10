@@ -49,24 +49,25 @@ oci_deb_layer(
 ```
 
 Run `pants generate-lockfiles --resolve=bookworm` to write the lockfile, and again whenever the
-target changes. Until then, and while the lockfile is out of date, Pants warns and generates no
-packages, so anything using them fails with an error that `:bookworm#amd64/jq` was not generated.
-The warning is only printed when the targets are generated, so with `pantsd` a later run may show
-just that error; regenerating the lockfile fixes it.
+target changes.
 
-The target generates:
+The target generates, from its own fields alone:
 
-* a `deb_package` target named `<arch>/<package>` for every locked package, which depends on the
-  pinned `.deb` of the package and of every locked package in its closure, so `:bookworm#amd64/jq`
-  brings `jq` and its whole closure;
-* a `deb_package_file` target named `<arch>/<package>/deb` for every locked package, which downloads
-  only its pinned `.deb`;
+* a `deb_package` target named `<arch>/<package>` for every architecture and requested package,
+  whose sources are the pinned `.deb` files of the package and of every locked package in its
+  closure, so `:bookworm#amd64/jq` brings `jq` and its whole closure;
 * a `deb_package_group` target named `<arch>`, depending on all the requested packages, so
   `:bookworm#amd64` is everything.
 
-Packages don't depend on each other's targets, only on `.deb` files, and the lockfile records each
-package's closure. Apt dependency cycles are therefore fine: `libc6` and `libgcc-s1` depend on each
-other in Debian, and `:bookworm#amd64/libc6` brings both.
+As with Python requirements, only the requested packages are targets: to depend on a package
+directly, add it to `packages`. A requested virtual package, like `awk`, brings the package that
+provides it.
+
+The lockfile is read only when the `.deb` files are needed, such as when a layer is built. Until it's
+generated, and while it's out of date, that fails with an error naming the lockfile and the
+`generate-lockfiles` command; commands that don't need the `.deb` files, like `pants list ::`, work
+without it. The lockfile records each package's closure, so apt dependency cycles are fine: `libc6`
+and `libgcc-s1` depend on each other in Debian, and either one brings both.
 
 A layer is for one architecture, so always pick one: `debs=[":bookworm"]` would bring the packages of
 every architecture, which `oci_deb_layer` rejects.

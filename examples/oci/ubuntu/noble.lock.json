@@ -76,11 +76,11 @@
           "version": "3.0.13-0ubuntu3.15"
         }
       ],
-      "roots": [
-        "ca-certificates",
-        "jq",
-        "libc-bin"
-      ]
+      "roots": {
+        "ca-certificates": "ca-certificates",
+        "jq": "jq",
+        "libc-bin": "libc-bin"
+      }
     },
     "arm64": {
       "packages": [
@@ -158,11 +158,11 @@
           "version": "3.0.13-0ubuntu3.15"
         }
       ],
-      "roots": [
-        "ca-certificates",
-        "jq",
-        "libc-bin"
-      ]
+      "roots": {
+        "ca-certificates": "ca-certificates",
+        "jq": "jq",
+        "libc-bin": "libc-bin"
+      }
     }
   },
   "inputs": {
@@ -186,5 +186,5 @@
       "https://snapshot.ubuntu.com/ubuntu/20260917T000000Z noble-security main"
     ]
   },
-  "version": 2
+  "version": 3
 }

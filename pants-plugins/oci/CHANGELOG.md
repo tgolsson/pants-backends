@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+
+- The `debs` of `oci_deb_layer`, `oci_cacerts_layer` and `oci_locale_layer` also accept targets
+  whose sources generate `.deb` files, like the `deb_package` targets of `pants-backend-distroless`,
+  whose sources are now the `.deb` files of their locked closure.
+
 ### Fixed
 
 - `pants help targets`, `help-all`, `help-advanced targets`, `help oci_passwd_layer` and

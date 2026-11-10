@@ -6,7 +6,7 @@ import tarfile
 import pytest
 from pants.core.goals import package as package_goal
 from pants.core.goals.package import BuiltPackage
-from pants.core.target_types import FileTarget, GenericTarget, ResourceTarget
+from pants.core.target_types import FileTarget, GenericTarget, RelocatedFiles, ResourceTarget
 from pants.core.target_types import rules as core_target_type_rules
 from pants.core.util_rules import adhoc_binaries
 from pants.core.util_rules import archive as pants_archive
@@ -24,7 +24,7 @@ from pants_backend_oci.util_rules.deb_layer_builder_test import BAR, FOO, FOO_DA
 @pytest.fixture
 def rule_runner() -> RuleRunner:
     return RuleRunner(
-        target_types=[DebLayer, FileTarget, GenericTarget, ResourceTarget],
+        target_types=[DebLayer, FileTarget, GenericTarget, RelocatedFiles, ResourceTarget],
         rules=[
             *deb_layer.rules(),
             *layer.rules(),
@@ -123,6 +123,23 @@ oci_deb_layer(name="layer", debs=[":group"])
     assert "var/lib/dpkg/status.d/bar" in names
 
 
+def test_includes_generated_files(rule_runner: RuleRunner) -> None:
+    # Like `deb_package` targets from `pants-backend-distroless`, whose sources generate the `.deb`
+    # files of their locked closure; `relocated_files` is the upstream target that generates files.
+    rule_runner.write_files(
+        {
+            "debs/foo_1.0-1_amd64.deb": FOO,
+            "debs/BUILD": """
+file(name="foo", source="foo_1.0-1_amd64.deb")
+relocated_files(name="moved", files_targets=[":foo"], src="debs", dest="moved")
+oci_deb_layer(name="layer", debs=[":moved"])
+""",
+        }
+    )
+
+    assert "var/lib/dpkg/status.d/foo" in layer_names(rule_runner, package(rule_runner, "layer"))
+
+
 def test_rejects_non_file_targets_in_closure(rule_runner: RuleRunner) -> None:
     rule_runner.write_files(
         {
@@ -136,7 +153,9 @@ oci_deb_layer(name="layer", debs=[":foo"])
         }
     )
 
-    with engine_error(contains="must only contain `file` targets, got: debs:bar"):
+    with engine_error(
+        contains="must only contain `file` targets or targets that generate them, got: debs:bar"
+    ):
         package(rule_runner, "layer")
 
 
@@ -196,7 +215,9 @@ oci_deb_layer(name="layer", debs=[":foo"])
         }
     )
 
-    with engine_error(contains="must only contain `file` targets, got: debs:foo"):
+    with engine_error(
+        contains="must only contain `file` targets or targets that generate them, got: debs:foo"
+    ):
         package(rule_runner, "layer")
 
 

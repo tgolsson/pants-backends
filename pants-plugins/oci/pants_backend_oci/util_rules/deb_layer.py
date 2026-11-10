@@ -23,7 +23,7 @@ from pants.engine.target import (
     SourcesField,
     TransitiveTargetsRequest,
 )
-from pants.engine.unions import UnionRule
+from pants.engine.unions import UnionMembership, UnionRule
 from pants.util.logging import LogLevel
 
 from pants_backend_oci.subsystem import ZstdTool
@@ -54,9 +54,10 @@ class DebFiles:
 
 
 @rule(desc="Resolve .deb packages", level=LogLevel.DEBUG)
-async def resolve_deb_files(request: DebFilesRequest) -> DebFiles:
-    # The closure of the field, so a target that depends on the packages it needs (like those
-    # generated from a Debian lockfile) brings them along. Targets without sources only group others.
+async def resolve_deb_files(request: DebFilesRequest, union_membership: UnionMembership) -> DebFiles:
+    # The closure of the field, so a target that depends on the packages it needs brings them along.
+    # Targets without sources only group others. Sources that generate `file`s count as files, like
+    # those of a `deb_package`, which are the `.deb` files of its locked closure.
     direct = await resolve_targets(**implicitly(DependenciesRequest(request.field)))
     closure = await transitive_targets(
         TransitiveTargetsRequest([tgt.address for tgt in direct]), **implicitly()
@@ -64,12 +65,14 @@ async def resolve_deb_files(request: DebFilesRequest) -> DebFiles:
     not_files = [
         str(tgt.address)
         for tgt in closure.closure
-        if tgt.has_field(SourcesField) and not tgt.has_field(FileSourceField)
+        if tgt.has_field(SourcesField)
+        and not tgt.has_field(FileSourceField)
+        and not tgt[SourcesField].can_generate(FileSourceField, union_membership)
     ]
     if not_files:
         raise InvalidFieldException(
             f"The `{request.field.alias}` field of {request.address} must only contain "
-            f"`file` targets, got: {', '.join(not_files)}"
+            f"`file` targets or targets that generate them, got: {', '.join(not_files)}"
         )
 
     sources = await determine_source_files(

@@ -42,7 +42,7 @@ from typing import Callable, Iterable, Iterator
 
 from . import openpgp
 
-LOCKFILE_VERSION = 2
+LOCKFILE_VERSION = 3
 
 
 class ResolveError(Exception):
@@ -326,8 +326,9 @@ class Resolved:
 
 def resolve(
     index: Index, requested: Iterable[str], exclude: Iterable[str]
-) -> tuple[list[str], list[Resolved]]:
-    """Resolves the closure of `requested`; returns the root package names and every package."""
+) -> tuple[dict[str, str], list[Resolved]]:
+    """Resolves the closure of `requested`; returns the package each requested name resolved to (a
+    virtual name resolves to its provider) and every package."""
     excluded = set(exclude)
     # Excluded packages count as installed, so whatever they provide is installed too.
     installed = excluded | index.provided_by(excluded)
@@ -373,7 +374,7 @@ def resolve(
         parent[package.name] = required_by
         queue.append(package.name)
 
-    roots = []
+    roots = {}
     for name in sorted(set(requested)):
         if name in installed:
             raise ResolveError(f"{name} is both requested and excluded")
@@ -381,7 +382,7 @@ def resolve(
         if package is None:
             raise ResolveError(f"No package named {name}")
         select(package, None)
-        roots.append(package.name)
+        roots[name] = package.name
 
     while queue:
         name = queue.popleft()
@@ -415,7 +416,7 @@ def resolve(
                 deps.append(satisfier)
 
     resolved = [Resolved(selected[n], tuple(sorted(depends[n]))) for n in sorted(selected)]
-    return sorted(set(roots)), resolved
+    return roots, resolved
 
 
 # --- Lockfile -------------------------------------------------------------------------------------
@@ -436,8 +437,8 @@ def normalize_inputs(
 def closures(resolved: Iterable[Resolved]) -> dict[str, list[str]]:
     """The packages each resolved package transitively depends on, apart from itself.
 
-    Apt dependencies can be cyclic, like `libc6` and `libgcc-s1`, so the targets generated from the
-    lockfile depend on this closure instead of on each other.
+    Apt dependencies can be cyclic, like `libc6` and `libgcc-s1`, so a package's `.deb` files are
+    looked up from this closure rather than by following dependencies.
     """
     depends = {r.package.name: r.depends for r in resolved}
     result = {}
