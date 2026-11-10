@@ -1,7 +1,7 @@
 # Kustomize backend for Pants
 
 This release targets Pants **2.32.x**. Install it with
-`pants-backend-kustomize==0.8.0rc0` in `[GLOBAL].plugins` in `pants.toml`.
+`pants-backend-kustomize==0.8.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-kustomize?label=Latest%20release)
 

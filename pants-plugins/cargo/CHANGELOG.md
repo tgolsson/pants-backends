@@ -5,10 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0rc0 - 2026-11-04
+## 0.1.0 - 2026-11-10
 
 - Target Pants `2.32.x`.
-- Require `pants_backend_cc>=0.1.0rc0` and `pants_backend_platforms>=0.1.0rc0`.
+- Require `pants_backend_cc>=0.1.0` and `pants_backend_platforms>=0.1.0`.
 
 First release as `pants-backend-cargo`. This plugin was `pants_cargo_porcelain`, whose last
 version, 0.4.0, targeted Pants 2.24 and was distributed as pre-release builds from
@@ -47,3 +47,10 @@ pants-backend-cc, links and serves cc-rs. Both backends are dependencies, requir
 
 - `[sccache]` and `[binstall]`, along with the cargo-mtime and cargo-binstall tools.
 - The `toml` dependency.
+
+### Since 0.1.0rc0
+
+#### Fixed
+
+- On macOS, cargo processes find `xcrun`, so builds no longer warn that it is missing when rustc
+  looks up the SDK path (#117).

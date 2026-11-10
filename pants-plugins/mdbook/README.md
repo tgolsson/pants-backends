@@ -1,7 +1,7 @@
 # MDBook backend for Pants
 
 This release targets Pants **2.32.x**. Install it with
-`pants-backend-mdbook==0.9.0rc0` in `[GLOBAL].plugins` in `pants.toml`.
+`pants-backend-mdbook==0.9.0` in `[GLOBAL].plugins` in `pants.toml`.
 
 ![PyPI](https://img.shields.io/pypi/v/pants-backend-mdbook?label=Latest%20release)
 

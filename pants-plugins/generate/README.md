@@ -6,7 +6,7 @@ codegen, so consumers get fresh outputs in their sandboxes. `pants generate` wri
 committed copies and `pants lint` fails when one is stale. Both use the same cached codegen
 rule, so the committed bytes are the bytes Pants consumers see.
 
-This release targets Pants **2.32.x**. Install it with `pants-backend-generate==0.1.0rc0` in
+This release targets Pants **2.32.x**. Install it with `pants-backend-generate==0.1.0` in
 `[GLOBAL].plugins` in `pants.toml`, and enable `pants_backend_generate` in
 `[GLOBAL].backend_packages`.
 

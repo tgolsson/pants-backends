@@ -3,7 +3,7 @@
 A [Pants](https://www.pantsbuild.org) backend for the C and C++ pieces that build-system backends
 share: toolchains, interfaces for their compiles and libraries, and the tools built on them.
 
-This release targets Pants **2.32.x**. Install it with `pants-backend-cc==0.1.0rc0` in
+This release targets Pants **2.32.x**. Install it with `pants-backend-cc==0.1.0` in
 `[GLOBAL].plugins` in `pants.toml`, and enable `pants_backend_cc` in
 `[GLOBAL].backend_packages`.
 

@@ -5,24 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-
-### Changed
-
-- The `debs` of `oci_deb_layer`, `oci_cacerts_layer` and `oci_locale_layer` also accept targets
-  whose sources generate `.deb` files, like the `deb_package` targets of `pants-backend-distroless`,
-  whose sources are now the `.deb` files of their locked closure.
-
-### Fixed
-
-- `pants help targets`, `help-all`, `help-advanced targets`, `help oci_passwd_layer` and
-  `help oci_group_layer` no longer fail with `NameError: name 'PasswdEntry' is not defined` (or
-  `'GroupEntry'`).
-
-## 0.11.0rc0 - 2026-11-04
+## 0.11.0 - 2026-11-10
 
 - Target Pants `2.32.x`.
-- Require `pants-backend-kustomize>=0.8.0rc0`.
+- Require `pants-backend-kustomize>=0.8.0`.
 
 This release replaces umoci, runc and skopeo: images are assembled by the plugin's own Python,
 scripted steps and `pants run` use podman (or Docker), and registries are reached with crane.
@@ -174,6 +160,20 @@ Read the breaking changes before upgrading.
   them.
 - `oci_build_layer` adds a layer for each of its `dependencies`, not only the first.
 - A layer target's entrypoint is no longer set to a nested layer tarball.
+
+### Since 0.11.0rc0
+
+#### Changed
+
+- The `debs` of `oci_deb_layer`, `oci_cacerts_layer` and `oci_locale_layer` also accept targets
+  whose sources generate `.deb` files, like the `deb_package` targets of `pants-backend-distroless`,
+  whose sources are now the `.deb` files of their locked closure.
+
+#### Fixed
+
+- `pants help targets`, `help-all`, `help-advanced targets`, `help oci_passwd_layer` and
+  `help oci_group_layer` no longer fail with `NameError: name 'PasswdEntry' is not defined` (or
+  `'GroupEntry'`).
 
 ## 0.10.0 - 2026-10-17
 
