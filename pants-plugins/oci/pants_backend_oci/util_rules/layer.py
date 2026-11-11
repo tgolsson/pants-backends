@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from pants.core.goals.package import BuiltPackageArtifact, PackageFieldSet, build_package
@@ -245,6 +246,36 @@ async def build_image_layer(request: ImageLayerRequest) -> ImageLayer:
         logger.info(f"Setting entrypoint to: {entrypoint}")
 
     return ImageLayer(request.target.address, layer_digest, layer_path, entrypoint, descriptor=descriptor)
+
+
+@dataclass(frozen=True)
+class FallibleImageLayer:
+    """A built layer, or the exception building it raised.
+
+    Lets a rule build layers alongside its base without a layer's failure hiding the base's.
+    """
+
+    output: ImageLayer | None
+    error: Exception | None = None
+
+
+@rule
+async def build_image_layer_fallible(request: ImageLayerRequest) -> FallibleImageLayer:
+    try:
+        return FallibleImageLayer(await build_image_layer(request))
+    except Exception as e:
+        return FallibleImageLayer(None, e)
+
+
+def layers_or_raise(layers: Iterable[FallibleImageLayer]) -> tuple[ImageLayer, ...]:
+    """The built layers, or the first failed layer's original exception, re-raised."""
+    built = []
+    for layer in layers:
+        if layer.output is None:
+            assert layer.error is not None
+            raise layer.error
+        built.append(layer.output)
+    return tuple(built)
 
 
 def rules():

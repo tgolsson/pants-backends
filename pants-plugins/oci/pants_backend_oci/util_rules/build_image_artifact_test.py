@@ -22,14 +22,14 @@ from pants_backend_oci.util_rules.build_image_artifact import (
     extract_image_artifact,
 )
 from pants_backend_oci.util_rules.image_bundle import FallibleImageBundle, ImageBundle
-from pants_backend_oci.util_rules.layer import ImageLayer
+from pants_backend_oci.util_rules.layer import FallibleImageLayer, ImageLayer
 
 BASE = ImageBundle(EMPTY_DIGEST, "sha256:base", True, metadata=EMPTY_DIGEST)
 ASSEMBLED = ImageBundle(EMPTY_DIGEST, "sha256:assembled", True, metadata=EMPTY_DIGEST)
 FILES = SimpleNamespace(output_digest=EMPTY_DIGEST)
 
 
-def _run(packages, base_bundle, calls, extract=False):
+def _run(packages, base_bundle, calls, extract=False, failing=None):
     address = Address("step")
     if extract:
         target = ImageExtractStep({"base": ["//:base"], "outputs": ["out"]}, address)
@@ -48,9 +48,12 @@ def _run(packages, base_bundle, calls, extract=False):
         )
     dependencies = tuple(SimpleNamespace(address=Address("", target_name=p)) for p in packages)
 
-    def build_image_layer(request, **kwargs):
+    def build_image_layer_fallible(request, **kwargs):
         calls["layers"].append(request.target)
-        return ImageLayer(request.target.address, EMPTY_DIGEST, "layer.tar")
+        error = (failing or {}).get(request.target.address.target_name)
+        if error is not None:
+            return FallibleImageLayer(None, error)
+        return FallibleImageLayer(ImageLayer(request.target.address, EMPTY_DIGEST, "layer.tar"))
 
     def assemble_image(request, **kwargs):
         calls["assemble"].append(request)
@@ -76,7 +79,7 @@ def _run(packages, base_bundle, calls, extract=False):
             ),
             "pants_backend_oci.util_rules.image_bundle.resolve_image_bundle": lambda *args,
             **kwargs: base_bundle,
-            "pants_backend_oci.util_rules.layer.build_image_layer": build_image_layer,
+            "pants_backend_oci.util_rules.layer.build_image_layer_fallible": build_image_layer_fallible,
             "pants_backend_oci.util_rules.assemble.assemble_image": assemble_image,
             "pants_backend_oci.util_rules.run.image_files": image_files,
         },
@@ -99,6 +102,28 @@ def test_failed_base_raises_its_error():
         Address("", target_name="a"),
         Address("", target_name="b"),
     ]
+    assert calls["assemble"] == []
+    assert calls["files"] == []
+
+
+def test_failed_base_is_reported_over_a_failed_layer():
+    failed = FallibleImageBundle(None, exit_code=1, stderr="broken base")
+    calls = _calls()
+
+    with pytest.raises(ImageArtifactBaseError, match="(?s)step.*broken base"):
+        _run(["a", "b"], failed, calls, failing={"b": RuntimeError("layer boom")})
+    assert len(calls["layers"]) == 2
+    assert calls["assemble"] == []
+    assert calls["files"] == []
+
+
+def test_failed_layer_raises_its_own_error_when_the_base_is_fine():
+    error = RuntimeError("layer boom")
+    calls = _calls()
+
+    with pytest.raises(RuntimeError) as raised:
+        _run(["a", "b"], FallibleImageBundle(BASE), calls, failing={"b": error})
+    assert raised.value is error
     assert calls["assemble"] == []
     assert calls["files"] == []
 

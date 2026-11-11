@@ -43,7 +43,7 @@ from pants_backend_oci.util_rules.image_bundle import (
     FallibleImageBundleRequest,
     resolve_image_bundle,
 )
-from pants_backend_oci.util_rules.layer import build_image_layer
+from pants_backend_oci.util_rules.layer import build_image_layer_fallible, layers_or_raise
 from pants_backend_oci.util_rules.sandboxed import OciBuilder
 
 _INDEX = "__layer_index.json"
@@ -151,14 +151,15 @@ async def lint_deb_layer_overwrites(
     checked = checked[: len(checked) - checked[::-1].index(True)]
 
     base_address = str(requests.base.target.address)
-    base, *layers = await concurrently(
+    base, *maybe_layers = await concurrently(
         resolve_image_bundle(**implicitly({requests.base: FallibleImageBundleRequest})),
-        *(build_image_layer(r) for r in requests.layers[: len(checked)]),
+        *(build_image_layer_fallible(r) for r in requests.layers[: len(checked)]),
     )
     if base.output is None:
         return failed(
             base.stdout or "", base.stderr or f"Failed to build the base image of {field_set.address}"
         )
+    layers = layers_or_raise(maybe_layers)
 
     blobs = await base_layers(BaseLayersRequest(base.output.digest, base_address), **implicitly())
     if blobs.stderr:

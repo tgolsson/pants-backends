@@ -40,7 +40,11 @@ from pants_backend_oci.util_rules.image_bundle import (
     ibr_to_fibr,
     resolve_image_bundle,
 )
-from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
+from pants_backend_oci.util_rules.layer import (
+    ImageLayerRequest,
+    build_image_layer_fallible,
+    layers_or_raise,
+)
 from pants_backend_oci.util_rules.run import ImageFilesRequest, image_files
 
 
@@ -110,12 +114,13 @@ async def build_image_artifact(
         resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
     )
 
-    maybe_built_base, *layers = await concurrently(
+    maybe_built_base, *maybe_layers = await concurrently(
         resolve_image_bundle(**implicitly({build_request.request: FallibleImageBundleRequest})),
-        *(build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies),
+        *(build_image_layer_fallible(ImageLayerRequest(dependency)) for dependency in dependencies),
     )
 
     bundle = base_or_raise(maybe_built_base, request.target.address)
+    layers = layers_or_raise(maybe_layers)
 
     if request.target.dependencies.value:
         config = ConfigEdit(env=tuple(request.target.environment.value or ()), history=True)

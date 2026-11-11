@@ -32,7 +32,11 @@ from pants_backend_oci.util_rules.image_bundle import (
     ibr_to_fibr,
     resolve_image_bundle,
 )
-from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
+from pants_backend_oci.util_rules.layer import (
+    ImageLayerRequest,
+    build_image_layer_fallible,
+    layers_or_raise,
+)
 from pants_backend_oci.util_rules.run import ScriptedLayerRequest, run_scripted_layer
 
 
@@ -130,13 +134,14 @@ async def image_layer_requests(request: ImageLayersRequest) -> ImageLayerRequest
 async def build_oci_bundle_package(request: BuildImageBundleRequest) -> FallibleImageBundle:
     requests = await image_layer_requests(ImageLayersRequest(request.target), **implicitly())
 
-    maybe_built_base, *layers = await concurrently(
+    maybe_built_base, *maybe_layers = await concurrently(
         resolve_image_bundle(**implicitly({requests.base: FallibleImageBundleRequest})),
-        *(build_image_layer(layer_request) for layer_request in requests.layers),
+        *(build_image_layer_fallible(layer_request) for layer_request in requests.layers),
     )
 
     if maybe_built_base.output is None:
         return dataclasses.replace(maybe_built_base, dependency_failed=True)
+    layers = layers_or_raise(maybe_layers)
 
     entrypoint = request.target.entrypoint.value
     config = ConfigEdit(

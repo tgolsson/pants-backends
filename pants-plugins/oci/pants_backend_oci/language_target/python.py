@@ -28,7 +28,11 @@ from pants_backend_oci.util_rules.image_bundle import (
     ibr_to_fibr,
     resolve_image_bundle,
 )
-from pants_backend_oci.util_rules.layer import ImageLayerRequest, build_image_layer
+from pants_backend_oci.util_rules.layer import (
+    ImageLayerRequest,
+    build_image_layer_fallible,
+    layers_or_raise,
+)
 
 
 class PythonMain(StringField):
@@ -86,12 +90,13 @@ async def build_python_image(request: BuildPythonImageRequest) -> FallibleImageB
         resolve_targets(**implicitly(DependenciesRequest(request.target.dependencies))),
     )
 
-    base_image, *layers = await concurrently(
+    base_image, *maybe_layers = await concurrently(
         resolve_image_bundle(**implicitly({bundle_request.request: FallibleImageBundleRequest})),
-        *(build_image_layer(ImageLayerRequest(dependency)) for dependency in dependencies),
+        *(build_image_layer_fallible(ImageLayerRequest(dependency)) for dependency in dependencies),
     )
     if base_image.output is None:
         return dataclasses.replace(base_image, dependency_failed=True)
+    layers = layers_or_raise(maybe_layers)
 
     pex = request.target.python_main.value
     if pex is None:
