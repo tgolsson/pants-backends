@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import PurePath
 
 from pants.backend.python.subsystems.python_tool_base import get_lockfile_interpreter_constraints
@@ -101,6 +101,13 @@ def agreeing_groups(files: Sequence[Mapping[str, object]]) -> list[list[int]]:
     return [members for members, _ in groups]
 
 
+def search_paths(tree: Iterable[str]) -> tuple[str, ...]:
+    """The directories holding the notes in `tree`, without those under another. Left to search
+    its root, gcovr follows the sandbox's links into Pants' named caches and walks all of them."""
+    directories = {PurePath(path).parent for path in tree if path.endswith(".gcno")}
+    return tuple(sorted(str(d) for d in directories if directories.isdisjoint(d.parents)))
+
+
 async def _gcovr_pex(gcovr: Gcovr) -> Pex:
     # Left to itself, Pants 2.31 builds a tool from its lockfile for `[python]`'s interpreter
     # constraints, which may admit a Python older than gcovr supports.
@@ -181,6 +188,7 @@ async def _tracefile(
         PexProcess(
             pex,
             argv=(
+                *search_paths(tree),
                 "--root=.",
                 f"--gcov-executable={{chroot}}/{GCOV}",
                 # gcovr locks the directory it runs gcov in: the object's own, not the root.
