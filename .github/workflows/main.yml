@@ -267,6 +267,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    # Linting builds the scies too; see `test`.
+    - name: Authenticate GitHub API requests
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        umask 077
+        printf 'machine api.github.com\nlogin x-access-token\npassword %s\n' "$GITHUB_TOKEN" > ~/.netrc
+
     - name: Run linters on all targets
       run: |
         ./get-pants.sh
