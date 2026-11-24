@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pants_backend_cc.coverage.rules import agreeing_groups, below_threshold
+from pants_backend_cc.coverage.rules import agreeing_groups, below_threshold, search_paths
 
 
 def test_tests_that_agree_share_a_group() -> None:
@@ -33,3 +33,15 @@ def test_tests_that_agree_share_a_group() -> None:
 )
 def test_below_threshold(exit_code: int, below: bool) -> None:
     assert below_threshold(exit_code) is below
+
+
+@pytest.mark.parametrize(
+    "tree, expected",
+    [
+        (["build/a/x.gcno", "build/a/b/y.gcno", "build/c/z.gcno", "src/x.c"], ("build/a", "build/c")),
+        (["x.gcno", "build/y.gcno"], (".",)),
+        (["src/x.c"], ()),
+    ],
+)
+def test_search_paths(tree: list[str], expected: tuple[str, ...]) -> None:
+    assert search_paths(tree) == expected
