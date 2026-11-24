@@ -42,13 +42,14 @@ def runner_args(runner: str) -> list[str]:
 
 
 def top_layer(archive: Path) -> list[str]:
-    """The paths in the image's last layer, which the scripted step added."""
+    """The files and whiteouts in the image's last layer, which the scripted step added. Parent
+    directories are left out: the runtime can mark one changed without the step touching it."""
     with tarfile.open(archive) as image:
         index = json.load(image.extractfile("index.json"))
         manifest = json.load(image.extractfile(f"blobs/sha256/{index['manifests'][0]['digest'][7:]}"))
         layer = image.extractfile(f"blobs/sha256/{manifest['layers'][-1]['digest'][7:]}")
         with tarfile.open(fileobj=layer) as tar:
-            return tar.getnames()
+            return [m.name for m in tar if not m.isdir()]
 
 
 def pants(tmpdir: str, runner: str, isolated: list[str], *args: str):
@@ -124,14 +125,7 @@ def test_scripted_layer_extract_and_image(runner: str, isolated_pants_args: list
             assert tar.getnames() == [".", "./g", "./g/a", "./g/a/f", "./g/b", "./g/b/f"]
         with tarfile.open(next(dist.glob("*/extract.tar.gz"))) as tar:
             assert tar.getnames()[-1] == "./etc/debian_version"
-        assert top_layer(next(dist.glob("*/image.tar"))) == [
-            "etc",
-            "etc/motd",
-            "var",
-            "var/lib",
-            "var/lib/apt",
-            "var/lib/apt/.wh.lists",
-        ]
+        assert top_layer(next(dist.glob("*/image.tar"))) == ["etc/motd", "var/lib/apt/.wh.lists"]
 
         no_outputs = pants(tmpdir, runner, isolated_pants_args, "package", f"{tmpdir}/oci:no-outputs")
         result = pants(tmpdir, runner, isolated_pants_args, "run", f"{tmpdir}/oci:image")
@@ -211,9 +205,4 @@ def test_list_commands_run_without_a_shell(runner: str, isolated_pants_args: lis
         dist = Path(tmpdir, "dist")
         with tarfile.open(next(dist.glob("*/layer.tar.gz"))) as tar:
             assert tar.getnames() == [".", "./out", "./out/version"]
-        assert top_layer(next(dist.glob("*/image.tar"))) == [
-            "var",
-            "var/lib",
-            "var/lib/apt",
-            "var/lib/apt/.wh.lists",
-        ]
+        assert top_layer(next(dist.glob("*/image.tar"))) == ["var/lib/apt/.wh.lists"]
